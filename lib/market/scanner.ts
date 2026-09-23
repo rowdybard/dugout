@@ -14,7 +14,7 @@ export function scan(m:Market,c:Config=DEFAULT_CONFIG):Signal[]{
  if(m.depth!=null&&m.depth<c.thin)out.push({type:'THIN MARKET',reason:`Only about ${m.depth.toLocaleString()} contracts are posted across both sides. Offers may disappear before you trade.`,score:4});
  return out.sort((a,b)=>b.score-a.score);
 }
-export function activitySignals(points:Point[],c:Config):Signal[]{
+export function activitySignals(points:Pick<Point,'time'|'volume'>[],c:Config):Signal[]{
  const samples=points.filter(p=>p.volume!=null);if(samples.length<12)return [];
  const rates=samples.slice(1).map((p,i)=>Math.max(0,p.volume!-samples[i].volume!)/Math.max(1,(p.time-samples[i].time)/1000));
  const avg=rates.slice(0,-1).reduce((a,b)=>a+b,0)/(rates.length-1);const last=rates.at(-1)!;

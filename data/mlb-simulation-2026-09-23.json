@@ -1,0 +1,2144 @@
+{
+  "id": "mlb-2026-09-23-ten-dollar-movement-v1",
+  "date": "2026-09-23",
+  "timezone": "America/New_York",
+  "startedAt": 1790179224906,
+  "completedAt": 1790179240774,
+  "bankroll": 10,
+  "maxBudget": 2,
+  "maxPositions": 5,
+  "rule": "Before first pitch, rank today’s available full-game-winner markets by absolute YES-price change over the last hour. Follow the direction: YES after an increase, NO after a decrease. Ties use earlier start time, then market slug. Buy up to five games with a maximum $2 each, including estimated fees. Skip flat, missing, stale, or unfillable markets. Hold until official settlement.",
+  "source": "https://gateway.polymarket.us",
+  "coverage": {
+    "eventsFetched": 58,
+    "todayGames": 16,
+    "eligibleGames": 6,
+    "capReached": false,
+    "errors": []
+  },
+  "entries": [
+    {
+      "id": "mlb-2026-09-23-ten-dollar-movement-v1:aec-mlb-wsh-det-2026-09-23",
+      "gameId": "118952",
+      "slug": "aec-mlb-wsh-det-2026-09-23",
+      "game": "Washington Nationals vs. Detroit Tigers",
+      "start": "2026-09-23T17:10:00Z",
+      "outcome": "Detroit Tigers",
+      "side": "NO",
+      "signal": "PRICE DROPPING",
+      "reason": "Washington Nationals’s YES display price fell from 41.0¢ to 38.5¢ over 57 minutes. The rule follows that direction.",
+      "time": 1790179240104,
+      "budget": 2,
+      "contracts": 3,
+      "cost": 1.8599999999999999,
+      "fee": 0.04912260000000001,
+      "amount": 1.9091226,
+      "average": 0.62,
+      "coefficient": 0.0695,
+      "movePoints": -2.4999999999999964,
+      "history": [
+        {
+          "time": 1790175720000,
+          "price": 0.41
+        },
+        {
+          "time": 1790175780000,
+          "price": 0.41
+        },
+        {
+          "time": 1790175840000,
+          "price": 0.41
+        },
+        {
+          "time": 1790175960000,
+          "price": 0.41
+        },
+        {
+          "time": 1790176020000,
+          "price": 0.415
+        },
+        {
+          "time": 1790176140000,
+          "price": 0.415
+        },
+        {
+          "time": 1790176260000,
+          "price": 0.415
+        },
+        {
+          "time": 1790176380000,
+          "price": 0.415
+        },
+        {
+          "time": 1790176440000,
+          "price": 0.41
+        },
+        {
+          "time": 1790176500000,
+          "price": 0.405
+        },
+        {
+          "time": 1790176560000,
+          "price": 0.405
+        },
+        {
+          "time": 1790176620000,
+          "price": 0.405
+        },
+        {
+          "time": 1790176740000,
+          "price": 0.405
+        },
+        {
+          "time": 1790176800000,
+          "price": 0.395
+        },
+        {
+          "time": 1790176860000,
+          "price": 0.395
+        },
+        {
+          "time": 1790176920000,
+          "price": 0.395
+        },
+        {
+          "time": 1790177040000,
+          "price": 0.395
+        },
+        {
+          "time": 1790177160000,
+          "price": 0.39
+        },
+        {
+          "time": 1790177220000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177340000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177460000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177580000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177700000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177760000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177880000,
+          "price": 0.385
+        },
+        {
+          "time": 1790177940000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178060000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178180000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178300000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178360000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178480000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178540000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178660000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178720000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178840000,
+          "price": 0.385
+        },
+        {
+          "time": 1790178900000,
+          "price": 0.385
+        },
+        {
+          "time": 1790179020000,
+          "price": 0.385
+        },
+        {
+          "time": 1790179140000,
+          "price": 0.385
+        }
+      ],
+      "book": {
+        "bids": [
+          {
+            "price": 0.38,
+            "quantity": 1497806.22
+          },
+          {
+            "price": 0.375,
+            "quantity": 69153.95
+          },
+          {
+            "price": 0.37,
+            "quantity": 116429.58
+          },
+          {
+            "price": 0.365,
+            "quantity": 21763.17
+          },
+          {
+            "price": 0.36,
+            "quantity": 88528.71
+          },
+          {
+            "price": 0.355,
+            "quantity": 614
+          },
+          {
+            "price": 0.35,
+            "quantity": 163
+          },
+          {
+            "price": 0.345,
+            "quantity": 589
+          },
+          {
+            "price": 0.34,
+            "quantity": 120
+          },
+          {
+            "price": 0.335,
+            "quantity": 594
+          },
+          {
+            "price": 0.33,
+            "quantity": 155
+          },
+          {
+            "price": 0.325,
+            "quantity": 609
+          },
+          {
+            "price": 0.32,
+            "quantity": 300
+          },
+          {
+            "price": 0.315,
+            "quantity": 31.6
+          },
+          {
+            "price": 0.305,
+            "quantity": 1031
+          },
+          {
+            "price": 0.295,
+            "quantity": 4799
+          },
+          {
+            "price": 0.27,
+            "quantity": 43750
+          },
+          {
+            "price": 0.265,
+            "quantity": 250
+          },
+          {
+            "price": 0.25,
+            "quantity": 5
+          },
+          {
+            "price": 0.19,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.09,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.07,
+            "quantity": 1
+          },
+          {
+            "price": 0.06,
+            "quantity": 30
+          },
+          {
+            "price": 0.03,
+            "quantity": 57
+          },
+          {
+            "price": 0.025,
+            "quantity": 39
+          },
+          {
+            "price": 0.02,
+            "quantity": 5210.1
+          },
+          {
+            "price": 0.01,
+            "quantity": 2465
+          },
+          {
+            "price": 0.005,
+            "quantity": 72967
+          }
+        ],
+        "asks": [
+          {
+            "price": 0.385,
+            "quantity": 83262.3
+          },
+          {
+            "price": 0.39,
+            "quantity": 234736.8
+          },
+          {
+            "price": 0.395,
+            "quantity": 147044.5
+          },
+          {
+            "price": 0.4,
+            "quantity": 602582.67
+          },
+          {
+            "price": 0.405,
+            "quantity": 80535.39
+          },
+          {
+            "price": 0.41,
+            "quantity": 64707.94
+          },
+          {
+            "price": 0.415,
+            "quantity": 589
+          },
+          {
+            "price": 0.42,
+            "quantity": 8606.65
+          },
+          {
+            "price": 0.425,
+            "quantity": 1349.86
+          },
+          {
+            "price": 0.43,
+            "quantity": 120
+          },
+          {
+            "price": 0.435,
+            "quantity": 7107.32
+          },
+          {
+            "price": 0.44,
+            "quantity": 31312.47
+          },
+          {
+            "price": 0.445,
+            "quantity": 7539.4
+          },
+          {
+            "price": 0.45,
+            "quantity": 7580.93
+          },
+          {
+            "price": 0.455,
+            "quantity": 9907.37
+          },
+          {
+            "price": 0.46,
+            "quantity": 20
+          },
+          {
+            "price": 0.465,
+            "quantity": 1051
+          },
+          {
+            "price": 0.47,
+            "quantity": 20
+          },
+          {
+            "price": 0.475,
+            "quantity": 25
+          },
+          {
+            "price": 0.48,
+            "quantity": 66
+          },
+          {
+            "price": 0.485,
+            "quantity": 43770
+          },
+          {
+            "price": 0.495,
+            "quantity": 125
+          },
+          {
+            "price": 0.5,
+            "quantity": 20
+          },
+          {
+            "price": 0.505,
+            "quantity": 6
+          },
+          {
+            "price": 0.53,
+            "quantity": 7
+          },
+          {
+            "price": 0.55,
+            "quantity": 150
+          },
+          {
+            "price": 0.57,
+            "quantity": 1
+          },
+          {
+            "price": 0.595,
+            "quantity": 29
+          },
+          {
+            "price": 0.6,
+            "quantity": 5
+          },
+          {
+            "price": 0.61,
+            "quantity": 251
+          },
+          {
+            "price": 0.695,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.795,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.89,
+            "quantity": 125
+          },
+          {
+            "price": 0.895,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.94,
+            "quantity": 30
+          },
+          {
+            "price": 0.97,
+            "quantity": 57
+          },
+          {
+            "price": 0.975,
+            "quantity": 39
+          },
+          {
+            "price": 0.98,
+            "quantity": 4270.38
+          },
+          {
+            "price": 0.99,
+            "quantity": 2665
+          },
+          {
+            "price": 0.995,
+            "quantity": 72976.44
+          }
+        ],
+        "state": "MARKET_STATE_OPEN",
+        "time": "2026-09-23T16:00:32.325750147Z"
+      },
+      "entryLiquidation": 1.7956324125
+    },
+    {
+      "id": "mlb-2026-09-23-ten-dollar-movement-v1:aec-mlb-tor-bal-2026-09-23",
+      "gameId": "118946",
+      "slug": "aec-mlb-tor-bal-2026-09-23",
+      "game": "Toronto Blue Jays vs. Baltimore Orioles",
+      "start": "2026-09-23T22:35:00Z",
+      "outcome": "Baltimore Orioles",
+      "side": "NO",
+      "signal": "PRICE DROPPING",
+      "reason": "Toronto Blue Jays’s YES display price fell from 47.5¢ to 47.0¢ over 57 minutes. The rule follows that direction.",
+      "time": 1790179240273,
+      "budget": 2,
+      "contracts": 3,
+      "cost": 1.6049999999999998,
+      "fee": 0.05186958750000001,
+      "amount": 1.6568695874999997,
+      "average": 0.5349999999999999,
+      "coefficient": 0.0695,
+      "movePoints": -0.5000000000000004,
+      "history": [
+        {
+          "time": 1790175720000,
+          "price": 0.475
+        },
+        {
+          "time": 1790175780000,
+          "price": 0.475
+        },
+        {
+          "time": 1790175840000,
+          "price": 0.475
+        },
+        {
+          "time": 1790175900000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176020000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176080000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176140000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176260000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176380000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176500000,
+          "price": 0.475
+        },
+        {
+          "time": 1790176620000,
+          "price": 0.475
+        },
+        {
+          "time": 1790176680000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176800000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176860000,
+          "price": 0.47
+        },
+        {
+          "time": 1790176920000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177040000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177160000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177220000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177340000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177460000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177580000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177700000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177760000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177880000,
+          "price": 0.47
+        },
+        {
+          "time": 1790177940000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178060000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178180000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178300000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178360000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178480000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178540000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178660000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178720000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178840000,
+          "price": 0.47
+        },
+        {
+          "time": 1790178900000,
+          "price": 0.47
+        },
+        {
+          "time": 1790179020000,
+          "price": 0.47
+        },
+        {
+          "time": 1790179140000,
+          "price": 0.47
+        }
+      ],
+      "book": {
+        "bids": [
+          {
+            "price": 0.465,
+            "quantity": 101825.15
+          },
+          {
+            "price": 0.46,
+            "quantity": 121947.97
+          },
+          {
+            "price": 0.455,
+            "quantity": 15847.79
+          },
+          {
+            "price": 0.45,
+            "quantity": 26851.79
+          },
+          {
+            "price": 0.445,
+            "quantity": 23066.78
+          },
+          {
+            "price": 0.44,
+            "quantity": 30
+          },
+          {
+            "price": 0.435,
+            "quantity": 489
+          },
+          {
+            "price": 0.43,
+            "quantity": 80
+          },
+          {
+            "price": 0.425,
+            "quantity": 2486.64
+          },
+          {
+            "price": 0.42,
+            "quantity": 40
+          },
+          {
+            "price": 0.415,
+            "quantity": 629
+          },
+          {
+            "price": 0.405,
+            "quantity": 1048.14
+          },
+          {
+            "price": 0.4,
+            "quantity": 5
+          },
+          {
+            "price": 0.395,
+            "quantity": 1031
+          },
+          {
+            "price": 0.38,
+            "quantity": 50
+          },
+          {
+            "price": 0.375,
+            "quantity": 3.77
+          },
+          {
+            "price": 0.32,
+            "quantity": 250
+          },
+          {
+            "price": 0.22,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.12,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.06,
+            "quantity": 30
+          },
+          {
+            "price": 0.05,
+            "quantity": 150
+          },
+          {
+            "price": 0.04,
+            "quantity": 450
+          },
+          {
+            "price": 0.03,
+            "quantity": 25
+          },
+          {
+            "price": 0.025,
+            "quantity": 62
+          },
+          {
+            "price": 0.02,
+            "quantity": 4990.35
+          },
+          {
+            "price": 0.015,
+            "quantity": 34
+          },
+          {
+            "price": 0.01,
+            "quantity": 7495
+          },
+          {
+            "price": 0.005,
+            "quantity": 21967
+          }
+        ],
+        "asks": [
+          {
+            "price": 0.47,
+            "quantity": 94078.46
+          },
+          {
+            "price": 0.475,
+            "quantity": 114073.39
+          },
+          {
+            "price": 0.48,
+            "quantity": 20438.63
+          },
+          {
+            "price": 0.485,
+            "quantity": 31853.24
+          },
+          {
+            "price": 0.49,
+            "quantity": 16579.94
+          },
+          {
+            "price": 0.495,
+            "quantity": 5802.37
+          },
+          {
+            "price": 0.5,
+            "quantity": 9906
+          },
+          {
+            "price": 0.505,
+            "quantity": 10457.87
+          },
+          {
+            "price": 0.51,
+            "quantity": 355.28
+          },
+          {
+            "price": 0.515,
+            "quantity": 2693.12
+          },
+          {
+            "price": 0.525,
+            "quantity": 469
+          },
+          {
+            "price": 0.53,
+            "quantity": 5
+          },
+          {
+            "price": 0.535,
+            "quantity": 1853.46
+          },
+          {
+            "price": 0.555,
+            "quantity": 1031
+          },
+          {
+            "price": 0.585,
+            "quantity": 5062
+          },
+          {
+            "price": 0.59,
+            "quantity": 19711
+          },
+          {
+            "price": 0.6,
+            "quantity": 150
+          },
+          {
+            "price": 0.685,
+            "quantity": 250
+          },
+          {
+            "price": 0.725,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.825,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.925,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.94,
+            "quantity": 30
+          },
+          {
+            "price": 0.95,
+            "quantity": 145.92
+          },
+          {
+            "price": 0.96,
+            "quantity": 114.71
+          },
+          {
+            "price": 0.97,
+            "quantity": 55
+          },
+          {
+            "price": 0.975,
+            "quantity": 39
+          },
+          {
+            "price": 0.98,
+            "quantity": 4020.38
+          },
+          {
+            "price": 0.99,
+            "quantity": 2723.47
+          },
+          {
+            "price": 0.995,
+            "quantity": 21967
+          }
+        ],
+        "state": "MARKET_STATE_OPEN",
+        "time": "2026-09-23T16:00:24.112739934Z"
+      },
+      "entryLiquidation": 1.53806265
+    },
+    {
+      "id": "mlb-2026-09-23-ten-dollar-movement-v1:aec-mlb-mil-phi-2026-09-23",
+      "gameId": "118948",
+      "slug": "aec-mlb-mil-phi-2026-09-23",
+      "game": "Milwaukee Brewers vs. Philadelphia Phillies",
+      "start": "2026-09-23T22:40:00Z",
+      "outcome": "Philadelphia Phillies",
+      "side": "NO",
+      "signal": "PRICE DROPPING",
+      "reason": "Milwaukee Brewers’s YES display price fell from 54.5¢ to 54.0¢ over 57 minutes. The rule follows that direction.",
+      "time": 1790179240438,
+      "budget": 2,
+      "contracts": 4,
+      "cost": 1.8599999999999999,
+      "fee": 0.06915945,
+      "amount": 1.9291594499999998,
+      "average": 0.46499999999999997,
+      "coefficient": 0.0695,
+      "movePoints": -0.5000000000000004,
+      "history": [
+        {
+          "time": 1790175720000,
+          "price": 0.545
+        },
+        {
+          "time": 1790175780000,
+          "price": 0.545
+        },
+        {
+          "time": 1790175840000,
+          "price": 0.545
+        },
+        {
+          "time": 1790175960000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176080000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176140000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176260000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176380000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176500000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176620000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176740000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176800000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176860000,
+          "price": 0.545
+        },
+        {
+          "time": 1790176920000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177040000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177160000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177220000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177340000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177460000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177580000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177700000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177760000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177880000,
+          "price": 0.545
+        },
+        {
+          "time": 1790177940000,
+          "price": 0.545
+        },
+        {
+          "time": 1790178060000,
+          "price": 0.545
+        },
+        {
+          "time": 1790178180000,
+          "price": 0.545
+        },
+        {
+          "time": 1790178300000,
+          "price": 0.545
+        },
+        {
+          "time": 1790178360000,
+          "price": 0.545
+        },
+        {
+          "time": 1790178420000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178480000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178540000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178660000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178720000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178840000,
+          "price": 0.54
+        },
+        {
+          "time": 1790178900000,
+          "price": 0.54
+        },
+        {
+          "time": 1790179020000,
+          "price": 0.54
+        },
+        {
+          "time": 1790179140000,
+          "price": 0.54
+        }
+      ],
+      "book": {
+        "bids": [
+          {
+            "price": 0.535,
+            "quantity": 290543.35
+          },
+          {
+            "price": 0.53,
+            "quantity": 174905.92
+          },
+          {
+            "price": 0.525,
+            "quantity": 20857.44
+          },
+          {
+            "price": 0.52,
+            "quantity": 72072.82
+          },
+          {
+            "price": 0.515,
+            "quantity": 22357.72
+          },
+          {
+            "price": 0.51,
+            "quantity": 62424
+          },
+          {
+            "price": 0.505,
+            "quantity": 580.49
+          },
+          {
+            "price": 0.5,
+            "quantity": 12711
+          },
+          {
+            "price": 0.495,
+            "quantity": 574
+          },
+          {
+            "price": 0.49,
+            "quantity": 12305
+          },
+          {
+            "price": 0.485,
+            "quantity": 609
+          },
+          {
+            "price": 0.465,
+            "quantity": 1031
+          },
+          {
+            "price": 0.435,
+            "quantity": 43750
+          },
+          {
+            "price": 0.43,
+            "quantity": 4936
+          },
+          {
+            "price": 0.42,
+            "quantity": 24610
+          },
+          {
+            "price": 0.415,
+            "quantity": 25
+          },
+          {
+            "price": 0.41,
+            "quantity": 50
+          },
+          {
+            "price": 0.4,
+            "quantity": 5
+          },
+          {
+            "price": 0.395,
+            "quantity": 250
+          },
+          {
+            "price": 0.31,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.21,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.11,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.06,
+            "quantity": 30
+          },
+          {
+            "price": 0.04,
+            "quantity": 30
+          },
+          {
+            "price": 0.03,
+            "quantity": 525
+          },
+          {
+            "price": 0.025,
+            "quantity": 39
+          },
+          {
+            "price": 0.02,
+            "quantity": 5960.1
+          },
+          {
+            "price": 0.01,
+            "quantity": 7463
+          },
+          {
+            "price": 0.005,
+            "quantity": 71967
+          }
+        ],
+        "asks": [
+          {
+            "price": 0.54,
+            "quantity": 436838.1
+          },
+          {
+            "price": 0.545,
+            "quantity": 200560.06
+          },
+          {
+            "price": 0.55,
+            "quantity": 84132.75
+          },
+          {
+            "price": 0.555,
+            "quantity": 36606.85
+          },
+          {
+            "price": 0.56,
+            "quantity": 64240.37
+          },
+          {
+            "price": 0.565,
+            "quantity": 8004.39
+          },
+          {
+            "price": 0.57,
+            "quantity": 9611.6
+          },
+          {
+            "price": 0.575,
+            "quantity": 8091.34
+          },
+          {
+            "price": 0.58,
+            "quantity": 8698.44
+          },
+          {
+            "price": 0.585,
+            "quantity": 595.47
+          },
+          {
+            "price": 0.59,
+            "quantity": 105
+          },
+          {
+            "price": 0.595,
+            "quantity": 799
+          },
+          {
+            "price": 0.6,
+            "quantity": 157.2
+          },
+          {
+            "price": 0.605,
+            "quantity": 719
+          },
+          {
+            "price": 0.61,
+            "quantity": 105
+          },
+          {
+            "price": 0.615,
+            "quantity": 5041
+          },
+          {
+            "price": 0.62,
+            "quantity": 24630
+          },
+          {
+            "price": 0.625,
+            "quantity": 1031
+          },
+          {
+            "price": 0.745,
+            "quantity": 43750
+          },
+          {
+            "price": 0.75,
+            "quantity": 250
+          },
+          {
+            "price": 0.815,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.915,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.94,
+            "quantity": 30
+          },
+          {
+            "price": 0.97,
+            "quantity": 555
+          },
+          {
+            "price": 0.975,
+            "quantity": 39
+          },
+          {
+            "price": 0.98,
+            "quantity": 5020.38
+          },
+          {
+            "price": 0.99,
+            "quantity": 7663
+          },
+          {
+            "price": 0.995,
+            "quantity": 71966
+          }
+        ],
+        "state": "MARKET_STATE_OPEN",
+        "time": "2026-09-23T16:00:01.716348951Z"
+      },
+      "entryLiquidation": 1.7709447999999999
+    },
+    {
+      "id": "mlb-2026-09-23-ten-dollar-movement-v1:aec-mlb-stl-pit-2026-09-23",
+      "gameId": "118953",
+      "slug": "aec-mlb-stl-pit-2026-09-23",
+      "game": "St. Louis Cardinals vs. Pittsburgh Pirates",
+      "start": "2026-09-23T22:40:00Z",
+      "outcome": "Pittsburgh Pirates",
+      "side": "NO",
+      "signal": "PRICE DROPPING",
+      "reason": "St. Louis Cardinals’s YES display price fell from 44.5¢ to 44.0¢ over 57 minutes. The rule follows that direction.",
+      "time": 1790179240602,
+      "budget": 2,
+      "contracts": 3,
+      "cost": 1.6949999999999998,
+      "fee": 0.05124408750000001,
+      "amount": 1.7462440874999998,
+      "average": 0.565,
+      "coefficient": 0.0695,
+      "movePoints": -0.5000000000000004,
+      "history": [
+        {
+          "time": 1790175720000,
+          "price": 0.445
+        },
+        {
+          "time": 1790175780000,
+          "price": 0.445
+        },
+        {
+          "time": 1790175840000,
+          "price": 0.445
+        },
+        {
+          "time": 1790175960000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176080000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176140000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176260000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176380000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176500000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176620000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176740000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176800000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176860000,
+          "price": 0.445
+        },
+        {
+          "time": 1790176920000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177040000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177160000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177220000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177340000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177460000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177580000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177700000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177760000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177880000,
+          "price": 0.445
+        },
+        {
+          "time": 1790177940000,
+          "price": 0.445
+        },
+        {
+          "time": 1790178060000,
+          "price": 0.445
+        },
+        {
+          "time": 1790178180000,
+          "price": 0.445
+        },
+        {
+          "time": 1790178300000,
+          "price": 0.445
+        },
+        {
+          "time": 1790178360000,
+          "price": 0.445
+        },
+        {
+          "time": 1790178480000,
+          "price": 0.44
+        },
+        {
+          "time": 1790178540000,
+          "price": 0.44
+        },
+        {
+          "time": 1790178660000,
+          "price": 0.44
+        },
+        {
+          "time": 1790178720000,
+          "price": 0.44
+        },
+        {
+          "time": 1790178840000,
+          "price": 0.44
+        },
+        {
+          "time": 1790178900000,
+          "price": 0.44
+        },
+        {
+          "time": 1790179020000,
+          "price": 0.44
+        },
+        {
+          "time": 1790179140000,
+          "price": 0.44
+        }
+      ],
+      "book": {
+        "bids": [
+          {
+            "price": 0.435,
+            "quantity": 250504.89
+          },
+          {
+            "price": 0.43,
+            "quantity": 119071.85
+          },
+          {
+            "price": 0.425,
+            "quantity": 21769.93
+          },
+          {
+            "price": 0.42,
+            "quantity": 68463.49
+          },
+          {
+            "price": 0.415,
+            "quantity": 9299.2
+          },
+          {
+            "price": 0.41,
+            "quantity": 18760.89
+          },
+          {
+            "price": 0.405,
+            "quantity": 5809.2
+          },
+          {
+            "price": 0.4,
+            "quantity": 18380.76
+          },
+          {
+            "price": 0.395,
+            "quantity": 8502.79
+          },
+          {
+            "price": 0.385,
+            "quantity": 469
+          },
+          {
+            "price": 0.375,
+            "quantity": 609
+          },
+          {
+            "price": 0.355,
+            "quantity": 1031
+          },
+          {
+            "price": 0.34,
+            "quantity": 50
+          },
+          {
+            "price": 0.315,
+            "quantity": 43750
+          },
+          {
+            "price": 0.31,
+            "quantity": 4779
+          },
+          {
+            "price": 0.3,
+            "quantity": 250
+          },
+          {
+            "price": 0.185,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.085,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.06,
+            "quantity": 30
+          },
+          {
+            "price": 0.04,
+            "quantity": 30
+          },
+          {
+            "price": 0.03,
+            "quantity": 525
+          },
+          {
+            "price": 0.025,
+            "quantity": 39
+          },
+          {
+            "price": 0.02,
+            "quantity": 5990.1
+          },
+          {
+            "price": 0.01,
+            "quantity": 7433.25
+          },
+          {
+            "price": 0.005,
+            "quantity": 71967
+          }
+        ],
+        "asks": [
+          {
+            "price": 0.44,
+            "quantity": 45302.57
+          },
+          {
+            "price": 0.445,
+            "quantity": 261476.34
+          },
+          {
+            "price": 0.45,
+            "quantity": 135312.93
+          },
+          {
+            "price": 0.455,
+            "quantity": 30838.48
+          },
+          {
+            "price": 0.46,
+            "quantity": 76146.81
+          },
+          {
+            "price": 0.465,
+            "quantity": 15605.36
+          },
+          {
+            "price": 0.47,
+            "quantity": 56611
+          },
+          {
+            "price": 0.475,
+            "quantity": 8254
+          },
+          {
+            "price": 0.48,
+            "quantity": 105
+          },
+          {
+            "price": 0.485,
+            "quantity": 782
+          },
+          {
+            "price": 0.49,
+            "quantity": 885
+          },
+          {
+            "price": 0.495,
+            "quantity": 714
+          },
+          {
+            "price": 0.5,
+            "quantity": 105
+          },
+          {
+            "price": 0.505,
+            "quantity": 105
+          },
+          {
+            "price": 0.51,
+            "quantity": 105
+          },
+          {
+            "price": 0.515,
+            "quantity": 5915
+          },
+          {
+            "price": 0.52,
+            "quantity": 23774
+          },
+          {
+            "price": 0.525,
+            "quantity": 105
+          },
+          {
+            "price": 0.56,
+            "quantity": 3.96
+          },
+          {
+            "price": 0.57,
+            "quantity": 5
+          },
+          {
+            "price": 0.58,
+            "quantity": 43800
+          },
+          {
+            "price": 0.66,
+            "quantity": 250
+          },
+          {
+            "price": 0.69,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.79,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.89,
+            "quantity": 0.25
+          },
+          {
+            "price": 0.94,
+            "quantity": 30
+          },
+          {
+            "price": 0.97,
+            "quantity": 555
+          },
+          {
+            "price": 0.975,
+            "quantity": 39
+          },
+          {
+            "price": 0.98,
+            "quantity": 5020.38
+          },
+          {
+            "price": 0.99,
+            "quantity": 7663
+          },
+          {
+            "price": 0.995,
+            "quantity": 71966
+          }
+        ],
+        "state": "MARKET_STATE_OPEN",
+        "time": "2026-09-23T16:00:19.289081501Z"
+      },
+      "entryLiquidation": 1.6286256000000001
+    },
+    {
+      "id": "mlb-2026-09-23-ten-dollar-movement-v1:aec-mlb-tb-nyy-2026-09-23",
+      "gameId": "118958",
+      "slug": "aec-mlb-tb-nyy-2026-09-23",
+      "game": "Tampa Bay Rays vs. New York Yankees",
+      "start": "2026-09-23T23:05:00Z",
+      "outcome": "Tampa Bay Rays",
+      "side": "YES",
+      "signal": "PRICE MOVING",
+      "reason": "Tampa Bay Rays’s YES display price rose from 45.0¢ to 45.5¢ over 57 minutes. The rule follows that direction.",
+      "time": 1790179240773,
+      "budget": 2,
+      "contracts": 4,
+      "cost": 1.82,
+      "fee": 0.06893705,
+      "amount": 1.88893705,
+      "average": 0.455,
+      "coefficient": 0.0695,
+      "movePoints": 0.5000000000000004,
+      "history": [
+        {
+          "time": 1790175720000,
+          "price": 0.45
+        },
+        {
+          "time": 1790175780000,
+          "price": 0.45
+        },
+        {
+          "time": 1790175840000,
+          "price": 0.45
+        },
+        {
+          "time": 1790175960000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176080000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176140000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176260000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176380000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176500000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176620000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176740000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176800000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176860000,
+          "price": 0.45
+        },
+        {
+          "time": 1790176920000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177040000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177160000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177220000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177340000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177460000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177580000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177700000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177760000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177880000,
+          "price": 0.45
+        },
+        {
+          "time": 1790177940000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178060000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178180000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178300000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178360000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178480000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178540000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178660000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178720000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178840000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178900000,
+          "price": 0.45
+        },
+        {
+          "time": 1790178960000,
+          "price": 0.455
+        },
+        {
+          "time": 1790179020000,
+          "price": 0.455
+        },
+        {
+          "time": 1790179140000,
+          "price": 0.455
+        }
+      ],
+      "book": {
+        "bids": [
+          {
+            "price": 0.45,
+            "quantity": 335815.27
+          },
+          {
+            "price": 0.445,
+            "quantity": 90556.49
+          },
+          {
+            "price": 0.44,
+            "quantity": 148472.52
+          },
+          {
+            "price": 0.435,
+            "quantity": 29959.91
+          },
+          {
+            "price": 0.43,
+            "quantity": 88635.85
+          },
+          {
+            "price": 0.425,
+            "quantity": 16124.74
+          },
+          {
+            "price": 0.42,
+            "quantity": 19868.85
+          },
+          {
+            "price": 0.415,
+            "quantity": 574
+          },
+          {
+            "price": 0.41,
+            "quantity": 243
+          },
+          {
+            "price": 0.405,
+            "quantity": 1179
+          },
+          {
+            "price": 0.4,
+            "quantity": 105
+          },
+          {
+            "price": 0.395,
+            "quantity": 574
+          },
+          {
+            "price": 0.39,
+            "quantity": 105
+          },
+          {
+            "price": 0.385,
+            "quantity": 714
+          },
+          {
+            "price": 0.38,
+            "quantity": 105
+          },
+          {
+            "price": 0.375,
+            "quantity": 105
+          },
+          {
+            "price": 0.37,
+            "quantity": 105
+          },
+          {
+            "price": 0.365,
+            "quantity": 1061
+          },
+          {
+            "price": 0.355,
+            "quantity": 5115.33
+          },
+          {
+            "price": 0.345,
+            "quantity": 41162
+          },
+          {
+            "price": 0.34,
+            "quantity": 150
+          },
+          {
+            "price": 0.3,
+            "quantity": 10
+          },
+          {
+            "price": 0.28,
+            "quantity": 250
+          },
+          {
+            "price": 0.06,
+            "quantity": 30
+          },
+          {
+            "price": 0.04,
+            "quantity": 30
+          },
+          {
+            "price": 0.03,
+            "quantity": 525
+          },
+          {
+            "price": 0.025,
+            "quantity": 39
+          },
+          {
+            "price": 0.02,
+            "quantity": 5990.1
+          },
+          {
+            "price": 0.01,
+            "quantity": 7433
+          },
+          {
+            "price": 0.005,
+            "quantity": 71967
+          }
+        ],
+        "asks": [
+          {
+            "price": 0.455,
+            "quantity": 157162.17
+          },
+          {
+            "price": 0.46,
+            "quantity": 340887.06
+          },
+          {
+            "price": 0.465,
+            "quantity": 39148.6
+          },
+          {
+            "price": 0.47,
+            "quantity": 111218.67
+          },
+          {
+            "price": 0.475,
+            "quantity": 10540.06
+          },
+          {
+            "price": 0.48,
+            "quantity": 62527
+          },
+          {
+            "price": 0.485,
+            "quantity": 574
+          },
+          {
+            "price": 0.49,
+            "quantity": 9588.33
+          },
+          {
+            "price": 0.495,
+            "quantity": 574
+          },
+          {
+            "price": 0.505,
+            "quantity": 641
+          },
+          {
+            "price": 0.515,
+            "quantity": 609
+          },
+          {
+            "price": 0.52,
+            "quantity": 55
+          },
+          {
+            "price": 0.525,
+            "quantity": 5092
+          },
+          {
+            "price": 0.53,
+            "quantity": 24836
+          },
+          {
+            "price": 0.535,
+            "quantity": 1031
+          },
+          {
+            "price": 0.6,
+            "quantity": 5
+          },
+          {
+            "price": 0.645,
+            "quantity": 43784.88
+          },
+          {
+            "price": 0.66,
+            "quantity": 250
+          },
+          {
+            "price": 0.94,
+            "quantity": 30
+          },
+          {
+            "price": 0.97,
+            "quantity": 555
+          },
+          {
+            "price": 0.975,
+            "quantity": 39
+          },
+          {
+            "price": 0.98,
+            "quantity": 5020.38
+          },
+          {
+            "price": 0.99,
+            "quantity": 7663
+          },
+          {
+            "price": 0.995,
+            "quantity": 71966
+          }
+        ],
+        "state": "MARKET_STATE_OPEN",
+        "time": "2026-09-23T16:00:24.438335627Z"
+      },
+      "entryLiquidation": 1.731195
+    }
+  ],
+  "skipped": [
+    {
+      "game": "Toronto Blue Jays vs. Baltimore Orioles",
+      "slug": "aec-mlb-tor-bal-2026-09-22",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Minnesota Twins vs. San Francisco Giants",
+      "slug": "aec-mlb-min-sf-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Cleveland Guardians vs. Boston Red Sox",
+      "slug": "aec-mlb-cle-bos-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Chicago White Sox vs. Kansas City Royals",
+      "slug": "aec-mlb-cws-kc-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Miami Marlins vs. Chicago Cubs",
+      "slug": "aec-mlb-mia-chc-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "New York Mets vs. Texas Rangers",
+      "slug": "aec-mlb-nym-tex-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Arizona Diamondbacks vs. Colorado Rockies",
+      "slug": "aec-mlb-az-col-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Los Angeles Angels vs. Athletics",
+      "slug": "aec-mlb-laa-ath-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Houston Astros vs. Seattle Mariners",
+      "slug": "aec-mlb-hou-sea-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "San Diego Padres vs. Los Angeles Dodgers",
+      "slug": "aec-mlb-sd-lad-2026-09-23",
+      "reason": "The observed price did not change over this window."
+    },
+    {
+      "game": "Cincinnati Reds vs. Atlanta Braves",
+      "slug": "aec-mlb-cin-atl-2026-09-23",
+      "reason": "Outside the top five fillable markets under the stated rule."
+    }
+  ],
+  "cash": 0.8696672250000006,
+  "fees": 0.290332775,
+  "spent": 9.130332775
+}

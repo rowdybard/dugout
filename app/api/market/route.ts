@@ -1,4 +1,52 @@
 import {db} from '@/lib/server/storage';
 import {replayData} from '@/lib/server/replay';
-import {bbo,book,history,amount,metadata} from '@/lib/server/polymarket';
-export async function GET(req:Request){const u=new URL(req.url);const slug=u.searchParams.get('slug');if(!slug||!/^[a-zA-Z0-9_.-]+$/.test(slug))return Response.json({error:'Invalid market'},{status:400});try{const [quote,depth,points,meta]=await Promise.all([bbo(slug),book(slug),history(slug,u.searchParams.get('range')||'1h'),metadata(slug)]);const samples=await db().prepare('SELECT time,volume FROM snapshots WHERE slug=? AND time>? AND volume IS NOT NULL ORDER BY time').bind(slug,Date.now()-3600000).all<{time:number;volume:number}>();return Response.json({activity:samples.results,replayAt:(await replayData())?.recordedAt,rules:meta.description||'',question:meta.question||'',quote:{bid:amount(quote?.bestBid),ask:amount(quote?.bestAsk),volume:quote?.sharesTraded??null,state:quote?.state,depth:Number(quote?.bidShares||0)+Number(quote?.askShares||0)},book:depth,history:points,updated:Date.now()});}catch(e){return Response.json({error:e instanceof Error?e.message:'Market unavailable'},{status:503});}}
+import {bbo, book, history, amount, metadata, numeric} from '@/lib/server/polymarket';
+import {loadMarketDetail} from '@/lib/server/market-detail';
+import type {DetailRange} from '@/lib/market/detail';
+
+const ranges = new Set<DetailRange>(['15m', '1h', '6h', '24h', 'ALL']);
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const slug = url.searchParams.get('slug');
+  const range = (url.searchParams.get('range') || '1h') as DetailRange;
+  if (!slug || !/^[a-zA-Z0-9_.-]+$/.test(slug) || !ranges.has(range)) {
+    return Response.json({error: 'Choose a valid market and time range.'}, {status: 400});
+  }
+
+  const data = await loadMarketDetail(slug, range, {
+    quote: async () => {
+      const quote = await bbo(slug);
+      if (!quote) return null;
+      const buyerQuantity = numeric(quote.bidShares);
+      const sellerQuantity = numeric(quote.askShares);
+      return {
+        bid: amount(quote.bestBid),
+        ask: amount(quote.bestAsk),
+        volume: numeric(quote.sharesTraded),
+        state: typeof quote.state === 'string' ? quote.state : null,
+        depth: buyerQuantity !== null && sellerQuantity !== null
+          ? buyerQuantity + sellerQuantity
+          : null,
+      };
+    },
+    book: () => book(slug),
+    history: () => history(slug, range),
+    metadata: async () => {
+      const market = await metadata(slug);
+      return {
+        question: typeof market.question === 'string' ? market.question : null,
+        rules: typeof market.description === 'string' ? market.description : null,
+      };
+    },
+    activity: async () => {
+      const samples = await db().prepare(
+        'SELECT time,volume FROM snapshots WHERE slug=? AND time>? AND volume IS NOT NULL ORDER BY time',
+      ).bind(slug, Date.now() - 3600000).all<{time: number; volume: number}>();
+      return samples.results;
+    },
+    replayAt: async () => (await replayData())?.recordedAt,
+  });
+
+  return Response.json(data, {headers: {'Cache-Control': 'no-store'}});
+}

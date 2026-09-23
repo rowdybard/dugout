@@ -1,19 +1,324 @@
-'use client';
-import {useState} from 'react';
-import {FlaskConical,ArrowUpRight} from 'lucide-react';
-import {Tabs,TabsList,TabsTrigger} from '@/components/ui/tabs';
-import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/components/ui/table';
-import {BeliefChart} from './chart';
-import type {Profile,Position} from '@/lib/market/types';
-import {feeFor} from '@/lib/market/paper';
-const dollars=(v:number)=>`${v<0?'−':''}$${Math.abs(v).toFixed(2)}`;
-export function PaperPortfolio({profile,onProfile,onExplore}:{profile:Profile|null;onProfile:(p:Profile)=>void;onExplore:()=>void}){
- const [view,setView]=useState('portfolio'),[filter,setFilter]=useState('ALL'),[error,setError]=useState(''),[busy,setBusy]=useState('');
- if(!profile)return <div className="empty-panel">Loading your paper portfolio…</div>;
- const positions=profile.positions;const open=positions.filter(p=>p.status==='open'),closed=positions.filter(p=>p.status!=='open');const value=(p:Position)=>p.status==='open'?p.contracts*(p.mark??p.entry)-feeFor(p.contracts,p.mark??p.entry,p.coefficient):(p.payout||0);const pnl=(p:Position)=>value(p)-p.amount;
- const equity=profile.cash+open.reduce((s,p)=>s+value(p),0);const win=closed.filter(p=>pnl(p)>0).length;const avg=positions.length?positions.reduce((s,p)=>s+p.entry,0)/positions.length:0;
- const categories=['ALL','PRICE MOVING','PRICE DROPPING','WIDE SPREAD','SPREAD TIGHTENING','UNUSUAL ACTIVITY','THIN MARKET'];
- const selected=filter==='ALL'?positions:positions.filter(p=>p.signal===filter);const filteredClosed=selected.filter(p=>p.status!=='open').sort((a,b)=>a.closedAt!-b.closedAt!);let running=100;const chart=filter==='ALL'?profile.equity:[{time:profile.equity[0].time,price:100},...filteredClosed.map(p=>({time:p.closedAt!,price:running+=pnl(p)}))];
- const close=async(id:string)=>{setBusy(id);setError('');try{const r=await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'close',id})});const d=await r.json() as Profile & {error?:string};if(!r.ok)throw new Error(d.error);onProfile(d);}catch(e){setError(e instanceof Error?e.message:'Unable to close');}finally{setBusy('');}};
- return <><div className="portfolio-intro"><div><div className="eyebrow">NO REAL MONEY. REAL ACCOUNTABILITY.</div><h1>Your paper trail<span>.</span></h1><p>See what worked. Remember what didn’t.</p></div><span className="paper-label"><FlaskConical size={15}/> $100 STARTING BANKROLL</span></div><Tabs value={view} onValueChange={setView}><TabsList className="portfolio-tabs"><TabsTrigger value="portfolio">Paper Portfolio</TabsTrigger><TabsTrigger value="signals">Signal Performance</TabsTrigger></TabsList></Tabs><div className="portfolio-stats"><div><span>PAPER EQUITY</span><strong>{dollars(equity)}</strong><small>{dollars(profile.cash)} available cash</small></div><div><span>TOTAL PROFIT / LOSS</span><strong className={equity>=100?'up':'down'}>{equity>=100?'+':''}{dollars(equity-100)}</strong><small>Including estimated exit fees</small></div><div><span>CLOSED-TRADE WIN RATE</span><strong>{closed.length?`${Math.round(win/closed.length*100)}%`:'—'}</strong><small>{closed.length} closed · {open.length} open</small></div><div><span>TOTAL POSITIONS</span><strong>{positions.length}</strong><small>Average entry {positions.length?`${(avg*100).toFixed(1)}¢`:'—'}</small></div></div><section className="portfolio-chart-panel"><div className="section-title"><h3>{filter==='ALL'?'Paper bankroll over time':`${filter.toLowerCase()} · realized performance`}</h3><span>{selected.length} trades in sample</span></div><div className="signal-filters">{categories.map(c=><button key={c} onClick={()=>setFilter(c)} className={filter===c?'active':''}>{c==='ALL'?'All signals':c.toLowerCase()}</button>)}</div><BeliefChart points={chart} money/><p className="chart-caption">{filter==='ALL'?'Cash plus open positions valued at the last observed buyer price, minus estimated exit fees. Missing quotes use entry price.':'Starts at a $100 reference balance and adds realized P/L for this signal only. Open trades are excluded.'}</p></section>{error&&<p className="error-message" role="alert">{error}</p>}{view==='signals'?<section className="signal-table"><h3>Observations, put to the test.</h3><p>Small samples tell stories, not reliable conclusions. Paper trades are self-selected and do not prove a causal edge.</p><Table><TableHeader><TableRow><TableHead>Scanner condition</TableHead><TableHead>Sample</TableHead><TableHead>Closed P/L</TableHead><TableHead>Win rate</TableHead><TableHead>Avg. entry</TableHead></TableRow></TableHeader><TableBody>{[...new Set([...categories.slice(1),...positions.map(p=>p.signal)])].map(s=>{const all=positions.filter(p=>p.signal===s),done=all.filter(p=>p.status!=='open'),profit=done.reduce((a,p)=>a+pnl(p),0);return <TableRow key={s}><TableCell><b>{s}</b><small>{done.length<30?'Too few closed trades to judge':'Descriptive only · validate on future data'}</small></TableCell><TableCell>{all.length} trades / {done.length} closed</TableCell><TableCell className={profit>=0?'up':'down'}>{dollars(profit)}</TableCell><TableCell>{done.length?`${Math.round(done.filter(p=>pnl(p)>0).length/done.length*100)}%`:'—'}</TableCell><TableCell>{all.length?`${(all.reduce((a,p)=>a+p.entry,0)/all.length*100).toFixed(1)}¢`:'—'}</TableCell></TableRow>;})}</TableBody></Table></section>:selected.length?<section className="positions"><h3>Your positions</h3>{selected.slice().reverse().map(p=><article key={p.id}><div><span className="league-tag">{p.league}</span><h4>{p.title}</h4><p>{p.contracts} {p.side} contracts · {p.signal} · {p.status}</p><small>Entry {(p.entry*100).toFixed(1)}¢ · {new Date(p.time).toLocaleString()}</small><small>{p.status==='open'?`Buyer quote ${p.mark!==null&&p.mark!==undefined?(p.mark*100).toFixed(1)+'¢':'unavailable'} · ${p.markTime?new Date(p.markTime).toLocaleTimeString():'not updated'}`:`Exit ${((p.exit||0)*100).toFixed(1)}¢ · ${p.status==='settled'?'official settlement':'manual close'}`}</small></div><div><strong className={pnl(p)>=0?'up':'down'}>{pnl(p)>=0?'+':''}{dollars(pnl(p))}</strong><small>{dollars(value(p))} value</small>{p.status==='open'&&<button disabled={!!busy} onClick={()=>close(p.id)}>{busy===p.id?'Closing…':'Close position'}</button>}</div></article>)}</section>:<div className="portfolio-empty"><FlaskConical size={32}/><h3>Your first idea goes here.</h3><p>Open a market, try a paper position, and let the results do the talking.</p><button onClick={onExplore}>Find something interesting <ArrowUpRight size={17}/></button></div>}</>;
+"use client";
+import { useState } from "react";
+import { FlaskConical, ArrowUpRight } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { BeliefChart } from "./chart";
+import type { Profile, Position } from "@/lib/market/types";
+import { feeFor } from "@/lib/market/paper";
+const dollars = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
+export function PaperPortfolio({
+  profile,
+  onProfile,
+  onExplore,
+  loadError,
+  onRetry,
+  onSimulation,
+}: {
+  profile: Profile | null;
+  onProfile: (p: Profile) => void;
+  onExplore: () => void;
+  loadError?: string;
+  onRetry?: () => void;
+  onSimulation?: () => void;
+}) {
+  const [view, setView] = useState("portfolio"),
+    [filter, setFilter] = useState("ALL"),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState("");
+  if (!profile)
+    return (
+      <div className="empty-panel" role={loadError ? "alert" : "status"}>
+        <h3>
+          {loadError
+            ? "Your practice picks couldn’t load."
+            : "Loading your practice picks…"}
+        </h3>
+        {loadError && (
+          <>
+            <p>{loadError}</p>
+            <button onClick={onRetry}>Retry</button>
+          </>
+        )}
+      </div>
+    );
+  const positions = profile.positions;
+  const open = positions.filter((p) => p.status === "open"),
+    closed = positions.filter((p) => p.status !== "open");
+  const value = (p: Position) =>
+    p.status === "open"
+      ? p.contracts * (p.mark ?? p.entry) -
+        feeFor(p.contracts, p.mark ?? p.entry, p.coefficient)
+      : p.payout || 0;
+  const pnl = (p: Position) => value(p) - p.amount;
+  const equity = profile.cash + open.reduce((s, p) => s + value(p), 0);
+  const win = closed.filter((p) => pnl(p) > 0).length;
+  const avg = positions.length
+    ? positions.reduce((s, p) => s + p.entry, 0) / positions.length
+    : 0;
+  const categories = [
+    "ALL",
+    "PRICE MOVING",
+    "PRICE DROPPING",
+    "WIDE SPREAD",
+    "SPREAD TIGHTENING",
+    "UNUSUAL ACTIVITY",
+    "THIN MARKET",
+  ];
+  const selected =
+    filter === "ALL" ? positions : positions.filter((p) => p.signal === filter);
+  const filteredClosed = selected
+    .filter((p) => p.status !== "open")
+    .sort((a, b) => a.closedAt! - b.closedAt!);
+  let running = 100;
+  const chart =
+    filter === "ALL"
+      ? profile.equity
+      : [
+          { time: profile.equity[0].time, price: 100 },
+          ...filteredClosed.map((p) => ({
+            time: p.closedAt!,
+            price: (running += pnl(p)),
+          })),
+        ];
+  const close = async (id: string) => {
+    setBusy(id);
+    setError("");
+    try {
+      const r = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close", id }),
+      });
+      const d = (await r.json()) as Profile & { error?: string };
+      if (!r.ok) throw new Error(d.error);
+      onProfile(d);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to close");
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <>
+      <div className="portfolio-intro">
+        <div>
+          <div className="eyebrow">PAPER PORTFOLIO · PICKS YOU CHOSE</div>
+          <h1>
+            Your practice picks<span>.</span>
+          </h1>
+          <p>
+            Only picks you explicitly saved appear here. All money is pretend.
+          </p>
+        </div>
+        <span className="paper-label">
+          <FlaskConical size={15} /> $100 STARTING BANKROLL
+        </span>
+      </div>
+      <button className="simulation-link" onClick={onSimulation}>
+        <FlaskConical size={19} />
+        <span>
+          <b>The $10 MLB test · Sep 23</b>
+          <small>See the separate experiment run by the app.</small>
+        </span>
+        <ArrowUpRight size={18} />
+      </button>
+      {loadError && (
+        <div className="error-banner" role="alert">
+          <p>{loadError} Showing the last loaded balance.</p>
+          <button onClick={onRetry}>Retry</button>
+        </div>
+      )}
+      <Tabs value={view} onValueChange={setView}>
+        <TabsList className="portfolio-tabs">
+          <TabsTrigger value="portfolio">Paper Portfolio</TabsTrigger>
+          <TabsTrigger value="signals">Signal Performance</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <div className="portfolio-stats">
+        <div>
+          <span>PAPER EQUITY</span>
+          <strong>{dollars(equity)}</strong>
+          <small>{dollars(profile.cash)} available cash</small>
+        </div>
+        <div>
+          <span>TOTAL PROFIT / LOSS</span>
+          <strong className={equity >= 100 ? "up" : "down"}>
+            {equity >= 100 ? "+" : ""}
+            {dollars(equity - 100)}
+          </strong>
+          <small>Including estimated exit fees</small>
+        </div>
+        <div>
+          <span>CLOSED-TRADE WIN RATE</span>
+          <strong>
+            {closed.length
+              ? `${Math.round((win / closed.length) * 100)}%`
+              : "—"}
+          </strong>
+          <small>
+            {closed.length} closed · {open.length} open
+          </small>
+        </div>
+        <div>
+          <span>TOTAL POSITIONS</span>
+          <strong>{positions.length}</strong>
+          <small>
+            Average entry{" "}
+            {positions.length ? `${(avg * 100).toFixed(1)}¢` : "—"}
+          </small>
+        </div>
+      </div>
+      <section className="portfolio-chart-panel">
+        <div className="section-title">
+          <h3>
+            {filter === "ALL"
+              ? "Paper bankroll over time"
+              : `${filter.toLowerCase()} · realized performance`}
+          </h3>
+          <span>{selected.length} trades in sample</span>
+        </div>
+        <div className="signal-filters">
+          {categories.map((c) => (
+            <button
+              key={c}
+              onClick={() => setFilter(c)}
+              className={filter === c ? "active" : ""}
+            >
+              {c === "ALL" ? "All signals" : c.toLowerCase()}
+            </button>
+          ))}
+        </div>
+        <BeliefChart points={chart} money />
+        <p className="chart-caption">
+          {filter === "ALL"
+            ? "Cash plus open positions valued at the last observed buyer price, minus estimated exit fees. Missing quotes use entry price."
+            : "Starts at a $100 reference balance and adds realized P/L for this signal only. Open trades are excluded."}
+        </p>
+      </section>
+      {error && (
+        <p className="error-message" role="alert">
+          {error}
+        </p>
+      )}
+      {view === "signals" ? (
+        <section className="signal-table">
+          <h3>Observations, put to the test.</h3>
+          <p>
+            Small samples tell stories, not reliable conclusions. Paper trades
+            are self-selected and do not prove a causal edge.
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Scanner condition</TableHead>
+                <TableHead>Sample</TableHead>
+                <TableHead>Closed P/L</TableHead>
+                <TableHead>Win rate</TableHead>
+                <TableHead>Avg. entry</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                ...new Set([
+                  ...categories.slice(1),
+                  ...positions.map((p) => p.signal),
+                ]),
+              ].map((s) => {
+                const all = positions.filter((p) => p.signal === s),
+                  done = all.filter((p) => p.status !== "open"),
+                  profit = done.reduce((a, p) => a + pnl(p), 0);
+                return (
+                  <TableRow key={s}>
+                    <TableCell>
+                      <b>{s}</b>
+                      <small>
+                        {done.length < 30
+                          ? "Too few closed trades to judge"
+                          : "Descriptive only · validate on future data"}
+                      </small>
+                    </TableCell>
+                    <TableCell>
+                      {all.length} trades / {done.length} closed
+                    </TableCell>
+                    <TableCell className={profit >= 0 ? "up" : "down"}>
+                      {dollars(profit)}
+                    </TableCell>
+                    <TableCell>
+                      {done.length
+                        ? `${Math.round((done.filter((p) => pnl(p) > 0).length / done.length) * 100)}%`
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {all.length
+                        ? `${((all.reduce((a, p) => a + p.entry, 0) / all.length) * 100).toFixed(1)}¢`
+                        : "—"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </section>
+      ) : selected.length ? (
+        <section className="positions">
+          <h3>Picks you saved</h3>
+          {selected
+            .slice()
+            .reverse()
+            .map((p) => (
+              <article key={p.id}>
+                <div>
+                  <span className="league-tag">{p.league}</span>
+                  <h4>{p.title}</h4>
+                  <p>
+                    {p.contracts} {p.side} contracts · {p.signal} · {p.status}
+                  </p>
+                  <small>
+                    Entry {(p.entry * 100).toFixed(1)}¢ ·{" "}
+                    {new Date(p.time).toLocaleString()}
+                  </small>
+                  <small>
+                    {p.status === "open"
+                      ? `Buyer quote ${p.mark !== null && p.mark !== undefined ? (p.mark * 100).toFixed(1) + "¢" : "unavailable"} · ${p.markTime ? new Date(p.markTime).toLocaleTimeString() : "not updated"}`
+                      : `Exit ${((p.exit || 0) * 100).toFixed(1)}¢ · ${p.status === "settled" ? "official settlement" : "manual close"}`}
+                  </small>
+                </div>
+                <div>
+                  <strong className={pnl(p) >= 0 ? "up" : "down"}>
+                    {pnl(p) >= 0 ? "+" : ""}
+                    {dollars(pnl(p))}
+                  </strong>
+                  <small>{dollars(value(p))} value</small>
+                  {p.status === "open" && (
+                    <button disabled={!!busy} onClick={() => close(p.id)}>
+                      {busy === p.id ? "Closing…" : "Sell practice pick"}
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+        </section>
+      ) : (
+        <div className="portfolio-empty">
+          <FlaskConical size={32} />
+          <h3>You haven’t saved a practice pick yet.</h3>
+          <p>
+            Choose an MLB or NFL game, tap Understand this game, then Save
+            practice pick. Watching a game doesn’t add a pick.
+          </p>
+          <button onClick={onExplore}>
+            Browse MLB games <ArrowUpRight size={17} />
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
