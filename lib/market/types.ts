@@ -102,6 +102,8 @@ export type Config = {
   stale: number;
 };
 export type Profile = {
+  /** Authoritative persisted account revision, used to reject late responses. */
+  revision?: number;
   trading?: import('../trading/workspace').TradingState;
   cash: number;
   positions: Position[];

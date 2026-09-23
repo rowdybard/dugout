@@ -105,13 +105,14 @@ export function calculateOrder(p: Profile, body: OrderRequest, context: Awaited<
 /** A single D1 transaction changes both ledger and immutable command journal, guarded by profile version. */
 export async function commitOrder(p: StoredProfile, body: OrderRequest, order: WorkspaceOrder) {
   const fingerprint = requestFingerprint(body), id = `${p.id}:${body.commandId}`;
+  const revision = p.version + 1;
   let outcome: D1Result[];
   try {
     outcome = await db().batch([
       db().prepare('INSERT INTO trading_commands(id,user_id,command_id,fingerprint,value,created_at) SELECT ?,?,?,?,?,? FROM profiles WHERE id=? AND version=?')
         .bind(id,p.id,body.commandId,fingerprint,JSON.stringify(order),order.createdAt,p.id,p.version),
       db().prepare('UPDATE profiles SET value=?,version=version+1 WHERE id=? AND version=? AND EXISTS (SELECT 1 FROM trading_commands WHERE id=?)')
-        .bind(JSON.stringify(p.data),p.id,p.version,id),
+        .bind(JSON.stringify({...p.data,revision}),p.id,p.version,id),
     ]);
   } catch (e) {
     const existing = await priorOrder(p.id, body.commandId, fingerprint);
@@ -123,6 +124,8 @@ export async function commitOrder(p: StoredProfile, body: OrderRequest, order: W
     if (existing) return existing;
     throw new Error('Account changed while checking the quote. No order was applied; refresh and try again.');
   }
+  p.version = revision;
+  p.data.revision = revision;
   return order;
 }
 export async function placePaperOrder(req: Request, body: OrderRequest) {

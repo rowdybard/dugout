@@ -11,9 +11,9 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {Dialog, DialogContent, DialogDescription, DialogTitle} from '@/components/ui/dialog';
+import {SportsContextPanel} from './sports-context-panel';
 import {Sparkline} from './chart';
 import {cents, gameTime} from './market-card';
-import {AutomationPanel} from './automation-panel';
 import {useMarketStream} from '@/lib/trading/use-market-stream';
 import {streamBookForDisplay} from '@/lib/trading/stream-types';
 import {feeFor, sideBook} from '@/lib/market/paper';
@@ -62,6 +62,13 @@ type Props = {
   onTab: (tab: string) => void;
   onWatch: (market: Market) => void;
   onSettings: () => void;
+  beginner: boolean;
+  visible: boolean;
+  target: {slug:string; side:Side; revision:number;action:'BUY'|'SELL';positionId?:string}|null;
+  onPendingOrder:(order:{slug:string;side:Side;commandId:string}|null)=>void;
+  onSimulation: () => void;
+  onGame: (market:Market) => void;
+  onHelp: (concept:string) => void;
 };
 const DEFAULT_SETTINGS: Settings = {entryPresets: [5, 10, 25], exitPresets: [25, 50, 100], maxPriceDrift: 0.02};
 const RANGES: DetailRange[] = ['15m', '1h', '6h', '24h', 'ALL'];
@@ -72,6 +79,7 @@ const time = (value: number) => new Date(value).toLocaleTimeString([], {hour: 'n
 const positionValue = (position: Position) => position.status === 'open'
   ? position.contracts * (position.mark ?? position.entry) - feeFor(position.contracts, position.mark ?? position.entry, position.coefficient)
   : position.payout ?? 0;
+const heldMarket = (position:Position):Market => ({slug:position.slug,id:'',title:position.side==='YES'?position.title:`Opposite of ${position.title}`,oppositeTitle:position.side==='NO'?position.title:`Not ${position.title}`,question:position.title,rules:'',gameId:'',game:position.game,league:position.league,start:'',teams:[],kind:'',bid:null,ask:null,price:position.mark==null?null:position.side==='YES'?position.mark:1-position.mark,volume:null,fee:position.coefficient??0,active:false,history:[],signals:[],observedAt:position.markTime??position.time});
 const deltaOf = (points: Point[]) => points.length > 1 ? (points.at(-1)!.price - points[0].price) * 100 : null;
 
 function PriceChart({points, positions = [], side = 'YES', moneyChart = false}: {
@@ -119,7 +127,7 @@ function CompactPortfolio({profile, onMarket}: {profile: Profile | null; onMarke
     ...[...closed].sort((a, b) => (a.closedAt ?? a.time) - (b.closedAt ?? b.time)).map(position => ({time: position.closedAt ?? position.time, price: balance += positionValue(position) - position.amount})),
   ];
   return <section className="tw-portfolio">
-    <div className="tw-portfolio-header"><div><span className="tw-kicker">PAPER PERFORMANCE</span><h1>Track the results.</h1></div><label className="tw-select-label">Signal <select aria-label="Performance signal" value={filter} onChange={event => setFilter(event.target.value)}><option value="ALL">All signals</option>{signals.map(signal => <option key={signal}>{signal}</option>)}</select></label></div>
+    <div className="tw-portfolio-header"><div><h2>Paper performance</h2></div><label className="tw-select-label">Signal <select aria-label="Performance signal" value={filter} onChange={event => setFilter(event.target.value)}><option value="ALL">All signals</option>{signals.map(signal => <option key={signal}>{signal}</option>)}</select></label></div>
     <div className="tw-performance-stats"><div><span>REALIZED P/L</span><strong className={realized < 0 ? 'tw-down' : 'tw-up'}>{signedMoney(realized)}</strong></div><div><span>CLOSED / OPEN</span><strong>{closed.length}<small> / {open.length}</small></strong></div><div><span>CLOSED WIN RATE</span><strong>{closed.length ? `${Math.round(wins / closed.length * 100)}%` : '—'}</strong></div><div><span>SAMPLE</span><strong>{selected.length}<small> positions</small></strong></div></div>
     <div className="tw-panel tw-performance-chart"><div className="tw-panel-heading"><h2>{filter === 'ALL' ? 'Paper equity' : 'Realized P/L · $100 reference'}</h2><span>{filter === 'ALL' ? 'Estimated exit fees included' : 'Open positions excluded'}</span></div><PriceChart points={chart} moneyChart/></div>
     <div className="tw-panel tw-signal-results"><div className="tw-panel-heading"><h2>Signal breakdown</h2><span>Paper results · sample sizes shown</span></div><div className="tw-table-scroll"><table><thead><tr><th>Signal</th><th>Closed</th><th>Open</th><th>Realized P/L</th><th>Win rate</th></tr></thead><tbody>{signals.map(signal => {
@@ -139,7 +147,7 @@ function PositionTable({positions, onMarket}: {positions: Position[]; onMarket: 
   })}</tbody></table>{!positions.length && <div className="tw-table-empty">No positions.</div>}</div>;
 }
 
-export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, onRetryProfile, loading: feedLoading, error: feedError, profileError, tab, onTab, onWatch, onSettings}: Props) {
+export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, onRetryProfile, loading: feedLoading, error: feedError, profileError, tab, onTab, onWatch, onSettings, beginner, visible, target, onSimulation, onGame, onHelp, onPendingOrder}: Props) {
   const [selectedSlug, setSelectedSlug] = useState('');
   const [side, setSide] = useState<Side>('YES');
   const [range, setRange] = useState<DetailRange>('1h');
@@ -166,6 +174,7 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
   const [uncertainCommand, setUncertainCommand] = useState('');
   const [pendingRequest, setPendingRequest] = useState<PendingPaperRequest | null>(null);
   const [showBook, setShowBook] = useState(false);
+  const [tradeAction,setTradeAction] = useState<'BUY'|'SELL'>('BUY');
   const [clock, setClock] = useState(Date.now());
   const [streamPoints, setStreamPoints] = useState<Point[]>([]);
   const submitting = useRef(false);
@@ -183,10 +192,11 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
     return base.filter(market => !query || `${market.game} ${market.title}`.toLowerCase().includes(query.toLowerCase()));
   }, [activeTab, markets, feed, watched, query]);
   const allMarkets = feed?.games.flatMap(game => game.markets) ?? markets;
-  const selected = allMarkets.find(market => market.slug === selectedSlug) ?? available[0] ?? null;
+  const held=profile?.positions.find(position=>position.slug===selectedSlug);
+  const selected = selectedSlug ? allMarkets.find(market => market.slug === selectedSlug) ?? (held?heldMarket(held):null) : available[0] ?? null;
   const current = detail?.slug === selected?.slug ? detail : null;
   const streamEnabled = connection?.transport === 'stream' && connection.state === 'ready';
-  const {quote: streamQuote, connected: streamConnected} = useMarketStream(selected?.slug ?? '', streamEnabled);
+  const {quote: streamQuote, connected: streamConnected} = useMarketStream(selected?.slug ?? '', streamEnabled && visible);
   const streamed = streamQuote && selected && streamQuote.slug === selected.slug && streamQuote.valid && streamConnected ? streamQuote : null;
   const streamBook = streamed ? streamBookForDisplay(streamed) : null;
   const sourceBook = streamBook ?? current?.book;
@@ -203,7 +213,7 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
   const outcome = selected ? side === 'YES' ? selected.title : selected.oppositeTitle || `NO · ${selected.title}` : '';
   const openPositions = profile?.positions.filter(position => position.status === 'open') ?? [];
   const selectedPositions = openPositions.filter(position => position.slug === selected?.slug && position.side === side);
-  const lot = selectedPositions.find(position => position.id === lotId) ?? selectedPositions[0];
+  const lot = lotId ? selectedPositions.find(position => position.id === lotId) : selectedPositions[0];
   const equity = profile ? profile.cash + openPositions.reduce((sum, position) => sum + positionValue(position), 0) : null;
   const pnl = equity === null ? null : equity - 100;
   const rules = current?.executionRules;
@@ -292,7 +302,7 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
   },[current?.bookReceivedAt,current?.retrievedAt,current?.slug,feed?.replayAt,streamed]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || !visible || activeTab === 'portfolio') return;
     let canceled = false;
     let inFlight = false;
     let controller: AbortController | null = null;
@@ -315,13 +325,17 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
     void load();
     const timer = setInterval(() => {if (!document.hidden) void load();}, streamEnabled ? 30000 : 5000);
     return () => {canceled = true; controller?.abort(); clearInterval(timer);};
-  }, [selected?.slug, range, detailRevision, streamEnabled]);
+  }, [selected?.slug, range, detailRevision, streamEnabled, visible, activeTab]);
+
+  useEffect(()=>{if(target){setSelectedSlug(target.slug);setSide(target.side);setLotId(target.positionId??'');setTradeAction(target.action);setTradeError('');}},[target?.revision]);
+
+  useEffect(()=>{onPendingOrder(uncertainCommand?{slug:pendingRequest?.body.slug??'',side:pendingRequest?.body.side??'YES',commandId:uncertainCommand}:null)},[uncertainCommand,pendingRequest?.body.slug,pendingRequest?.body.side,onPendingOrder]);
 
   const selectMarket = (market: Market, selectedSide: Side = 'YES', positionId = '') => {
-    setSelectedSlug(market.slug); setSide(selectedSide); setLotId(positionId); setTradeError(''); setReceipt('');
+    setSelectedSlug(market.slug); setSide(selectedSide); setLotId(positionId); setTradeError(''); setReceipt('');setTradeAction(positionId?'SELL':'BUY');
   };
   const viewPosition = (position: Position) => {
-    const market = allMarkets.find(candidate => candidate.slug === position.slug);
+    const market = allMarkets.find(candidate => candidate.slug === position.slug)??heldMarket(position);
     if (market) {selectMarket(market, position.side, position.id); onTab(position.league.toLowerCase()); setQuery('');}
     else setTradeError('This market is outside the current feed. Refresh markets to retry.');
   };
@@ -389,19 +403,20 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
     if (limitPrice === null) return;
     await sendPaperRequest({body: {commandId: crypto.randomUUID(), action, slug: selected.slug, side, ...(action === 'BUY' ? {amount} : {positionId: lot?.id, percent: exitPercent}), limitPrice, mode: 'paper'}, outcome, createdAt: Date.now()});
   };
-  const tabItems = [{value: 'interesting', label: 'Scanner', icon: Flame}, {value: 'mlb', label: 'MLB', icon: CircleDot}, {value: 'nfl', label: 'NFL', icon: Trophy}, {value: 'watchlist', label: 'Watchlist', icon: Bookmark}, {value: 'portfolio', label: 'Portfolio', icon: FlaskConical}];
+  const tabItems = [{value: 'mlb', label: 'MLB', icon: CircleDot}, {value: 'nfl', label: 'NFL', icon: Trophy}, {value: 'watchlist', label: 'Watchlist', icon: Bookmark}, {value: 'interesting', label: 'Scanner', icon: Flame}];
 
-  return <main className="trading-workspace">
-    <div className="tw-topline">
+  return <main className="trading-workspace" hidden={!visible}>
+    <div className="tw-section-heading"><div><h1>{activeTab === 'portfolio' ? 'Your results' : 'Manual trading'}</h1>{beginner && <p>{activeTab === 'portfolio' ? 'All your paper positions, including bot trades.' : 'Choose a game, inspect the chart, then enter or exit.'}</p>}</div>{activeTab === 'portfolio' && <button className="secondary-action" onClick={onSimulation}><FlaskConical size={16}/> $10 MLB experiment</button>}</div>
+    {activeTab !== 'portfolio' && <div className="tw-topline">
       <nav aria-label="Trading navigation">{tabItems.map(({value, label, icon: Icon}) => <button key={value} className={activeTab === value ? 'active' : ''} aria-current={activeTab === value ? 'page' : undefined} onClick={() => changeTab(value)}><Icon size={16}/>{label}{value === 'interesting' && markets.filter(market => market.signals.length).length > 0 && <span>{markets.filter(market => market.signals.length).length}</span>}</button>)}</nav>
       <div className="tw-connection" title={connection?.message ?? 'Checking market connection'}><i className={connection?.transport === 'stream' && connection.state === 'ready' ? 'ready' : ''}/>{feed?.replayAt ? 'RECORDED CAPTURE' : connection?.transport === 'stream' && connection.state === 'ready' ? 'Streaming' : connection?.state === 'stale' ? 'Connection stale' : 'REST snapshots'}<button className="tw-icon" aria-label="Refresh markets" disabled={feedLoading} onClick={onRefresh}><RefreshCw size={14} className={feedLoading ? 'spin' : ''}/></button></div>
-    </div>
-    <div className="tw-account-bar"><span className="tw-account-label"><FlaskConical size={14}/> PAPER ACCOUNT</span><div><span>Equity</span><b>{equity === null ? '—' : money(equity)}</b></div><div><span>Cash</span><b>{profile ? money(profile.cash) : '—'}</b></div><div><span>Net P/L</span><b className={pnl === null ? '' : pnl < 0 ? 'tw-down' : 'tw-up'}>{pnl === null ? '—' : signedMoney(pnl)}</b></div><div className="tw-open-count"><span>Open</span><b>{openPositions.length}</b></div><button className="tw-live-locked" disabled title="Live execution unavailable until the US account and execution service are connected"><LockKeyhole size={12}/> Live unavailable</button></div>
+    </div>}
+    <div className="tw-account-bar"><div><span>Equity</span><b>{equity === null ? '—' : money(equity)}</b></div><div><span>Cash</span><b>{profile ? money(profile.cash) : '—'}</b></div><div><span>Net P/L</span><b className={pnl === null ? '' : pnl < 0 ? 'tw-down' : 'tw-up'}>{pnl === null ? '—' : signedMoney(pnl)}</b></div><div className="tw-open-count"><span>Open</span><b>{openPositions.length}</b></div></div>
     {(feedError || profileError) && <div className="tw-notice" role="alert"><span>{feedError || profileError}</span><button onClick={feedError ? onRefresh : onRetryProfile}>Retry</button></div>}
     {tradeError && activeTab === 'portfolio' && <div className="tw-notice" role="alert">{tradeError}</div>}
     {activeTab === 'portfolio' ? <CompactPortfolio profile={profile} onMarket={viewPosition}/> : <div className="tw-grid">
       <aside className="tw-market-rail" aria-label="Market selection">
-        <div className="tw-rail-heading"><b>{activeTab === 'interesting' ? markets.some(market => market.signals.length) ? 'Flagged markets' : 'MLB · no scanner flags' : activeTab === 'watchlist' ? 'Watching' : `${activeTab.toUpperCase()} games`} <span>{available.length}</span></b><button className="tw-icon" onClick={onSettings} aria-label="Scanner thresholds"><SlidersHorizontal size={14}/></button></div>
+        <div className="tw-rail-heading"><b>{activeTab === 'interesting' ? markets.some(market => market.signals.length) ? 'Scanner observations' : 'No flags · browsing MLB' : activeTab === 'watchlist' ? 'Watching' : `${activeTab.toUpperCase()} games`} <span>{available.length}</span></b><button className="tw-icon" onClick={onSettings} aria-label="Scanner thresholds"><SlidersHorizontal size={14}/></button></div>
         <label className="tw-search"><Search size={14}/><input aria-label="Search markets" placeholder="Find a team or market" value={query} onChange={event => setQuery(event.target.value)}/>{query && <button onClick={() => setQuery('')} aria-label="Clear market search"><X size={13}/></button>}</label>
         <div className="tw-market-list">
           {available.map(market => {
@@ -419,49 +434,43 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
       </aside>
       <section className="tw-market-main">
         {!selected ? <div className="tw-no-selection"><CircleDot size={32}/><h1>Select a market.</h1><button onClick={() => changeTab('mlb')}>MLB games <ArrowUpRight size={16}/></button></div> : <>
-          <div className="tw-market-header"><div><span className="tw-kicker">{selected.league} <i/> {gameTime(selected.start)}</span><h1>{selected.game}</h1><span className="tw-market-type">{selected.kind.replaceAll('_', ' ')}</span></div><button onClick={() => onWatch(selected)} className={`tw-watch ${marketWatched ? 'active' : ''}`} aria-label={marketWatched ? 'Unwatch market' : 'Watch market'}><Bookmark size={18} fill={marketWatched ? 'currentColor' : 'none'}/></button></div>
-          <div className="tw-outcomes" role="group" aria-label="Select outcome">{(['YES', 'NO'] as const).map(value => <button key={value} className={side === value ? 'active' : ''} aria-pressed={side === value} onClick={() => {setSide(value); setLotId(''); setTradeError('');}}><span>{value}</span>{value === 'YES' ? selected.title : selected.oppositeTitle || `Not ${selected.title}`}{side === value && <Check size={15}/>}</button>)}</div>
+          <div className="tw-market-header"><div><span className="tw-kicker">{selected.league} <i/> {selected.start?gameTime(selected.start):'Recorded position'}</span><h1>{selected.game}</h1>{selected.gameId&&<button className="tw-game-info" onClick={()=>onGame(selected)}>Game details <ChevronRight size={13}/></button>}</div><button onClick={() => onWatch(selected)} className={`tw-watch ${marketWatched ? 'active' : ''}`} aria-label={marketWatched ? 'Unwatch market' : 'Watch market'}><Bookmark size={18} fill={marketWatched ? 'currentColor' : 'none'}/></button></div>
+          <div className="tw-outcomes" role="group" aria-label="Select outcome">{(['YES', 'NO'] as const).map(value => <button key={value} className={side === value ? 'active' : ''} aria-pressed={side === value} onClick={() => {setSide(value); setLotId(''); setTradeError('');}}>{!beginner && <span>{value}</span>}{value === 'YES' ? selected.title : selected.oppositeTitle || `Not ${selected.title}`}{side === value && <Check size={15}/>}</button>)}</div>
           {allMarkets.filter(market => market.gameId === selected.gameId).length > 1 && <label className="tw-related">Market <select aria-label="Markets for selected game" value={selected.slug} onChange={event => {const market = allMarkets.find(candidate => candidate.slug === event.target.value); if (market) selectMarket(market);}}>{allMarkets.filter(market => market.gameId === selected.gameId).map(market => <option key={market.slug} value={market.slug}>{market.title}</option>)}</select><ChevronDown size={13}/></label>}
-          <div className="tw-chart-top"><div className="tw-hero-price"><strong><span className="tw-price-source">{bid !== null && ask !== null ? "MID" : "PRICE"}</span>{cents(displayPrice)}</strong><div className={change !== null && change < 0 ? 'tw-down' : 'tw-up'}>{change === null ? <span>—</span> : <><span>{change < 0 ? <ArrowDownRight size={17}/> : <ArrowUpRight size={17}/>} {change >= 0 ? '+' : ''}{change.toFixed(1)} pts</span><small>{range === 'ALL' ? 'recorded history' : `last ${range}`}</small></>}</div></div><div className="tw-range" role="group" aria-label="Chart time range">{RANGES.map(value => <button key={value} className={range === value ? 'active' : ''} aria-pressed={range === value} onClick={() => setRange(value)}>{value}</button>)}</div></div>
+          <div className="tw-chart-top"><div className="tw-hero-price"><strong><span className="tw-price-source">{beginner?"MARKET VIEW":bid !== null && ask !== null ? "MID PRICE" : "PRICE"}</span>{cents(displayPrice)}</strong><div className={change !== null && change < 0 ? 'tw-down' : 'tw-up'}>{change === null ? <span>—</span> : <><span>{change < 0 ? <ArrowDownRight size={17}/> : <ArrowUpRight size={17}/>} {change >= 0 ? '+' : ''}{change.toFixed(1)} pts</span><small>{range === 'ALL' ? 'recorded history' : `last ${range}`}</small></>}</div></div><div className="tw-range" role="group" aria-label="Chart time range">{RANGES.map(value => <button key={value} className={range === value ? 'active' : ''} aria-pressed={range === value} onClick={() => setRange(value)}>{value}</button>)}</div></div>
           <PriceChart points={points} positions={sidePositions} side={side}/>
           <div className="tw-chart-foot"><span><i className={stale ? 'stale' : ''}/>{feed?.replayAt || current?.replayAt ? `Captured ${time(feed?.replayAt ?? current!.replayAt!)}` : streamBook ? `Quote ${time(streamed!.receivedAt)}` : detailLoading && !current ? 'Loading quote' : current ? `Quote ${time(current.bookReceivedAt??current.retrievedAt)}` : 'Awaiting quote'}{feed?.replayAt || current?.replayAt ? ' · RECORDED CAPTURE' : streamBook ? ' · WebSocket' : ' · REST / 5s'}</span><button onClick={() => setDetailRevision(value => value + 1)} disabled={detailLoading} aria-label="Refresh selected market"><RefreshCw size={12}/></button><span>{points.length} observations</span></div>
           {detailError && <div className="tw-inline-error" role="alert">{detailError}</div>}
-          <div className="tw-quote-strip"><div><span>BID</span><b className="tw-up">{cents(bid)}</b></div><div><span>ASK</span><b>{cents(ask)}</b></div><div><span>SPREAD</span><b>{cents(spread)}</b></div><div><span>VOLUME</span><b>{current?.quote?.volume == null ? '—' : qty(current.quote.volume)}</b></div></div>
+          <div className="tw-quote-strip"><div><span>{beginner?'Sell price':'BID'}</span><b className="tw-up">{cents(bid)}</b></div><div><span>{beginner?'Buy price':'ASK'}</span><b>{cents(ask)}</b></div><div><span>Spread {beginner&&<button className="tw-help" aria-label="Explain spread" onClick={()=>onHelp('Spread')}>?</button>}</span><b>{cents(spread)}</b></div><div><span>VOLUME</span><b>{current?.quote?.volume == null ? '—' : qty(current.quote.volume)}</b></div></div>
           {!!selected.signals.length && <div className="tw-signals">{selected.signals.map(signal => <span key={signal.type} title={signal.reason}>{signal.type}</span>)}</div>}
-          <button className="tw-depth-toggle" aria-expanded={showBook} onClick={() => setShowBook(value => !value)}><Layers3 size={14}/> Depth <ChevronDown size={14} className={showBook ? 'expanded' : ''}/></button>
+          <button className="tw-depth-toggle" aria-expanded={showBook} onClick={() => setShowBook(value => !value)}><Layers3 size={14}/> {beginner?'Show buyers and sellers':'Order book'} <ChevronDown size={14} className={showBook ? 'expanded' : ''}/></button>
+          <SportsContextPanel markets={markets} slug={selected.slug} visible={visible && activeTab!=='portfolio'} beginner={beginner} compact/>
           {showBook && <div className="tw-depth">{(['bids', 'asks'] as const).map(bookSide => <div key={bookSide}><div className="tw-depth-heading"><b>{bookSide === 'bids' ? 'BID' : 'ASK'}</b><span>QTY</span></div>{(book?.[bookSide] ?? []).slice(0, 6).map(level => <div key={level.price} className={`tw-depth-row ${bookSide}`}><i style={{width: `${Math.min(100, level.quantity / Math.max(1, ...book![bookSide].slice(0, 6).map(entry => entry.quantity)) * 100)}%`}}/><b>{cents(level.price)}</b><span>{qty(level.quantity)}</span></div>)}{!book?.[bookSide].length && <span className="tw-depth-empty">No levels</span>}</div>)}</div>}
         </>}
       </section>
       <aside className="tw-execution" aria-label="Order controls">
-        <div className="tw-order-heading"><span><i/> PAPER</span><button onClick={openPresets} className="tw-icon" aria-label="Edit trading presets"><Pencil size={14}/></button></div>
+        <div className="tw-order-heading"><span>YOUR ORDER</span><button onClick={openPresets} className="tw-icon" aria-label="Edit trading presets"><Pencil size={14}/></button></div>
         <h2>{outcome || 'Select an outcome'}</h2>
-        <div className="tw-control-label"><span>ENTRY AMOUNT</span><button onClick={openPresets}>Edit presets</button></div>
+        <div className="tw-action-tabs" role="group" aria-label="Order action"><button className={tradeAction==='BUY'?'active':''} onClick={()=>setTradeAction('BUY')}>Enter</button><button className={tradeAction==='SELL'?'active exit':''} onClick={()=>setTradeAction('SELL')}>Exit{selectedPositions.length>0?` · ${selectedPositions.length}`:''}</button></div>
+        {tradeAction==='BUY' ? <><div className="tw-control-label"><span>Amount</span><button onClick={openPresets}>Edit presets</button></div>
         <div className="tw-presets">{settings.entryPresets.map((value, index) => <button key={`${value}-${index}`} className={!customAmount && amount === value ? 'active' : ''} onClick={() => {setAmount(value); setCustomAmount(false);}}>{money(value).replace('.00', '')}</button>)}<button className={customAmount ? 'active' : ''} onClick={() => setCustomAmount(true)}>Custom</button></div>
         {customAmount && <label className="tw-custom-amount">$<input type="number" min="1" step="0.01" aria-label="Custom entry amount" value={Number.isFinite(amount) ? amount : ''} onChange={event => setAmount(event.target.value === '' ? NaN : Number(event.target.value))}/></label>}
-        <div className="tw-order-estimates"><div><span>Est. quantity</span><b>{estimate?.contracts ? qty(estimate.contracts) : '—'}</b></div><div><span>Est. fees</span><b>{estimate?.contracts ? money(estimate.fees) : '—'}</b></div><div><span>Max entry price</span><b>{cents(buyLimit)}</b></div><div><span>Est. spend</span><b>{estimate?.contracts ? money(estimate.total) : '—'}</b></div></div>
-        <button className="tw-ape-in" onClick={() => submit('BUY')} disabled={!!buyBlock} title={buyBlock || 'Submit a paper entry with a price limit'}>{busy === 'BUY' ? <Loader2 size={17} className="spin"/> : <ArrowUpRight size={17}/>} Ape In <span>· {Number.isFinite(amount) ? money(amount).replace('.00', '') : '—'}</span></button>
+        <div className="tw-order-estimates"><div><span>{beginner?'Contracts':'Est. quantity'}</span><b>{estimate?.contracts ? qty(estimate.contracts) : '—'}</b></div><div><span>Est. fees</span><b>{estimate?.contracts ? money(estimate.fees) : '—'}</b></div><div><span>Price limit</span><b>{cents(buyLimit)}</b></div><div><span>Est. spend</span><b>{estimate?.contracts ? money(estimate.total) : '—'}</b></div></div>
+        <button className="tw-ape-in" onClick={() => submit('BUY')} disabled={!!buyBlock} title={buyBlock || 'Submit a paper entry with a price limit'}>{busy === 'BUY' ? <Loader2 size={17} className="spin"/> : <ArrowUpRight size={17}/>} {beginner?'Paper buy':'Ape In'} <span>· {Number.isFinite(amount) ? money(amount).replace('.00', '') : '—'}</span></button>
         {!!buyBlock && !busy && <p className="tw-block-reason">{buyBlock}</p>}
-        <div className="tw-exit-section"><div className="tw-control-label"><span>EXIT POSITION</span><b>{lot ? `${qty(lot.contracts)} held` : 'No position'}</b></div>
-          {selectedPositions.length > 1 && <select className="tw-lot-select" aria-label="Position to exit" value={lot?.id ?? ''} onChange={event => setLotId(event.target.value)}>{selectedPositions.map(position => <option key={position.id} value={position.id}>{qty(position.contracts)} @ {cents(position.entry)} · {time(position.time)}</option>)}</select>}
+        </> : <div className="tw-exit-section"><div className="tw-control-label"><span>EXIT POSITION</span><b>{lot ? `${qty(lot.contracts)} held` : 'No position'}</b></div>
+          {(selectedPositions.length > 1 || (lotId && !lot && selectedPositions.length > 0)) && <select className="tw-lot-select" aria-label="Position to exit" value={lot?.id ?? ''} onChange={event => setLotId(event.target.value)}>{!lot&&<option value="" disabled>Choose an open position</option>}{selectedPositions.map(position => <option key={position.id} value={position.id}>{qty(position.contracts)} @ {cents(position.entry)} · {time(position.time)}</option>)}</select>}
           <div className="tw-presets tw-exit-presets">{settings.exitPresets.map((value, index) => <button key={`${value}-${index}`} className={exitPercent === value ? 'active' : ''} onClick={() => setExitPercent(value)}>{value}%</button>)}</div>
           <div className="tw-order-estimates"><div><span>Exit quantity</span><b>{lot ? qty(exitQuantity) : '—'}</b></div><div><span>Min exit price</span><b>{cents(sellLimit)}</b></div><div><span>Est. net proceeds</span><b>{exitEstimate ? money(exitEstimate.net) : '—'}</b></div></div>
-          <button className="tw-ape-out" onClick={() => submit('SELL')} disabled={!!sellBlock} title={sellBlock || 'Submit a paper exit with a price limit'}>{busy === 'SELL' ? <Loader2 size={17} className="spin"/> : <ArrowDownRight size={17}/>} Ape Out <span>· {exitPercent}%</span></button>
-          {!!sellBlock && !!lot && !busy && <p className="tw-block-reason">{sellBlock}</p>}
-        </div>
-        <div className="tw-execution-note">Paper fills · estimates include fees · limited by book depth</div>
+          <button className="tw-ape-out" onClick={() => submit('SELL')} disabled={!!sellBlock} title={sellBlock || 'Submit a paper exit with a price limit'}>{busy === 'SELL' ? <Loader2 size={17} className="spin"/> : <ArrowDownRight size={17}/>} {beginner?'Paper sell':'Ape Out'} <span>· {exitPercent}%</span></button>
+          {!!sellBlock && !busy && <p className="tw-block-reason">{sellBlock}</p>}
+        </div>}
+        <div className="tw-execution-note">Paper only · estimates include fees</div>
         {receipt && <div className="tw-receipt" role="status"><Check size={14}/><span>{receipt}</span></div>}
         {tradeError && <div className="tw-inline-error" role="alert">{tradeError}</div>}
         {uncertainCommand && !busy && <div className="tw-recovery"><button className="tw-reconcile" onClick={reconcile}><RefreshCw size={14}/> Reconcile order</button>{pendingRequest?.body.commandId === uncertainCommand && <><p>{pendingRequest.body.action} · {pendingRequest.outcome} · {pendingRequest.body.action === 'BUY' ? money(pendingRequest.body.amount ?? 0) : `${pendingRequest.body.percent}%`} · {time(pendingRequest.createdAt)}</p><button className="tw-reconcile" onClick={() => sendPaperRequest(pendingRequest)}>Retry same paper order</button><small>Same command and price limit. Previously recorded fills cannot be applied twice.</small></>}</div>}
-        <AutomationPanel slug={selected?.slug ?? ''} side={side} profile={profile} onProfile={onProfile}/>
       </aside>
-      <section className="tw-panel tw-open-positions"><div className="tw-panel-heading"><h2>Open positions <span>{openPositions.length}</span></h2><button onClick={() => changeTab('portfolio')}>Portfolio <ChevronRight size={14}/></button></div><PositionTable positions={openPositions} onMarket={viewPosition}/></section>
-    </div>}
-    {activeTab!=='portfolio' && selected && <div className="tw-mobile-dock" aria-label="Quick paper trading">
-      <div className="tw-mobile-dock-top"><b>PAPER · {outcome}</b><button onClick={openPresets} aria-label="Edit quick trading presets"><Pencil size={16}/></button></div>
-      <div className="tw-mobile-amounts"><label>Entry <select aria-label="Quick entry amount" value={settings.entryPresets.includes(amount)?String(amount):'custom'} onChange={event=>{if(event.target.value==='custom'){setCustomAmount(true);requestAnimationFrame(()=>document.querySelector<HTMLInputElement>('[aria-label="Custom entry amount"]')?.focus())}else{setAmount(Number(event.target.value));setCustomAmount(false)}}}>{settings.entryPresets.map((value,index)=><option key={index} value={value}>{money(value)}</option>)}<option value="custom">{customAmount?money(amount):'Custom'}</option></select></label>
-        <label>Exit <select aria-label="Quick exit percentage" value={exitPercent} onChange={event=>setExitPercent(Number(event.target.value))}>{settings.exitPresets.map((value,index)=><option key={index} value={value}>{value}%</option>)}</select></label></div>
-      <div className="tw-mobile-actions"><button className="tw-ape-in" aria-label={`Quick paper entry ${money(amount)}`} disabled={!!buyBlock} onClick={()=>submit('BUY')}>Ape In · {money(amount).replace('.00','')}</button><button className="tw-ape-out" aria-label={`Quick paper exit ${exitPercent}%`} disabled={!!sellBlock} onClick={()=>submit('SELL')}>Ape Out · {exitPercent}%</button></div>
-      <span className="tw-mobile-state" role="status">{tradeError||receipt||commonBlock||`Limit ${cents(buyLimit)} in · ${cents(sellLimit)} out`}</span>
+      <details className="tw-panel tw-open-positions"><summary>Open positions <span>{openPositions.length}</span></summary><PositionTable positions={openPositions} onMarket={viewPosition}/><button className="tw-results-link" onClick={()=>changeTab('portfolio')}>All results <ChevronRight size={14}/></button></details>
     </div>}
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}><DialogContent className="tw-settings-dialog"><DialogTitle>Trading presets</DialogTitle><DialogDescription>Saved to your paper account. Changing presets does not submit an order.</DialogDescription><div className="tw-preset-editor"><h3>Entry amounts · $</h3><div>{draftEntry.map((value, index) => <label key={index}><span>Preset {index + 1}</span><input type="number" min="1" step=".01" value={value} aria-label={`Entry preset ${index + 1}`} onChange={event => setDraftEntry(values => values.map((old, at) => at === index ? event.target.value : old))}/></label>)}</div><h3>Exit amounts · %</h3><div>{draftExit.map((value, index) => <label key={index}><span>Preset {index + 1}</span><input type="number" min="1" max="100" step="1" value={value} aria-label={`Exit preset ${index + 1}`} onChange={event => setDraftExit(values => values.map((old, at) => at === index ? event.target.value : old))}/></label>)}</div><h3>Price tolerance · ¢</h3><label className="tw-drift-input"><input type="number" min="0" max="10" step=".1" aria-label="Maximum price tolerance in cents" value={draftDrift} onChange={event => setDraftDrift(event.target.value)}/><span>From the displayed ask / bid</span></label></div>{settingsError && <p className="tw-inline-error" role="alert">{settingsError}</p>}<button className="tw-save-settings" disabled={settingsBusy} onClick={saveSettings}>{settingsBusy ? 'Saving…' : 'Save presets'}</button></DialogContent></Dialog>
   </main>;

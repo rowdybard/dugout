@@ -15,7 +15,18 @@ export async function profile(req:Request){
  const initial:Profile={cash:100,positions:[],watches:[],equity:[{time:Date.now(),price:100}],config:DEFAULT_CONFIG};
  await db().prepare('INSERT OR IGNORE INTO profiles(id,value,version) VALUES(?,?,0)').bind(id,JSON.stringify(initial)).run();
  const row=await db().prepare('SELECT value,version FROM profiles WHERE id=?').bind(id).first<{value:string;version:number}>();
- return {id,data:JSON.parse(row!.value) as Profile,version:row!.version};
+ if(!row)throw new Error('Paper account is unavailable.');
+ const data=JSON.parse(row.value) as Profile;
+ // The SQL column is authoritative even for older JSON or a stale redundant field.
+ data.revision=row.version;
+ return {id,data,version:row.version};
 }
-export async function saveProfile(p:Awaited<ReturnType<typeof profile>>){const r=await db().prepare('UPDATE profiles SET value=?,version=version+1 WHERE id=? AND version=?').bind(JSON.stringify(p.data),p.id,p.version).run();if(!r.meta.changes)throw new Error('Another update just finished. Please try again.');}
+export async function saveProfile(p:Awaited<ReturnType<typeof profile>>){
+ const revision=p.version+1;
+ const r=await db().prepare('UPDATE profiles SET value=?,version=version+1 WHERE id=? AND version=?')
+  .bind(JSON.stringify({...p.data,revision}),p.id,p.version).run();
+ if(!r.meta.changes)throw new Error('Another update just finished. Please try again.');
+ // Never claim a newer revision until the compare-and-swap succeeded.
+ p.version=revision;p.data.revision=revision;
+}
 export function sameOrigin(req:Request){const origin=req.headers.get('origin');if(origin&&origin!==new URL(req.url).origin)throw new Error('Request origin mismatch.');}
