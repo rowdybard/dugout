@@ -5,6 +5,7 @@ Production logs showed `/api/feed` requests cancelled near the browser's 45-seco
 ## Changed behavior
 
 - Start creates the isolated paper session without market, sports, or history requests. The development-replay gate remains server enforced.
+- Initial saved-account loading is also independent of pricing or settling previous manual positions. Those optional updates run while the manual workspace/results are visible.
 - Market discovery, saved chart enrichment, and bot execution are separate. History and per-card BBO fan-out no longer block home or the bot.
 - Discovery returns partial coverage within 12 seconds. Cached pages allow later checks to continue coverage. Listing receipts retain their actual timestamps; rereading a cached listing does not create a fresh quote.
 - A bot checks up to two entry candidates per cycle, or its held position first. Discovery, context, and quote work share a 22-second deadline. Sports entry checks have a smaller sub-budget to leave time for the book.

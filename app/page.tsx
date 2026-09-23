@@ -40,7 +40,8 @@ export default function Home() {
   const [toast,setToast]=useState('');
   const [pendingOrder,setPendingOrder]=useState<{slug:string;side:'YES'|'NO';commandId:string}|null>(null);
   const loadProfile=useCallback(async()=>{
-    try {const r=await fetch('/api/portfolio',{signal:AbortSignal.timeout(20000)});const d=await r.json() as Profile&{error?:string};if(!r.ok)throw new Error(d.error||'Paper account unavailable.');setProfile(d);setProfileError('');}
+    // Reading saved cash must never wait for pricing/settling old manual positions.
+    try {const r=await fetch('/api/bot',{cache:'no-store',signal:AbortSignal.timeout(10000)});const d=await r.json() as {profile:Profile;error?:string};if(!r.ok||!d.profile)throw new Error(d.error||'Paper account unavailable.');setProfile(d.profile);setProfileError('');}
     catch{setProfileError('Your paper account could not load.');}
   },[]);
   const load=useCallback(async()=>{
@@ -51,6 +52,16 @@ export default function Home() {
     finally{feedPending.current=false;setLoading(false);}
   },[]);
   useEffect(()=>{void load();void loadProfile();const timer=setInterval(()=>{if(!document.hidden){void load();void loadProfile();}},60000);return()=>clearInterval(timer)},[load,loadProfile]);
+  useEffect(()=>{
+    if(view!=='manual'&&!(view==='results'&&resultsTab==='manual'))return;
+    let pending=false,cancelled=false;const controller=new AbortController();
+    const refresh=async()=>{if(pending||document.hidden)return;pending=true;
+      try{const response=await fetch('/api/portfolio',{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});if(response.ok){const next=await response.json() as Profile;if(!cancelled)setProfile(next);}}
+      catch{/* Keep saved cash and visibly dated marks while this optional refresh is unavailable. */}
+      finally{pending=false;}
+    };
+    void refresh();const timer=setInterval(refresh,60000);return()=>{cancelled=true;controller.abort();clearInterval(timer);};
+  },[view,resultsTab,setProfile]);
   useEffect(()=>{if(!settings&&profile?.config)setConfig(profile.config)},[settings,profile?.config]);
   useEffect(()=>{try{setBeginner(localStorage.getItem('dugout-beginner')!=='false')}catch{}if(new URLSearchParams(window.location.search).get('view')==='simulation')setView('simulation')},[]);
   useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),4500);return()=>clearTimeout(timer)},[toast]);
