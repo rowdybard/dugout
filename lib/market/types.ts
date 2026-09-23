@@ -1,0 +1,13 @@
+export type League='MLB'|'NFL';
+export type Point={time:number;price:number;spread?:number|null;volume?:number|null};
+export type Team={id:number;name:string;abbreviation:string;record?:string;logo?:string};
+export type Signal={type:string;reason:string;score:number};
+export type Market={slug:string;id:string;title:string;oppositeTitle?:string;question:string;rules:string;gameId:string;game:string;league:League;start:string;teams:Team[];kind:string;bid:number|null;ask:number|null;price:number|null;volume:number|null;fee:number;active:boolean;history:Point[];signals:Signal[];observedAt:number;depth?:number|null;historyError?:string};
+export type Game={id:string;title:string;league:League;start:string;teams:Team[];markets:Market[]};
+export type Feed={games:Game[];markets:Market[];updated:number;errors:string[];coverage:string;replayAt?:number};
+export type Level={price:number;quantity:number};
+export type Book={bids:Level[];asks:Level[];state:string;time:string};
+export type Position={id:string;slug:string;game:string;title:string;league:League;side:'YES'|'NO';entry:number;entryProbability:number;amount:number;contracts:number;fee:number;coefficient?:number;time:number;signal:string;reason:string;status:'open'|'closed'|'settled';exit?:number;payout?:number;closedAt?:number;mark?:number|null;markTime?:number;settlement?:number};
+export type Watch={key:string;kind:'market'|'game'|'team';label:string;time:number;price:number|null};
+export type Config={move:number;wide:number;spreadChange:number;activity:number;thin:number;stale:number};
+export type Profile={cash:number;positions:Position[];watches:Watch[];equity:{time:number;price:number}[];config:Config};
