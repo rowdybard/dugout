@@ -17,7 +17,7 @@ export function AutopilotDashboard({profile,feed,onProfile,beginner,visible,pend
   const [bankroll,setBankroll]=useState(10),[leagues,setLeagues]=useState<League[]>(['MLB']);
   const [filter,setFilter]=useState<'all'|'trades'|'skips'>('all');
   const [experiment,setExperiment]=useState<Experiment|null>(null);
-  useEffect(()=>{let mounted=true;fetch('/api/bot/experiment').then(r=>r.ok?r.json():null).then(data=>{if(mounted&&data)setExperiment(data as Experiment);}).catch(()=>{});return()=>{mounted=false;};},[]);
+  useEffect(()=>{let mounted=true;fetch('/api/bot/experiment',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(mounted&&data)setExperiment(data as Experiment);}).catch(()=>{});return()=>{mounted=false;};},[]);
   const replay=!!feed?.replayAt,open=s?.positions.filter(p=>p.status==='open')??[],closed=s?.positions.filter(p=>p.status!=='open')??[];
   const equity=s?botEquity(s):bankroll,pnl=s?equity-s.config.startingCash:0;
   const started=s&&s.status!=='stopped';

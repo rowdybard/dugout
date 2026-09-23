@@ -4,7 +4,7 @@ import {ChevronDown} from 'lucide-react';
 type Research={version:string;ratingsThrough:string;holdout:{games:number;brier:number;baseline:number;interval:number[]};later:{games:number;brier:number;baseline:number};purpose:string;limitations:string[]};
 export function BotModelResearch(){
   const [research,setResearch]=useState<Research|null>(null);
-  useEffect(()=>{let active=true;fetch('/api/bot/model').then(r=>r.ok?r.json():null).then(r=>{if(active)setResearch(r as Research|null);}).catch(()=>{});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;fetch('/api/bot/model',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(r=>{if(active)setResearch(r as Research|null);}).catch(()=>{});return()=>{active=false;};},[]);
   if(!research)return null;
   return <details className="auto-experiment auto-model"><summary><span>MLB outcome model <small>Experimental</small></span><span>{research.holdout.games.toLocaleString()}-game holdout <ChevronDown size={15}/></span></summary><div>
     <p>{research.purpose}</p>
