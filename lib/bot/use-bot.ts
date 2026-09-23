@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {Profile,League} from '../market/types';
 import {shouldAcceptProfile} from '../trading/profile-version';
+import {requestBot} from './request';
 
 export function useBot(profile:Profile|null,onProfile:(p:Profile)=>void,blocked=false){
   const ref=useRef(profile),onChange=useRef(onProfile),pending=useRef(0),blockedRef=useRef(blocked);
@@ -19,8 +20,9 @@ export function useBot(profile:Profile|null,onProfile:(p:Profile)=>void,blocked=
     if(action!=='step'){controls.current++;setControlPending(true);}
     const task=tail.current.then(async()=>{
     try{
-      const response=await fetch('/api/bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...(action==='start'?{}:{sessionId}),...extra}),signal:AbortSignal.timeout(45000)});
-      const data=await response.json() as {error?:string;profile:Profile};if(!response.ok)throw new Error(data.error??'Bot request failed.');receive(data.profile);setError('');return true;
+      const result=await requestBot({action,...(action==='start'?{}:{sessionId}),...extra});
+      if(result.profile)receive(result.profile);
+      setError(result.error??'');return result.ok;
     }catch(e){setError(e instanceof Error?e.message:'Bot request failed.');return false;}
     finally{pending.current--;setBusy(pending.current>0);if(action!=='step'){controls.current--;setControlPending(controls.current>0);}setNow(Date.now());}
     });

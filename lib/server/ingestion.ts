@@ -4,13 +4,12 @@ import { scan, activitySignals, DEFAULT_CONFIG } from "@/lib/market/scanner";
 import {
   amount,
   getLeaguePage,
-  history,
   numeric,
-  bbo,
   type Raw,
 } from "./polymarket";
-import { cached, db } from "./storage";
-function normalize(e: Raw, league: League): Game {
+import { cached, db, readCached } from "./storage";
+import {discoverPages} from './catalog';
+function normalize(e: Raw, league: League,observedAt:number): Game {
   const teams = (e.teams || []).map((t: Raw) => ({
     id: t.id,
     name: t.name,
@@ -59,47 +58,23 @@ function normalize(e: Raw, league: League): Game {
         active: true,
         history: [],
         signals: [],
-        observedAt: Date.now(),
+        observedAt,
       };
     });
   return game;
 }
-async function mapLimit<T, R>(items: T[], fn: (x: T) => Promise<R>, n = 3) {
-  const result: R[] = new Array(items.length);
-  let i = 0;
-  await Promise.all(
-    Array.from({ length: n }, async () => {
-      while (i < items.length) {
-        const j = i++;
-        result[j] = await fn(items[j]);
-        await new Promise((r) => setTimeout(r, 180));
-      }
-    }),
-  );
-  return result;
-}
-export async function getFeed(): Promise<Feed> {
-  return cached("feed-v6", 60000, async () => {
+export async function getCatalog(leagues:League[]=['MLB','NFL']):Promise<Feed>{
+  return cached(`catalog-v1:${[...new Set(leagues)].sort().join(',')}`,15000,async()=>{
     const games: Game[] = [];
-    const errors: string[] = [];
-    await Promise.allSettled((["MLB", "NFL"] as League[]).map(async (league) => {
-      try {
-        for (let offset = 0; offset < 24; offset += 4) {
-          const page = await getLeaguePage(league.toLowerCase(), offset);
-          const events = page.events || [];
-          for (const e of events) {
+    const {pages,errors}=await discoverPages((league,offset,signal)=>getLeaguePage(league.toLowerCase(),offset,signal),12000,leagues);
+    for(const {league,page} of pages){
+          for (const e of page.events) {
             if (!e.closed && !e.ended && e.active) {
-              const g = normalize(e, league);
+              const g = normalize(e, league,page.observedAt);
               if (g.markets.length) games.push(g);
             }
           }
-          if (events.length < 4) break;
-        }
-      } catch (e) {
-        console.error("league feed", league, e);
-        errors.push(`${league} feed is temporarily unavailable.`);
-      }
-    }));
+    }
     if (!games.length && errors.length)
       throw new Error(
         "Unable to reach Polymarket US right now. Please try again shortly.",
@@ -113,44 +88,6 @@ export async function getFeed(): Promise<Feed> {
           g.markets[0],
       )
       .filter(Boolean);
-    await mapLimit(markets, async (m) => {
-      const [priceHistory, quote] = await Promise.allSettled([history(m.slug), bbo(m.slug)]);
-      if (priceHistory.status === "fulfilled") {
-        m.history = priceHistory.value;
-      } else {
-        m.historyError = "History unavailable";
-      }
-      if (quote.status === "fulfilled" && quote.value) {
-        const q = quote.value;
-        m.bid = amount(q.bestBid);
-        m.ask = amount(q.bestAsk);
-        m.price = m.ask;
-        m.volume = numeric(q.sharesTraded);
-        const bids = numeric(q.bidShares),
-          asks = numeric(q.askShares);
-        m.depth = bids !== null && asks !== null ? bids + asks : null;
-        m.active = q.state === "MARKET_STATE_OPEN";
-        m.observedAt = Date.now();
-      }
-      m.signals = scan(m);
-      try {
-        await enrich(m);
-        await record(m);
-      } catch {
-        const warning = "Some observations could not be saved. Current market information is still shown.";
-        if (!errors.includes(warning)) errors.push(warning);
-      }
-      return m;
-    });
-    await db()
-      .prepare("DELETE FROM cache WHERE updated < ? AND key NOT LIKE 'simulation:%' AND key NOT LIKE 'bot-archive:%'")
-      .bind(Date.now() - 7 * 86400000)
-      .run();
-    await db()
-      .prepare("DELETE FROM snapshots WHERE time < ?")
-      .bind(Date.now() - 30 * 86400000)
-      .run();
-    await db().prepare("DELETE FROM trading_observations WHERE time < ?").bind(Date.now()-7*86400000).run();
     return {
       games: unique,
       markets,
@@ -158,8 +95,43 @@ export async function getFeed(): Promise<Feed> {
       errors,
       replayAt: (await replayData())?.recordedAt,
       coverage:
-        "Full-game winner markets · up to 24 games per league. All available markets inside each game.",
+        `Full-game winners · ${unique.length} games loaded · up to 24 per league. Listing quotes may be up to 2 minutes old; trades require a fresh book.`,
     };
+  });
+}
+
+/** Home charts use saved observations. Optional remote chart loads cannot block starting/scanning. */
+export async function getFeed():Promise<Feed>{
+  return cached('feed-v7',15000,async()=>{
+    const feed=structuredClone(await getCatalog());
+    await Promise.all(feed.markets.map(async m=>{
+      try{
+        const cutoff=Date.now()-3600000;
+        const [rows,ticks,saved]=await Promise.all([
+          db().prepare('SELECT time,price,(ask-bid) AS spread,volume FROM snapshots WHERE slug=? AND time>? ORDER BY time').bind(m.slug,cutoff).all<Point>(),
+          db().prepare("SELECT time,ask AS price,(ask-bid) AS spread FROM trading_observations WHERE slug=? AND time>? AND ask IS NOT NULL AND source!='REPLAY' ORDER BY time LIMIT 1000").bind(m.slug,cutoff).all<Point>(),
+          readCached<Point[]>(`history:${m.slug}:INTERVAL_1H`),
+        ]);
+        const observations=[...(saved?.value??[]),...rows.results,...ticks.results]
+          .filter(p=>p.time>=cutoff&&Number.isFinite(p.price)&&p.price>=0&&p.price<=1);
+        // Record a listing once at its actual receipt, never as a fresh tick on every render.
+        if(m.price!==null&&m.observedAt>=cutoff)observations.push({time:m.observedAt,price:m.price,spread:m.ask!==null&&m.bid!==null?m.ask-m.bid:null});
+        m.history=[...new Map(observations.map(p=>[p.time,p])).values()].sort((a,b)=>a.time-b.time);
+        m.activityHistory=[...rows.results.map(p=>({time:p.time,volume:p.volume})),{time:m.observedAt,volume:m.volume}].sort((a,b)=>a.time-b.time);
+        m.signals=[...scan(m),...activitySignals(m.activityHistory,DEFAULT_CONFIG)];
+        if(m.history.length<2)m.historyError='Collecting history. Open the market for available exchange history.';
+        await record(m);
+      }catch{m.historyError='Saved history is temporarily unavailable.';}
+    }));
+    // Cleanup once per hour, not on every dashboard request.
+    await cached('maintenance:observations',3600000,async()=>{
+      await db().batch([
+        db().prepare("DELETE FROM cache WHERE updated < ? AND key NOT LIKE 'simulation:%' AND key NOT LIKE 'bot-archive:%'").bind(Date.now()-7*86400000),
+        db().prepare('DELETE FROM snapshots WHERE time < ?').bind(Date.now()-30*86400000),
+        db().prepare('DELETE FROM trading_observations WHERE time < ?').bind(Date.now()-7*86400000),
+      ]);return true;
+    }).catch(()=>false);
+    return feed;
   });
 }
 export async function record(m: Market) {
@@ -168,9 +140,9 @@ export async function record(m: Market) {
       "INSERT OR IGNORE INTO snapshots(id,slug,time,price,bid,ask,volume,depth,signals) VALUES(?,?,?,?,?,?,?,?,?)",
     )
     .bind(
-      `${m.slug}:${Math.floor(Date.now() / 60000)}`,
+      `${m.slug}:${Math.floor(m.observedAt / 60000)}`,
       m.slug,
-      Date.now(),
+      m.observedAt,
       m.price,
       m.bid,
       m.ask,

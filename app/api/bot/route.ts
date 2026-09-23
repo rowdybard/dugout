@@ -1,11 +1,11 @@
 import {z} from 'zod';
 import {profile,saveProfile,sameOrigin,db} from '@/lib/server/storage';
-import {getFeed} from '@/lib/server/ingestion';
+import {getCatalog} from '@/lib/server/ingestion';
+import {replayData} from '@/lib/server/replay';
 import {ensureTrading} from '@/lib/server/trading';
 import {loadBotInput} from '@/lib/bot/server-input';
-import {botUniverse,defaultBotConfig,newBot,stepBot} from '@/lib/bot/engine';
-import type {BotInput} from '@/lib/bot/types';
-import type {Market} from '@/lib/market/types';
+import {defaultBotConfig,newBot,stepBot} from '@/lib/bot/engine';
+import {collectBotInputs} from '@/lib/bot/collect-inputs';
 
 const schema=z.discriminatedUnion('action',[
   z.object({action:z.literal('start'),bankroll:z.number().finite().min(5).max(100),leagues:z.array(z.enum(['MLB','NFL'])).min(1).max(2)}).strict(),
@@ -29,7 +29,7 @@ export async function POST(req:Request){
     if(body.action==='start'){
       if(trading.autopilot?.positions.some(x=>x.status==='open'))throw new Error('Exit the existing bot positions before starting another bankroll.');
       if(trading.autopilot&&trading.autopilot.status!=='stopped')throw new Error('Stop the current session before creating a new bankroll.');
-      const feed=await getFeed();if(feed.replayAt)throw new Error('Current books are required. This preview contains recorded development data.');
+      if(await replayData())throw new Error('Current books are required. This preview contains recorded development data.');
       if(trading.automation?.status==='running'){trading.automation.status='paused';trading.automation.lastReason='The separate bankroll bot is now selected.';}
       const previous=trading.autopilot;
       trading.autopilot=newBot(defaultBotConfig(body.bankroll,[...new Set(body.leagues)]),Date.now());
@@ -64,21 +64,10 @@ export async function POST(req:Request){
       await saveProfile(p);
     }
     if(body.action==='step'&&Date.now()-session.lastCycleAt<4500)return Response.json({profile:p.data,session,runtime});
-    const held=session.positions.filter(p=>p.status==='open');
-    const feed=held.length?null:await getFeed(),universe=botUniverse(feed?.markets??[],session,Date.now());
-    const heldMarkets:Market[]=held.map(p=>({id:p.slug,slug:p.slug,title:p.title,game:p.game,gameId:p.slug,league:p.league,start:'',kind:'',teams:[],question:'',rules:'',bid:null,ask:null,price:null,volume:null,fee:p.coefficient??.0695,active:true,history:[],signals:[],observedAt:Date.now()}));
-    const selected=held.length?heldMarkets:Array.from({length:Math.min(6,universe.length)},(_,i)=>universe[(session.cursor+i)%universe.length]);
-    const inputs:BotInput[]=[];const failures:{slug:string;reason:string}[]=[];
-    // Quote receipts are checked again after context I/O; a slow source cannot make an old book fresh.
-    for(let i=0;i<selected.length;i+=3){
-      await Promise.all(selected.slice(i,i+3).map(async market=>{
-        try{inputs.push(await loadBotInput(market,held.length>0));}
-        catch(error){failures.push({slug:market.slug,reason:error instanceof Error?error.message.slice(0,200):'Source unavailable.'});}
-      }));
-    }
+    const {inputs,failures,cursor,universeSize}=await collectBotInputs(session,{markets:async()=>(await getCatalog(session.config.leagues)).markets,input:loadBotInput});
     const next=stepBot(session,inputs,Date.now(),body.action==='exit'?body.positionId:undefined);
-    next.universeSize=held.length?session.universeSize:universe.length;next.cursor=universe.length?(session.cursor+selected.length)%universe.length:session.cursor;
-    if(failures.length)next.lastReason=`${failures.length} market source(s) unavailable. ${failures[0].reason}`;
+    next.universeSize=universeSize;next.cursor=cursor;
+    if(failures.length)next.lastReason=`Waiting for data · ${failures[0].reason}`;
     trading.autopilot=next;
     // One compare-and-swap persists the session ledger, fills, and decision trace together.
     // Concurrent steps/controls lose this race before any paper cash is committed.

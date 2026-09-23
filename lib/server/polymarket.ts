@@ -3,14 +3,16 @@ import { PolymarketUS } from "polymarket-us";
 import { cached, db } from "./storage";
 import type { Book, Point } from "@/lib/market/types";
 import {createPublicSourceBudget} from '../bot/public-source-budget';
+import {abortable} from './request-budget';
 export const sdk = new PolymarketUS({ timeout: 12000 });
 const requestBudget=createPublicSourceBudget();
 /** A provider-requested pause survives Worker restarts and other UI requests. */
-async function publicRead<T>(request:()=>Promise<T>):Promise<T>{
+async function publicRead<T>(request:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
+  signal?.throwIfAborted();
   const saved=await db().prepare('SELECT value FROM cache WHERE key=?').bind('polymarket:backoff').first<{value:string}>();
   const until=saved?Number(saved.value):0;
   if(Number.isFinite(until)&&until>Date.now())throw new Error(`Polymarket US requests are paused until ${new Date(until).toISOString()}.`);
-  try{return await requestBudget.run(request);}
+  try{return await abortable(requestBudget.run(request,signal),signal);}
   catch(error){
     const retryAt=requestBudget.blockedUntil();
     if(retryAt>Date.now())await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind('polymarket:backoff',String(retryAt),Date.now()).run();
@@ -25,7 +27,8 @@ export function numeric(x: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 export const amount = (x: any) => numeric(x?.value);
-export async function publicGet(path: string): Promise<Raw> {
+export async function publicGet(path: string, signal?:AbortSignal): Promise<Raw> {
+  signal?.throwIfAborted();
   const replay = await replayData();
   if (replay) {
     const url = new URL(path, BASE);
@@ -51,17 +54,18 @@ export async function publicGet(path: string): Promise<Raw> {
     }
   }
   return publicRead(async()=>{
-    const r = await fetch(BASE + path, { signal: AbortSignal.timeout(18000) });
+    const r = await fetch(BASE + path, { signal: signal?AbortSignal.any([signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000) });
     if (!r.ok) throw Object.assign(new Error(`Polymarket US returned ${r.status}.`),{status:r.status,retryAfterMs:Math.max(0,Number(r.headers.get('Retry-After'))*1000)});
     return r.json();
-  });
+  },signal);
 }
-export const getLeaguePage = (league: string, offset: number) =>
-  cached(`league-compact:${league}:${offset}`, 120000, async () => {
+export const getLeaguePage = (league: string, offset: number,signal?:AbortSignal) =>
+  cached(`league-compact-v2:${league}:${offset}`, 120000, async () => {
     const raw = await publicGet(
-      `/v2/leagues/${league}/events?type=sport&limit=4&offset=${offset}`,
+      `/v2/leagues/${league}/events?type=sport&limit=4&offset=${offset}`,signal,
     );
     return {
+      observedAt:Date.now(),
       events: (raw.events || []).map((e: Raw) => ({
         id: e.id,
         title: e.title,
@@ -169,11 +173,11 @@ export async function bbo(slug: string) {
     return r.marketData;
   });
 }
-export async function book(slug: string): Promise<Book> {
+export async function book(slug: string,signal?:AbortSignal): Promise<Book> {
   const replay = await replayData();
   const r = (replay
     ? replay.markets[slug]?.book
-    : await publicRead(()=>sdk.markets.book(slug))) as unknown as Raw;
+    : signal?await publicGet(`/v1/markets/${encodeURIComponent(slug)}/book`,signal):await publicRead(()=>sdk.markets.book(slug))) as unknown as Raw;
   if (!r) throw new Error("Recorded book unavailable.");
   const b = r.marketData;
   if (!b) throw new Error("Order book is unavailable.");
@@ -188,16 +192,16 @@ export async function book(slug: string): Promise<Book> {
     time: b.transactTime,
   };
 }
-export async function settlement(slug: string) {
+export async function settlement(slug: string,signal?:AbortSignal) {
   if (await replayData()) return null;
   try {
-    const r = (await publicRead(()=>sdk.markets.settlement(slug))) as unknown as Raw;
+    const r = (signal?await publicGet(`/v1/markets/${encodeURIComponent(slug)}/settlement`,signal):await publicRead(()=>sdk.markets.settlement(slug))) as unknown as Raw;
     return numeric(r.settlement);
   } catch {
     return null;
   }
 }
-export async function metadata(slug: string) {
+export async function metadata(slug: string,signal?:AbortSignal) {
   const replay = await replayData();
   if (replay) {
     for (const l of Object.values(replay.leagues) as Raw[])
@@ -205,6 +209,6 @@ export async function metadata(slug: string) {
         for (const m of e.markets) if (m.slug === slug) return m;
     throw new Error("Recorded market unavailable.");
   }
-  const r = (await publicRead(()=>sdk.markets.retrieveBySlug(slug))) as unknown as Raw;
+  const r = (signal?await publicGet(`/v1/market/slug/${encodeURIComponent(slug)}`,signal):await publicRead(()=>sdk.markets.retrieveBySlug(slug))) as unknown as Raw;
   return r.market ?? r;
 }

@@ -2,10 +2,12 @@
 export function createPublicSourceBudget(options:{spacingMs?:number;now?:()=>number;delay?:(ms:number)=>Promise<void>}={}){
   const now=options.now??Date.now,delay=options.delay??(ms=>new Promise(resolve=>setTimeout(resolve,ms))),spacing=options.spacingMs??750;
   let tail:Promise<unknown>=Promise.resolve(),nextAt=0,blockedUntil=0;
-  async function run<T>(request:()=>Promise<T>):Promise<T>{
+  async function run<T>(request:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
     const result=tail.then(async()=>{
+      signal?.throwIfAborted();
       if(now()<blockedUntil)throw new Error(`Polymarket US requested a pause. Retry after ${new Date(blockedUntil).toISOString()}.`);
       const wait=nextAt-now();if(wait>0)await delay(wait);
+      signal?.throwIfAborted();
       nextAt=now()+spacing;
       try{return await request();}
       catch(error){

@@ -1,5 +1,5 @@
 "use client";
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {Activity, Bot, ChartNoAxesCombined, Check, ChevronRight, FlaskConical, HelpCircle, MousePointer2, Bookmark} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
 import {Dialog, DialogContent, DialogTitle, DialogDescription} from '@/components/ui/dialog';
@@ -14,6 +14,7 @@ import {shouldAcceptProfile} from '@/lib/trading/profile-version';
 import {glossary} from '@/lib/market/explain';
 import {scan, activitySignals, DEFAULT_CONFIG} from '@/lib/market/scanner';
 import type {Config, Feed, Game, Profile, Watch} from '@/lib/market/types';
+import {sourceError} from '@/lib/server/request-budget';
 import './workspace-shell.css';
 
 type View = 'automation' | 'manual' | 'results' | 'simulation';
@@ -29,6 +30,7 @@ export default function Home() {
   const [error,setError]=useState('');
   const [profileError,setProfileError]=useState('');
   const [loading,setLoading]=useState(true);
+  const feedPending=useRef(false);
   const [settings,setSettings]=useState(false);
   const [config,setConfig]=useState<Config>(DEFAULT_CONFIG);
   const [settingsBusy,setSettingsBusy]=useState(false);
@@ -42,10 +44,11 @@ export default function Home() {
     catch{setProfileError('Your paper account could not load.');}
   },[]);
   const load=useCallback(async()=>{
+    if(feedPending.current)return;feedPending.current=true;
     setLoading(true);
-    try {const r=await fetch('/api/feed',{signal:AbortSignal.timeout(45000)});const d=await r.json() as Feed&{error?:string};if(!r.ok)throw new Error(d.error||'Market feed unavailable.');setFeed(d);setError('');}
-    catch(e){setError(e instanceof Error?e.message:'Market feed unavailable.');}
-    finally{setLoading(false);}
+    try {const r=await fetch('/api/feed',{signal:AbortSignal.timeout(25000)});const d=await r.json() as Feed&{error?:string};if(!r.ok)throw new Error(d.error||'Market feed unavailable.');setFeed(d);setError('');}
+    catch(e){setError(sourceError(e,'Market feed unavailable.'));}
+    finally{feedPending.current=false;setLoading(false);}
   },[]);
   useEffect(()=>{void load();void loadProfile();const timer=setInterval(()=>{if(!document.hidden){void load();void loadProfile();}},60000);return()=>clearInterval(timer)},[load,loadProfile]);
   useEffect(()=>{if(!settings&&profile?.config)setConfig(profile.config)},[settings,profile?.config]);

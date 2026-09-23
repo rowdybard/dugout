@@ -1,0 +1,363 @@
+{
+  "kind": "actual-public-api-smoke-check-isolated-paper-database",
+  "startedAt": "2026-09-23T22:10:49.850Z",
+  "actions": [
+    {
+      "action": "start",
+      "status": 200,
+      "milliseconds": 8,
+      "botStatus": "running",
+      "cash": 10,
+      "cycles": 0,
+      "markets": 0,
+      "examined": 0,
+      "decisions": [],
+      "reason": "Waiting for current books and sports context."
+    },
+    {
+      "action": "step",
+      "status": 200,
+      "milliseconds": 22004,
+      "botStatus": "running",
+      "cash": 10,
+      "cycles": 1,
+      "markets": 22,
+      "examined": 0,
+      "decisions": [],
+      "reason": "Waiting for data · A data source took too long. The next check will retry with fresh data."
+    },
+    {
+      "action": "step",
+      "status": 200,
+      "milliseconds": 7655,
+      "botStatus": "running",
+      "cash": 10,
+      "cycles": 2,
+      "markets": 22,
+      "examined": 2,
+      "decisions": [
+        {
+          "time": 1790201484518,
+          "slug": "aec-mlb-stl-pit-2026-09-23",
+          "title": "St. Louis Cardinals win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.43157610363274046,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201480979,
+          "bookTime": 1790201483745,
+          "id": "b157d4c7-f3d3-483b-b8af-7ccadd01941f"
+        },
+        {
+          "time": 1790201484518,
+          "slug": "aec-mlb-stl-pit-2026-09-23",
+          "title": "Pittsburgh Pirates win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5684238963672595,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201480979,
+          "bookTime": 1790201483745,
+          "id": "1defb349-392d-4585-92ba-22c255f467f8"
+        },
+        {
+          "time": 1790201484518,
+          "slug": "aec-mlb-tb-nyy-2026-09-23",
+          "title": "Tampa Bay Rays win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4612689272687114,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201481051,
+          "bookTime": 1790201484517,
+          "id": "27bffe71-d5d2-40ad-a566-c90ac43268e1"
+        },
+        {
+          "time": 1790201484518,
+          "slug": "aec-mlb-tb-nyy-2026-09-23",
+          "title": "New York Yankees win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5387310727312886,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201481051,
+          "bookTime": 1790201484517,
+          "id": "df681c30-aa40-4647-8621-6e7048e60e62"
+        }
+      ],
+      "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability."
+    },
+    {
+      "action": "step",
+      "status": 200,
+      "milliseconds": 5886,
+      "botStatus": "running",
+      "cash": 10,
+      "cycles": 3,
+      "markets": 22,
+      "examined": 4,
+      "decisions": [
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Cleveland Guardians win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4408966923180827,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "2ccf39e4-d1e0-4be7-abba-945d252755e1"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Boston Red Sox win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5591033076819173,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "7de23870-fff4-43b9-9e25-ac9dd9607c38"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Cincinnati Reds win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4015698777516781,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "1923a1a3-0b75-455b-b6d6-ff494f94d272"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Atlanta Braves win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5984301222483219,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "73ef7793-667c-49b2-9b48-5cd6d16c4eac"
+        }
+      ],
+      "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability."
+    },
+    {
+      "action": "pause",
+      "status": 200,
+      "milliseconds": 1,
+      "botStatus": "paused",
+      "cash": 10,
+      "cycles": 3,
+      "markets": 22,
+      "examined": 4,
+      "decisions": [
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Cleveland Guardians win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4408966923180827,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "2ccf39e4-d1e0-4be7-abba-945d252755e1"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Boston Red Sox win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5591033076819173,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "7de23870-fff4-43b9-9e25-ac9dd9607c38"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Cincinnati Reds win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4015698777516781,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "1923a1a3-0b75-455b-b6d6-ff494f94d272"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Atlanta Braves win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5984301222483219,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "73ef7793-667c-49b2-9b48-5cd6d16c4eac"
+        }
+      ],
+      "reason": "New entries paused. Existing positions remain managed while the page is visible."
+    },
+    {
+      "action": "resume",
+      "status": 200,
+      "milliseconds": 0,
+      "botStatus": "running",
+      "cash": 10,
+      "cycles": 3,
+      "markets": 22,
+      "examined": 4,
+      "decisions": [
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Cleveland Guardians win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4408966923180827,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "2ccf39e4-d1e0-4be7-abba-945d252755e1"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Boston Red Sox win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5591033076819173,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "7de23870-fff4-43b9-9e25-ac9dd9607c38"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Cincinnati Reds win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4015698777516781,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "1923a1a3-0b75-455b-b6d6-ff494f94d272"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Atlanta Braves win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5984301222483219,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "73ef7793-667c-49b2-9b48-5cd6d16c4eac"
+        }
+      ],
+      "reason": "Scanning resumed."
+    },
+    {
+      "action": "stop",
+      "status": 200,
+      "milliseconds": 1,
+      "botStatus": "stopped",
+      "cash": 10,
+      "cycles": 3,
+      "markets": 22,
+      "examined": 4,
+      "decisions": [
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Cleveland Guardians win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4408966923180827,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "2ccf39e4-d1e0-4be7-abba-945d252755e1"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cle-bos-2026-09-23",
+          "title": "Boston Red Sox win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5591033076819173,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493749,
+          "bookTime": 1790201494652,
+          "id": "7de23870-fff4-43b9-9e25-ac9dd9607c38"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Cincinnati Reds win",
+          "side": "YES",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.4015698777516781,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "1923a1a3-0b75-455b-b6d6-ff494f94d272"
+        },
+        {
+          "time": 1790201495406,
+          "slug": "aec-mlb-cin-atl-2026-09-23",
+          "title": "Atlanta Braves win",
+          "side": "NO",
+          "action": "SKIP",
+          "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+          "forecastProbability": 0.5984301222483219,
+          "modelVersion": "mlb-elo-v1-2026-09-23",
+          "contextTime": 1790201493797,
+          "bookTime": 1790201495405,
+          "id": "73ef7793-667c-49b2-9b48-5cd6d16c4eac"
+        }
+      ],
+      "reason": "Entries stopped. Attempting to exit remaining positions at current bids."
+    }
+  ],
+  "feed": {
+    "milliseconds": 8117,
+    "games": 45,
+    "markets": 45,
+    "errors": [],
+    "replay": false
+  },
+  "finishedAt": "2026-09-23T22:11:43.526Z"
+}

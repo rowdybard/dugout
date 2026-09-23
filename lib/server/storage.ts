@@ -2,13 +2,26 @@ import {env} from 'cloudflare:workers';
 import {DEFAULT_CONFIG} from '@/lib/market/scanner';
 import type {Profile} from '@/lib/market/types';
 export function db(){if(!env.DB)throw new Error('History storage is unavailable.');return env.DB;}
-export async function cached<T>(key:string,ttl:number,load:()=>Promise<T>):Promise<T>{
+export async function readCached<T>(key:string):Promise<{value:T;updated:number}|null>{
  const old=await db().prepare('SELECT value, updated FROM cache WHERE key=?').bind(key).first<{value:string;updated:number}>();
- if(old&&Date.now()-old.updated<ttl){const parsed=JSON.parse(old.value);if(parsed?.__chunks){const rows=await db().batch(Array.from({length:parsed.__chunks},(_,i)=>db().prepare('SELECT value FROM cache WHERE key=?').bind(`${key}:part:${parsed.generation}:${i}`)));return JSON.parse(rows.map(r=>(r.results[0] as {value:string}).value).join(''));}return parsed;}
+ if(!old)return null;
+ const parsed=JSON.parse(old.value);
+ if(parsed?.__chunks){const rows=await db().batch(Array.from({length:parsed.__chunks},(_,i)=>db().prepare('SELECT value FROM cache WHERE key=?').bind(`${key}:part:${parsed.generation}:${i}`)));return {value:JSON.parse(rows.map(r=>(r.results[0] as {value:string}).value).join('')),updated:old.updated};}
+ return {value:parsed,updated:old.updated};
+}
+const loads=new Map<string,Promise<unknown>>();
+export async function cached<T>(key:string,ttl:number,load:()=>Promise<T>):Promise<T>{
+ const old=await readCached<T>(key);
+ if(old&&Date.now()-old.updated<ttl)return old.value;
+ const pending=loads.get(key);if(pending)return pending as Promise<T>;
+ const task=(async()=>{
  const value=await load(),serialized=JSON.stringify(value),now=Date.now();
  const write=(k:string,v:string)=>db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated').bind(k,v,now);
  if(serialized.length>400000){const chunks=[];for(let i=0;i<serialized.length;i+=400000)chunks.push(serialized.slice(i,i+400000));const generation=crypto.randomUUID();await db().batch([...chunks.map((c,i)=>write(`${key}:part:${generation}:${i}`,c)),write(key,JSON.stringify({__chunks:chunks.length,generation}))]);}else await write(key,serialized).run();
  return value;
+ })();
+ loads.set(key,task);
+ try{return await task;}finally{if(loads.get(key)===task)loads.delete(key);}
 }
 export async function profile(req:Request){
  const id=req.headers.get('oai-authenticated-user-id')||'private-owner';

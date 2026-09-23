@@ -17,3 +17,15 @@ test('HTTP errors are summarized while no quote value is synthesized',async()=>{
   const budget=createPublicSourceBudget();
   await assert.rejects(budget.run(async()=>{throw Object.assign(new Error('<html>private server detail</html>'),{status:503});}),/^Error: Polymarket US returned HTTP 503\. No current quote was accepted\.$/);
 });
+test('expired work waiting in the public queue is never sent to the provider',async()=>{
+  let release!:()=>void,expiredCalls=0;
+  const budget=createPublicSourceBudget({spacingMs:0});
+  const first=budget.run(()=>new Promise<void>(resolve=>{release=resolve;}));
+  await Promise.resolve();
+  const controller=new AbortController();
+  const expired=budget.run(async()=>{expiredCalls++;},controller.signal);
+  controller.abort(new DOMException('Expired','TimeoutError'));release();
+  await first;await assert.rejects(expired,{name:'TimeoutError'});
+  assert.equal(expiredCalls,0);
+  assert.equal(await budget.run(async()=>42),42,'a cancelled waiter must not poison later reads');
+});
