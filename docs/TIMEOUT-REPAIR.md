@@ -23,3 +23,7 @@ In the live check, Start returned in 8 ms. The cold scan hit its 22-second deadl
 Browser QA verified the home, advanced-mode filler removal, MLB/NFL manual navigation, recorded-data gating, and the run-status explanation. The preview uses clearly labeled recorded development data; production retains live public reads.
 
 Cloudflare hosting and authenticated streaming remain deferred at the user's request. The current browser runner requires the page to stay visible. NFL automatic entries still require an outcome model and reliable starting-QB evidence; the MLB model remains experimental and its dated ratings expire unless refreshed.
+
+## Saved credential verification
+
+The user subsequently saved Polymarket US secrets. `/api/polymarket/status` validates them server-side using the official SDK's read-only `GET https://api.polymarket.us/v1/account/balances`. It returns and caches only a redacted connection status, not balances, identifiers, keys or upstream error text. A hash of the credential pair invalidates the status cache when either changes. Both 32-byte and 64-byte base64 Ed25519 secrets are accepted, matching the SDK. The existing `POLYNARKET_KEY_ID` setting is accepted as an alias, with the correctly spelled `POLYMARKET_KEY_ID` taking precedence. The UI shows the result in “How this runs.” This check does not enable streaming or real-money execution.

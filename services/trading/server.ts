@@ -106,7 +106,7 @@ export function startFromEnvironment(env: NodeJS.ProcessEnv = process.env) {
   }
   const idleTimeoutMs = Number(env.TRADING_STREAM_IDLE_TIMEOUT_MS ?? "60000");
   if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 15000 || idleTimeoutMs > 300000) throw new Error("Invalid idle timeout");
-  const service = new TradingStreamService({ keyId: env.POLYMARKET_KEY_ID, secretKey: env.POLYMARKET_SECRET_KEY, idleTimeoutMs });
+  const service = new TradingStreamService({ keyId: env.POLYMARKET_KEY_ID??env.POLYNARKET_KEY_ID, secretKey: env.POLYMARKET_SECRET_KEY, idleTimeoutMs });
   const { server, closeClients } = createTradingServer(service, token);
   server.listen(port, host, () => {
     service.start();
