@@ -2,7 +2,21 @@ import { replayData } from "./replay";
 import { PolymarketUS } from "polymarket-us";
 import { cached, db } from "./storage";
 import type { Book, Point } from "@/lib/market/types";
+import {createPublicSourceBudget} from '../bot/public-source-budget';
 export const sdk = new PolymarketUS({ timeout: 12000 });
+const requestBudget=createPublicSourceBudget();
+/** A provider-requested pause survives Worker restarts and other UI requests. */
+async function publicRead<T>(request:()=>Promise<T>):Promise<T>{
+  const saved=await db().prepare('SELECT value FROM cache WHERE key=?').bind('polymarket:backoff').first<{value:string}>();
+  const until=saved?Number(saved.value):0;
+  if(Number.isFinite(until)&&until>Date.now())throw new Error(`Polymarket US requests are paused until ${new Date(until).toISOString()}.`);
+  try{return await requestBudget.run(request);}
+  catch(error){
+    const retryAt=requestBudget.blockedUntil();
+    if(retryAt>Date.now())await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind('polymarket:backoff',String(retryAt),Date.now()).run();
+    throw error;
+  }
+}
 export const BASE = "https://gateway.polymarket.us";
 export type Raw = Record<string, any>;
 export function numeric(x: unknown): number | null {
@@ -36,9 +50,11 @@ export async function publicGet(path: string): Promise<Raw> {
       );
     }
   }
-  const r = await fetch(BASE + path, { signal: AbortSignal.timeout(18000) });
-  if (!r.ok) throw new Error(`Polymarket US returned ${r.status}.`);
-  return r.json();
+  return publicRead(async()=>{
+    const r = await fetch(BASE + path, { signal: AbortSignal.timeout(18000) });
+    if (!r.ok) throw Object.assign(new Error(`Polymarket US returned ${r.status}.`),{status:r.status,retryAfterMs:Math.max(0,Number(r.headers.get('Retry-After'))*1000)});
+    return r.json();
+  });
 }
 export const getLeaguePage = (league: string, offset: number) =>
   cached(`league-compact:${league}:${offset}`, 120000, async () => {
@@ -148,7 +164,7 @@ export async function bbo(slug: string) {
     const replay = await replayData();
     const r = (replay
       ? replay.markets[slug]?.bbo
-      : await sdk.markets.bbo(slug)) as unknown as Raw;
+      : await publicRead(()=>sdk.markets.bbo(slug))) as unknown as Raw;
     if (!r) throw new Error("Recorded quote unavailable.");
     return r.marketData;
   });
@@ -157,7 +173,7 @@ export async function book(slug: string): Promise<Book> {
   const replay = await replayData();
   const r = (replay
     ? replay.markets[slug]?.book
-    : await sdk.markets.book(slug)) as unknown as Raw;
+    : await publicRead(()=>sdk.markets.book(slug))) as unknown as Raw;
   if (!r) throw new Error("Recorded book unavailable.");
   const b = r.marketData;
   if (!b) throw new Error("Order book is unavailable.");
@@ -175,7 +191,7 @@ export async function book(slug: string): Promise<Book> {
 export async function settlement(slug: string) {
   if (await replayData()) return null;
   try {
-    const r = (await sdk.markets.settlement(slug)) as unknown as Raw;
+    const r = (await publicRead(()=>sdk.markets.settlement(slug))) as unknown as Raw;
     return numeric(r.settlement);
   } catch {
     return null;
@@ -189,6 +205,6 @@ export async function metadata(slug: string) {
         for (const m of e.markets) if (m.slug === slug) return m;
     throw new Error("Recorded market unavailable.");
   }
-  const r = (await sdk.markets.retrieveBySlug(slug)) as unknown as Raw;
+  const r = (await publicRead(()=>sdk.markets.retrieveBySlug(slug))) as unknown as Raw;
   return r.market ?? r;
 }

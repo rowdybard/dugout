@@ -32,7 +32,7 @@ export function initialDipState(config: DipReversionConfig = DEFAULT_DIP_CONFIG)
 
 export const initialDipReversionState = initialDipState;
 
-function validConfig(config: DipReversionConfig): boolean {
+export function validConfig(config: DipReversionConfig): boolean {
   const positive = [config.baselineWindowMs, config.minimumHistoryMs, config.minSamples, config.declinePoints,
     config.recoveryPoints, config.recoveryConfirmations, config.maxSpreadPoints, config.minimumDepth,
     config.entryBudget, config.targetReturn, config.stopReturn, config.maxHoldMs, config.signalExpiryMs];

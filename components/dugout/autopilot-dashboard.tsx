@@ -1,0 +1,60 @@
+'use client';
+import {useEffect,useState,type ReactNode} from 'react';
+import {ArrowUpRight,ArrowRight,Pause,Play,Square,ChevronDown,Search,Activity,SlidersHorizontal} from 'lucide-react';
+import {Area,AreaChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
+import {BotModelResearch} from './bot-model-research';
+import {useBot} from '@/lib/bot/use-bot';
+import {botEquity} from '@/lib/bot/engine';
+import type {Feed,League,Profile} from '@/lib/market/types';
+import './autopilot-dashboard.css';
+
+const money=(n:number)=>`${n<0?'−':''}$${Math.abs(n).toFixed(2)}`;
+const signed=(n:number)=>`${n>0?'+':''}${money(n)}`;
+type Experiment={startedAt:number;endedAt:number|null;startingCash:number;endingEquity:number;cycles:number;observations:number;markets:number;scope:number;providerRateLimits:number;localBackoffSkips:number;entries:number;closed:number;errors:number;reasons:{reason:string;count:number}[];limitation:string};
+type Props={profile:Profile|null;feed:Feed|null;onProfile:(p:Profile)=>void;beginner:boolean;visible:boolean;pendingOrder:boolean;children?:ReactNode;onManual:(slug:string)=>void};
+export function AutopilotDashboard({profile,feed,onProfile,beginner,visible,pendingOrder,children,onManual}:Props){
+  const bot=useBot(profile,onProfile,pendingOrder),s=bot.session;
+  const [bankroll,setBankroll]=useState(10),[leagues,setLeagues]=useState<League[]>(['MLB']);
+  const [filter,setFilter]=useState<'all'|'trades'|'skips'>('all');
+  const [experiment,setExperiment]=useState<Experiment|null>(null);
+  useEffect(()=>{let mounted=true;fetch('/api/bot/experiment').then(r=>r.ok?r.json():null).then(data=>{if(mounted&&data)setExperiment(data as Experiment);}).catch(()=>{});return()=>{mounted=false;};},[]);
+  const replay=!!feed?.replayAt,open=s?.positions.filter(p=>p.status==='open')??[],closed=s?.positions.filter(p=>p.status!=='open')??[];
+  const equity=s?botEquity(s):bankroll,pnl=s?equity-s.config.startingCash:0;
+  const started=s&&s.status!=='stopped';
+  const stale=!!s&&s.status!=='stopped'&&!!s.lastCycleAt&&bot.now-s.lastCycleAt>30000;
+  const status=bot.controlPending?'Control queued':bot.error?'Check connection':stale?'Checks interrupted':s?.status==='running'?'Scanning':s?.status==='paused'?'Entries paused':s?.status==='stopping'?'Exiting':s?.status==='stopped'?'Stopped':'Ready to configure';
+  const decisions=[...(s?.decisions??[])].reverse().filter(d=>filter==='all'||(filter==='trades'?['BUY','SELL','SETTLE'].includes(d.action):d.action==='SKIP')).slice(0,12);
+  const valid=Number.isFinite(bankroll)&&bankroll>=5&&bankroll<=100&&leagues.length>0;
+  const toggle=(league:League)=>setLeagues(previous=>previous.includes(league)?previous.filter(x=>x!==league):[...previous,league]);
+  return <main className="auto-home" hidden={!visible}>
+    <div className="auto-heading"><div><span className="auto-kicker">MLB + NFL</span><h1>Paper bot</h1></div><span className="auto-status"><Activity size={15}/>{status}</span></div>
+    <div className="auto-top">
+      <section className={`auto-capital ${!s?'auto-unstarted':''}`} aria-label="Bot bankroll">
+        <div className="auto-section-title"><span>{s?'BOT BANKROLL':'STARTING BANKROLL'}</span><span>Paper dollars</span></div>
+        <div className="auto-balance">{s?<strong>{money(equity)}</strong>:<label><span>$</span><input aria-label="Starting paper bankroll" type="number" min="5" max="100" step="1" value={bankroll} onChange={e=>setBankroll(Number(e.target.value))}/></label>}<span className={pnl<0?'negative':'positive'}>{s?`${signed(pnl)} since start`:'Separate from manual trades'}</span></div>
+        <div className="auto-stat-row"><div><span>Available</span><strong>{money(s?.cash??bankroll)}</strong></div><div><span>In trades</span><strong>{open.length}</strong></div><div><span>Closed trades</span><strong>{closed.length}</strong></div></div>
+        <div className="auto-chart" aria-label={s?'Recorded bot bankroll over time':'No bot performance recorded yet'}>{s&&s.equity.length>1?<ResponsiveContainer width="100%" height="100%"><AreaChart data={s.equity}><XAxis hide dataKey="time"/><YAxis hide domain={['dataMin - 0.5','dataMax + 0.5']}/><Tooltip labelFormatter={v=>new Date(Number(v)).toLocaleTimeString()} formatter={v=>[money(Number(v)),'Estimated bankroll']} contentStyle={{background:'#171d17',border:'1px solid #46543b'}}/><Area dataKey="price" type="linear" stroke={pnl<0?'#f27d86':'#b8f569'} fill={pnl<0?'#f27d8614':'#b8f56914'} strokeWidth={2} isAnimationActive={false}/></AreaChart></ResponsiveContainer>:<div className="auto-chart-empty"><Activity size={22}/><span>The chart starts with your first observation.</span></div>}</div>
+        {beginner&&<p className="auto-explanation">The bot gets its own balance. Sale proceeds return here for the next trade. No real deposit or money is used.</p>}
+      </section>
+      <section className="auto-control" aria-label="Automatic bot controls">
+        <div className="auto-section-title"><span>LET THE BOT CHOOSE</span><span>Both outcomes</span></div>
+        <h2>{open[0]?.title??'Automatic market selection'}</h2>
+        <div className="auto-sport-toggles" role="group" aria-label="Leagues for the bot">{(['MLB','NFL'] as const).map(league=><button key={league} disabled={!!started||league==='NFL'} title={league==='NFL'?'NFL automatic entries need a validated outcome model and pregame QB data. Manual research remains available.':undefined} aria-pressed={s&&started?s.config.leagues.includes(league):leagues.includes(league)} onClick={()=>toggle(league)}>{league}<span>{league==='MLB'?'Baseball':'Research only'}</span></button>)}</div>
+        <div className="auto-config-line"><span><b>{money(s?.config.entryBudget??Math.min(2,bankroll/5))}</b> max per entry</span><span><b>1</b> open position</span><span><b>{money(s?.config.maxSessionLoss??bankroll*.2)}</b> session loss stop</span></div>
+        <p className="auto-current-reason" role={bot.error?'alert':undefined}>{bot.error||(stale?'The last check is over 30 seconds old. New quotes are required before the next action.':s?.lastReason)||(replay?'This preview uses recorded data. Current quotes are required to start.':'Automatically evaluates available pregame MLB winner markets. NFL remains research only.')}</p>
+        <div className="auto-actions">{!started?<button className="auto-start" disabled={!profile||!feed||replay||!valid||bot.busy||pendingOrder} onClick={()=>void bot.start(bankroll,leagues)}><Play size={17}/>{bot.busy?'Starting…':`Start ${money(bankroll).replace('.00','')} paper bot`}<ArrowRight size={18}/></button>:<><button className="auto-start" disabled={bot.controlPending||s.status==='stopping'} onClick={()=>void(s.status==='paused'?bot.resume():bot.pause())}>{s.status==='paused'?<Play size={17}/>:<Pause size={17}/>} {s.status==='paused'?'Resume entries':'Pause entries'}</button><button className="auto-stop" disabled={bot.controlPending} onClick={()=>void bot.stop()}><Square size={14}/>Stop & exit</button></>}</div>
+        <div className="auto-runtime"><span className="auto-amber"/>Browser session · stops checking when this page is hidden</div>
+        <details className="auto-rules"><summary><SlidersHorizontal size={14}/>Rules & limits<ChevronDown size={14}/></summary><dl><div><dt>Strategy</dt><dd>Team model + dip → recovery experiment</dd></div><div><dt>New entries</dt><dd>MLB pregame; both sides considered</dd></div><div><dt>Entry</dt><dd>5-point dip, 1.5-point recovery, 2 confirmations</dd></div><div><dt>Exit</dt><dd>+8% net target / −15% net loss / 10 minutes</dd></div><div><dt>Outcome filter</dt><dd>Team estimate ≥ entry price + fees + 3 points</dd></div><div><dt>Costs</dt><dd>Reject entries already past the loss exit</dd></div><div><dt>Sports context</dt><dd>Missing or changed key-player information blocks entry</dd></div><div><dt>Background service</dt><dd>Not connected</dd></div><div><dt>Predictive value</dt><dd>Unvalidated; a recovery is a scenario, not a forecast</dd></div></dl></details>
+      </section>
+    </div>
+    <section className="auto-decisions" aria-label="Bot decisions">
+      <div className="auto-decisions-heading"><div><h2>Inside the decision</h2><span>{s?`${s.universeSize} markets in scope · ${s.cycles} checks · ${s.scanned} market examinations`:'Entries, exits, and the reasons it stays out.'}</span></div><div className="auto-filter" role="group" aria-label="Decision filter">{(['all','trades','skips'] as const).map(f=><button key={f} aria-pressed={filter===f} onClick={()=>setFilter(f)}>{f==='all'?'All':f==='trades'?'Trades':'Skipped'}</button>)}</div></div>
+      {open.length>0&&<div className="auto-open">{open.map(p=><div key={p.id}><div><span>{p.league} · OPEN</span><strong>{p.title}</strong><small>{money(p.amount)} invested · {p.contracts} contracts</small></div><button disabled={bot.controlPending||s?.exitRequests?.includes(p.id)} onClick={()=>void bot.exit(p.id)}>{s?.exitRequests?.includes(p.id)?'Exit requested':'Exit position'} <ArrowUpRight size={16}/></button></div>)}</div>}
+      {decisions.length?<div className="auto-decision-list">{decisions.map(d=><details key={d.id} className="auto-decision"><summary><span className={`auto-action action-${d.action.toLowerCase()}`}>{d.action}</span><div><strong>{d.title}</strong><span>{d.reason}</span></div><time>{new Date(d.time).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</time><ChevronDown size={14}/></summary><div className="auto-decision-detail">{d.forecastProbability!==undefined&&<span>Team-results model: {(d.forecastProbability*100).toFixed(1)}% for this side. Player impact is not modeled.</span>}{d.allInEntryPrice!==undefined&&<span>Entry including estimated fees: {(d.allInEntryPrice*100).toFixed(1)}¢ per contract</span>}{d.initialLoss!==undefined&&<span>Immediate exit cost: {(d.initialLoss*100).toFixed(1)}%</span>}{d.recoveryScenarioReturn!==undefined&&<span>If the old price returns: {(d.recoveryScenarioReturn*100).toFixed(1)}% estimated after fees. Not a forecast.</span>}<span>Sports receipt: {d.contextTime?new Date(d.contextTime).toLocaleTimeString():'Not used for this exit'}</span><button onClick={()=>onManual(d.slug)}>Inspect market <ArrowUpRight size={14}/></button></div></details>)}</div>:<div className="auto-empty"><Search size={25}/><div><strong>{s?'No matching decisions in this filter.':'No picks yet. The bot has not started.'}</strong><p>{beginner?'It will record what it checked, what passed, and why it traded or waited.':'Decision history appears after a scan.'}</p></div></div>}
+    </section>
+    <BotModelResearch/>
+    {experiment&&<details className="auto-experiment"><summary><span>MLB forward check <small>{new Date(experiment.startedAt).toLocaleDateString([],{month:'short',day:'numeric'})} · {Math.round(((experiment.endedAt??experiment.startedAt)-experiment.startedAt)/60000)} min</small></span><span>{money(experiment.startingCash)} → {money(experiment.endingEquity)} · {experiment.entries} entries <ChevronDown size={15}/></span></summary><div><p>{experiment.observations} actual book observations across {experiment.markets} eligible markets. {experiment.cycles} scan cycles. {experiment.closed} closed positions.</p><p>{experiment.limitation}</p><p>{experiment.providerRateLimits} provider rate-limit responses. {experiment.localBackoffSkips} local checks skipped during backoff; those checks sent no API request.</p><ul>{experiment.reasons.map(r=><li key={r.reason}>{r.reason}</li>)}</ul></div></details>}
+    <details className="auto-sports"><summary>Game & player research<ChevronDown size={17}/></summary>{children}</details>
+    <div className="auto-footnote">Paper fills use displayed depth and estimated fees. Exit targets depend on available bids. No real orders or proven profit model.</div>
+  </main>;
+}

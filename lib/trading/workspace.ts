@@ -29,6 +29,8 @@ export type AutomationSession = {
 export type TradingState = {
   settings: TradingSettings;
   automation?: AutomationSession;
+  autopilot?: import('../bot/types').BotSession;
+  botHistory?: {id:string;startedAt:number;endedAt:number;startingCash:number;endingCash:number;closed:number;version:string}[];
 };
 export type WorkspaceOrder = {
   id: string; commandId: string; slug: string; side: 'YES' | 'NO';

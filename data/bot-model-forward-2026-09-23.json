@@ -1,0 +1,2405 @@
+{
+  "kind": "actual-forward-paper-observation",
+  "description": "Actual public quotes observed prospectively. Hypothetical fills only. No live order API used.",
+  "startedAt": 1790188762735,
+  "windows": [
+    {
+      "startedAt": 1790188762720,
+      "endedAt": 1790189130155
+    }
+  ],
+  "updatedAt": 1790189130155,
+  "endedAt": 1790189130155,
+  "initialCash": 10,
+  "estimatedEquity": 10,
+  "session": {
+    "id": "4f3785cd-07c1-4be4-a87a-864a617ec93d",
+    "revision": 23,
+    "mode": "paper",
+    "status": "stopped",
+    "config": {
+      "version": "paper-research-v2",
+      "leagues": [
+        "MLB"
+      ],
+      "startingCash": 10,
+      "entryBudget": 2,
+      "maxSessionLoss": 2,
+      "maxPositions": 1,
+      "outcomeFilter": {
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "minimumProbabilityGap": 0.03
+      },
+      "strategy": {
+        "id": "DIP_REVERSION",
+        "version": "paper-research-v2",
+        "baselineWindowMs": 300000,
+        "minimumHistoryMs": 120000,
+        "minSamples": 6,
+        "declinePoints": 5,
+        "recoveryPoints": 1.5,
+        "recoveryConfirmations": 2,
+        "maxSpreadPoints": 3,
+        "minimumDepth": 10,
+        "entryBudget": 2,
+        "limitOffsetPoints": 1,
+        "targetReturn": 0.08,
+        "stopReturn": 0.15,
+        "maxHoldMs": 600000,
+        "cooldownMs": 300000,
+        "signalExpiryMs": 180000,
+        "allowedGamePhases": [
+          "PREGAME"
+        ]
+      },
+      "eventDay": "2026-09-23"
+    },
+    "startedAt": 1790188762735,
+    "lastCycleAt": 1790189130151,
+    "runner": "service",
+    "cash": 10,
+    "positions": [],
+    "equity": [
+      {
+        "time": 1790188762735,
+        "price": 10
+      },
+      {
+        "time": 1790188799408,
+        "price": 10
+      },
+      {
+        "time": 1790188799419,
+        "price": 10
+      },
+      {
+        "time": 1790188809418,
+        "price": 10
+      },
+      {
+        "time": 1790188819419,
+        "price": 10
+      },
+      {
+        "time": 1790188829422,
+        "price": 10
+      },
+      {
+        "time": 1790188839425,
+        "price": 10
+      },
+      {
+        "time": 1790188849430,
+        "price": 10
+      },
+      {
+        "time": 1790188865053,
+        "price": 10
+      },
+      {
+        "time": 1790188869441,
+        "price": 10
+      },
+      {
+        "time": 1790188879441,
+        "price": 10
+      },
+      {
+        "time": 1790188889443,
+        "price": 10
+      },
+      {
+        "time": 1790188953174,
+        "price": 10
+      },
+      {
+        "time": 1790188954778,
+        "price": 10
+      },
+      {
+        "time": 1790188967968,
+        "price": 10
+      },
+      {
+        "time": 1790188973182,
+        "price": 10
+      },
+      {
+        "time": 1790188983184,
+        "price": 10
+      },
+      {
+        "time": 1790188993187,
+        "price": 10
+      },
+      {
+        "time": 1790189003191,
+        "price": 10
+      },
+      {
+        "time": 1790189023830,
+        "price": 10
+      },
+      {
+        "time": 1790189030124,
+        "price": 10
+      },
+      {
+        "time": 1790189034006,
+        "price": 10
+      },
+      {
+        "time": 1790189043878,
+        "price": 10
+      },
+      {
+        "time": 1790189130151,
+        "price": 10
+      }
+    ],
+    "states": {
+      "aec-mlb-min-sf-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790188951673,
+        "lastObservedPrice": 0.5874999999999999,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-min-sf-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790188951673,
+        "lastObservedPrice": 0.4125,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-mil-phi-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-mil-phi-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-tor-bal-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-tor-bal-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cle-bos-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cle-bos-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-stl-pit-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-stl-pit-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-hou-sea-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-hou-sea-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-laa-ath-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790189129441,
+        "lastObservedPrice": 0.5475000000000001,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-laa-ath-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790189129441,
+        "lastObservedPrice": 0.4525,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-az-col-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790189130150,
+        "lastObservedPrice": 0.5925,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-az-col-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING",
+        "lastObservedAt": 1790189130150,
+        "lastObservedPrice": 0.4075,
+        "reason": "Collecting enough history for a market-specific baseline."
+      },
+      "aec-mlb-sd-lad-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-sd-lad-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-tb-nyy-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-tb-nyy-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-mia-chc-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-mia-chc-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cws-kc-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cws-kc-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cin-atl-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-cin-atl-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-nym-tex-2026-09-23:YES": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      },
+      "aec-mlb-nym-tex-2026-09-23:NO": {
+        "version": "paper-research-v2",
+        "phase": "WAITING"
+      }
+    },
+    "histories": {
+      "aec-mlb-min-sf-2026-09-23": [
+        {
+          "time": 1790188951673,
+          "price": 0.5874999999999999
+        }
+      ],
+      "aec-mlb-mil-phi-2026-09-23": [],
+      "aec-mlb-tor-bal-2026-09-23": [],
+      "aec-mlb-cle-bos-2026-09-23": [],
+      "aec-mlb-stl-pit-2026-09-23": [],
+      "aec-mlb-hou-sea-2026-09-23": [],
+      "aec-mlb-laa-ath-2026-09-23": [
+        {
+          "time": 1790189129441,
+          "price": 0.5475000000000001
+        }
+      ],
+      "aec-mlb-az-col-2026-09-23": [
+        {
+          "time": 1790189130150,
+          "price": 0.5925
+        }
+      ],
+      "aec-mlb-sd-lad-2026-09-23": [],
+      "aec-mlb-tb-nyy-2026-09-23": [],
+      "aec-mlb-mia-chc-2026-09-23": [],
+      "aec-mlb-cws-kc-2026-09-23": [],
+      "aec-mlb-cin-atl-2026-09-23": [],
+      "aec-mlb-nym-tex-2026-09-23": []
+    },
+    "contextBaselines": {
+      "118946": {
+        "gameId": "824784",
+        "receivedAt": 1790188951821,
+        "independentSnapshots": 2,
+        "playerIds": {},
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "baltimoreorioles:tyleroneill": "60dayil:2026-09-23T17:25:00.000Z",
+          "baltimoreorioles:samuelbasallo": "7dayil:2026-09-23T16:19:00.000Z",
+          "torontobluejays:brettbateman": "daytoday:2026-09-23T15:50:00.000Z",
+          "baltimoreorioles:jacksonholliday": "10dayil:2026-09-23T15:37:00.000Z",
+          "torontobluejays:dylancease": "daytoday:2026-09-21T20:29:00.000Z",
+          "baltimoreorioles:ryanhelsley": "60dayil:2026-09-19T17:08:00.000Z",
+          "torontobluejays:anthonysantander": "60dayil:2026-09-18T21:55:00.000Z",
+          "torontobluejays:shanebieber": "15dayil:2026-09-18T21:53:00.000Z",
+          "baltimoreorioles:kylebradish": "15dayil:2026-09-16T22:05:00.000Z",
+          "torontobluejays:jamesontaillon": "15dayil:2026-09-15T21:23:00.000Z",
+          "torontobluejays:rudymartinjr": "10dayil:2026-09-14T19:31:00.000Z",
+          "baltimoreorioles:blazealexander": "10dayil:2026-09-09T20:49:00.000Z",
+          "baltimoreorioles:ryanmountcastle": "60dayil:2026-09-08T18:07:00.000Z",
+          "torontobluejays:codyponce": "60dayil:2026-09-07T17:42:00.000Z",
+          "torontobluejays:patrickcorbin": "60dayil:2026-09-07T17:37:00.000Z",
+          "baltimoreorioles:luisrobertjr": "10dayil:2026-09-06T16:30:00.000Z",
+          "torontobluejays:jonatanclase": "60dayil:2026-08-27T21:43:00.000Z",
+          "torontobluejays:yimigarcia": "60dayil:2026-08-26T17:56:00.000Z",
+          "torontobluejays:jakebloss": "60dayil:2026-08-12T19:38:00.000Z",
+          "torontobluejays:luisurias": "10dayil:2026-08-10T20:51:00.000Z",
+          "baltimoreorioles:colinselby": "60dayil:2026-07-31T20:48:00.000Z",
+          "torontobluejays:addisonbarger": "60dayil:2026-07-27T20:51:00.000Z",
+          "baltimoreorioles:keeganakin": "60dayil:2026-07-15T20:40:00.000Z",
+          "torontobluejays:joseberrios": "60dayil:2026-05-27T17:29:00.000Z",
+          "baltimoreorioles:jordanwestburg": "60dayil:2026-05-15T21:13:00.000Z",
+          "torontobluejays:bowdenfrancis": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118947": {
+        "gameId": "824951",
+        "receivedAt": 1790189121422,
+        "independentSnapshots": 2,
+        "playerIds": {
+          "losangelesangels": "700712",
+          "athletics": "605488"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "athletics:jtginn": "60dayil:2026-09-22T21:34:00.000Z",
+          "athletics:maxmuncy": "10dayil:2026-09-22T21:14:00.000Z",
+          "losangelesangels:georgeklassen": "15dayil:2026-09-19T23:44:00.000Z",
+          "losangelesangels:nolanschanuel": "10dayil:2026-09-18T23:43:00.000Z",
+          "losangelesangels:kyrenparis": "10dayil:2026-09-18T22:13:00.000Z",
+          "athletics:brookskriske": "60dayil:2026-09-17T15:14:00.000Z",
+          "athletics:brentrooker": "60dayil:2026-09-16T22:36:00.000Z",
+          "athletics:nickkurtz": "60dayil:2026-09-16T22:33:00.000Z",
+          "losangelesangels:samynaterajr": "15dayil:2026-09-16T21:34:00.000Z",
+          "athletics:gagejump": "15dayil:2026-09-15T18:52:00.000Z",
+          "athletics:luisseverino": "60dayil:2026-09-14T14:30:00.000Z",
+          "losangelesangels:yoanmoncada": "60dayil:2026-09-13T01:35:00.000Z",
+          "losangelesangels:gustavocampero": "10dayil:2026-09-13T01:31:00.000Z",
+          "athletics:jacobwilson": "60dayil:2026-09-11T21:04:00.000Z",
+          "athletics:tylersoderstrom": "60dayil:2026-08-20T18:26:00.000Z",
+          "athletics:justinsterner": "60dayil:2026-08-16T17:56:00.000Z",
+          "athletics:markleiterjr": "60dayil:2026-07-30T18:13:00.000Z",
+          "losangelesangels:jackkochanowicz": "60dayil:2026-06-27T05:12:00.000Z",
+          "athletics:gunnarhoglund": "60dayil:2026-05-20T22:04:00.000Z",
+          "losangelesangels:robertstephenson": "60dayil:2026-05-08T11:02:00.000Z",
+          "losangelesangels:anthonyrendon": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118948": {
+        "gameId": "823410",
+        "receivedAt": 1790188778747,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "milwaukeebrewers": "701656",
+          "philadelphiaphillies": "605400"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "milwaukeebrewers:joeyortiz": "daytoday:2026-09-22T23:20:00.000Z",
+          "philadelphiaphillies:jesusluzardo": "15dayil:2026-09-21T13:38:00.000Z",
+          "philadelphiaphillies:jonathanbowlan": "daytoday:2026-09-18T21:41:00.000Z",
+          "philadelphiaphillies:calebkilian": "60dayil:2026-09-17T19:50:00.000Z",
+          "milwaukeebrewers:grantanderson": "15dayil:2026-09-15T16:04:00.000Z",
+          "milwaukeebrewers:brysewilson": "15dayil:2026-09-15T16:01:00.000Z",
+          "milwaukeebrewers:brandonwoodruff": "60dayil:2026-09-15T15:58:00.000Z",
+          "philadelphiaphillies:felixreyes": "60dayil:2026-08-20T17:06:00.000Z",
+          "philadelphiaphillies:bradkeller": "60dayil:2026-07-29T23:34:00.000Z",
+          "milwaukeebrewers:brianfitzpatrick": "60dayil:2026-07-05T00:09:00.000Z",
+          "philadelphiaphillies:johanrojas": "60dayil:2026-06-25T19:25:00.000Z",
+          "philadelphiaphillies:adolisgarcia": "60dayil:2026-06-24T19:23:00.000Z",
+          "milwaukeebrewers:quinnpriester": "60dayil:2026-06-18T15:25:00.000Z",
+          "milwaukeebrewers:angelzerpa": "60dayil:2026-05-31T17:56:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118949": {
+        "gameId": "824868",
+        "receivedAt": 1790189098392,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "cincinnatireds": "671096",
+          "atlantabraves": "519242"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "cincinnatireds:chaseburns": "15dayil:2026-09-23T15:51:00.000Z",
+          "atlantabraves:ronaldacunajr": "daytoday:2026-09-23T00:16:00.000Z",
+          "atlantabraves:lanethomas": "10dayil:2026-09-22T19:58:00.000Z",
+          "cincinnatireds:tonysantillan": "15dayil:2026-09-22T16:15:00.000Z",
+          "cincinnatireds:spencersteer": "60dayil:2026-09-18T18:49:00.000Z",
+          "cincinnatireds:juliangarcia": "15dayil:2026-09-18T18:43:00.000Z",
+          "cincinnatireds:blakedunn": "60dayil:2026-09-15T19:43:00.000Z",
+          "atlantabraves:reynaldolopez": "15dayil:2026-09-15T14:40:00.000Z",
+          "atlantabraves:joejimenez": "60dayil:2026-09-15T14:39:00.000Z",
+          "atlantabraves:bryceelder": "15dayil:2026-09-09T15:38:00.000Z",
+          "cincinnatireds:michaeltoglia": "60dayil:2026-09-04T18:20:00.000Z",
+          "atlantabraves:spencerstrider": "60dayil:2026-08-28T20:43:00.000Z",
+          "atlantabraves:spencerschwellenbach": "60dayil:2026-08-28T20:36:00.000Z",
+          "cincinnatireds:huntergreene": "60dayil:2026-08-13T15:56:00.000Z",
+          "atlantabraves:joeywentz": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118950": {
+        "gameId": "824060",
+        "receivedAt": 1790189098403,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "chicagowhitesox": "663542",
+          "kansascityroyals": "607625"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "chicagowhitesox:tristanpeters": "daytoday:2026-09-22T20:35:00.000Z",
+          "kansascityroyals:connorseabold": "60dayil:2026-09-18T12:50:00.000Z",
+          "kansascityroyals:jamesmcarthur": "60dayil:2026-09-10T13:53:00.000Z",
+          "chicagowhitesox:prelanderberroa": "60dayil:2026-09-03T00:10:00.000Z",
+          "chicagowhitesox:kybush": "60dayil:2026-09-03T00:03:00.000Z",
+          "kansascityroyals:beckway": "15dayil:2026-09-02T15:14:00.000Z",
+          "kansascityroyals:carlosestevez": "60dayil:2026-09-01T22:01:00.000Z",
+          "chicagowhitesox:jordanleasure": "60dayil:2026-08-31T23:05:00.000Z",
+          "kansascityroyals:nickmears": "60dayil:2026-08-26T15:03:00.000Z",
+          "chicagowhitesox:joeybart": "10dayil:2026-08-07T21:58:00.000Z",
+          "kansascityroyals:luinderavila": "60dayil:2026-08-06T19:18:00.000Z",
+          "kansascityroyals:stephenkolek": "60dayil:2026-08-04T22:37:00.000Z",
+          "kansascityroyals:coleragans": "60dayil:2026-07-02T21:42:00.000Z",
+          "kansascityroyals:jonathanindia": "60dayil:2026-06-04T20:26:00.000Z",
+          "chicagowhitesox:mikevasil": "60dayil:2026-05-08T11:02:00.000Z",
+          "chicagowhitesox:tannermurray": "60dayil:2026-05-08T11:02:00.000Z",
+          "chicagowhitesox:brooksbaldwin": "60dayil:2026-05-08T11:02:00.000Z",
+          "kansascityroyals:alecmarsh": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118951": {
+        "gameId": "822841",
+        "receivedAt": 1790189121343,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "newyorkmets": "690997",
+          "texasrangers": "674003"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "texasrangers:calquantrill": "60dayil:2026-09-22T23:15:00.000Z",
+          "texasrangers:jocpederson": "10dayil:2026-09-22T23:11:00.000Z",
+          "newyorkmets:christianscott": "15dayil:2026-09-22T19:51:00.000Z",
+          "texasrangers:jackleiter": "60dayil:2026-09-22T14:07:00.000Z",
+          "texasrangers:michelotanez": "15dayil:2026-09-19T21:45:00.000Z",
+          "texasrangers:colewinn": "60dayil:2026-09-18T22:06:00.000Z",
+          "newyorkmets:jaredyoung": "7dayil:2026-09-18T20:40:00.000Z",
+          "newyorkmets:danielduarte": "15dayil:2026-09-16T18:34:00.000Z",
+          "newyorkmets:robertstock": "15dayil:2026-09-16T18:24:00.000Z",
+          "texasrangers:kylehigashioka": "10dayil:2026-09-05T14:27:00.000Z",
+          "texasrangers:carterbaumler": "60dayil:2026-08-31T12:58:00.000Z",
+          "newyorkmets:jorgepolanco": "60dayil:2026-08-28T19:06:00.000Z",
+          "texasrangers:josecorniell": "60dayil:2026-07-30T01:57:00.000Z",
+          "texasrangers:jalenbeeks": "60dayil:2026-07-21T23:05:00.000Z",
+          "newyorkmets:reedgarrett": "60dayil:2026-05-08T11:02:00.000Z",
+          "newyorkmets:tylormegill": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118953": {
+        "gameId": "823327",
+        "receivedAt": 1790188797872,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "stlouiscardinals": "669461",
+          "pittsburghpirates": "669199"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "stlouiscardinals:blazejordan": "10dayil:2026-09-19T21:24:00.000Z",
+          "pittsburghpirates:braxtonashcraft": "15dayil:2026-09-18T20:46:00.000Z",
+          "stlouiscardinals:joshuabaez": "10dayil:2026-09-18T19:55:00.000Z",
+          "stlouiscardinals:eversonpereira": "10dayil:2026-09-18T13:34:00.000Z",
+          "pittsburghpirates:esmerlynvaldez": "10dayil:2026-09-12T17:21:00.000Z",
+          "pittsburghpirates:isaacmattson": "15dayil:2026-09-08T22:35:00.000Z",
+          "stlouiscardinals:hunterdobbins": "15dayil:2026-09-04T00:06:00.000Z",
+          "pittsburghpirates:endyrodriguez": "60dayil:2026-09-01T17:58:00.000Z",
+          "pittsburghpirates:mitchkeller": "60dayil:2026-08-03T22:33:00.000Z",
+          "stlouiscardinals:maxrajcic": "60dayil:2026-07-23T17:25:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118954": {
+        "gameId": "823894",
+        "receivedAt": 1790188951855,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "sandiegopadres": "592662",
+          "losangelesdodgers": "808967"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "losangelesdodgers:blakesnell": "daytoday:2026-09-22T23:44:00.000Z",
+          "losangelesdodgers:shoheiohtani": "15dayil:2026-09-22T23:33:00.000Z",
+          "losangelesdodgers:willklein": "60dayil:2026-09-22T22:13:00.000Z",
+          "losangelesdodgers:daltonrushing": "10dayil:2026-09-17T14:52:00.000Z",
+          "losangelesdodgers:edgardohenriquez": "15dayil:2026-09-16T20:52:00.000Z",
+          "sandiegopadres:gavinsheets": "10dayil:2026-09-12T20:13:00.000Z",
+          "sandiegopadres:jeremiahestrada": "15dayil:2026-09-12T20:06:00.000Z",
+          "sandiegopadres:ramonlaureano": "60dayil:2026-09-12T19:52:00.000Z",
+          "sandiegopadres:jasonadam": "60dayil:2026-09-12T19:39:00.000Z",
+          "losangelesdodgers:ericlauer": "60dayil:2026-09-11T22:04:00.000Z",
+          "losangelesdodgers:gavinstone": "60dayil:2026-09-10T13:24:00.000Z",
+          "sandiegopadres:miguelandujar": "10dayil:2026-09-09T13:34:00.000Z",
+          "losangelesdodgers:jakecousins": "60dayil:2026-09-03T13:34:00.000Z",
+          "sandiegopadres:joemusgrove": "60dayil:2026-09-02T21:01:00.000Z",
+          "losangelesdodgers:bencasparius": "60dayil:2026-09-02T18:44:00.000Z",
+          "sandiegopadres:luisrengifo": "60dayil:2026-09-01T16:29:00.000Z",
+          "sandiegopadres:lucasgiolito": "60dayil:2026-08-24T23:01:00.000Z",
+          "losangelesdodgers:brusdargraterol": "60dayil:2026-06-01T14:38:00.000Z",
+          "sandiegopadres:bryanhoeing": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118956": {
+        "gameId": "824301",
+        "receivedAt": 1790189121456,
+        "independentSnapshots": 2,
+        "playerIds": {
+          "arizonadiamondbacks": "518876",
+          "coloradorockies": "690279"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "coloradorockies:willicastro": "10dayil:2026-09-17T16:04:00.000Z",
+          "arizonadiamondbacks:tylerlocklear": "60dayil:2026-09-12T21:22:00.000Z",
+          "arizonadiamondbacks:ryanthompson": "60dayil:2026-09-01T21:34:00.000Z",
+          "arizonadiamondbacks:ajpuk": "60dayil:2026-08-07T22:46:00.000Z",
+          "arizonadiamondbacks:andrewsaalfrank": "60dayil:2026-07-18T12:24:00.000Z",
+          "coloradorockies:chasedollander": "60dayil:2026-06-23T22:03:00.000Z",
+          "coloradorockies:welintonherrera": "60dayil:2026-06-02T17:08:00.000Z",
+          "arizonadiamondbacks:cristianmena": "60dayil:2026-06-01T22:44:00.000Z",
+          "coloradorockies:mccadebrown": "60dayil:2026-06-01T00:18:00.000Z",
+          "coloradorockies:rjpetit": "60dayil:2026-05-08T11:02:00.000Z",
+          "coloradorockies:piersonohl": "60dayil:2026-05-08T11:02:00.000Z",
+          "coloradorockies:krisbryant": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118957": {
+        "gameId": "823086",
+        "receivedAt": 1790188884276,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "houstonastros": "814490",
+          "seattlemariners": "669923"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "houstonastros:jeremypena": "daytoday:2026-09-23T04:32:00.000Z",
+          "houstonastros:bricematthews": "daytoday:2026-09-23T03:51:00.000Z",
+          "houstonastros:cristianjavier": "daytoday:2026-09-23T03:13:00.000Z",
+          "houstonastros:daultonvarsho": "daytoday:2026-09-23T00:26:00.000Z",
+          "seattlemariners:andresmunoz": "daytoday:2026-09-22T22:08:00.000Z",
+          "houstonastros:mikeburrows": "60dayil:2026-09-22T21:38:00.000Z",
+          "houstonastros:enyeldelossantos": "15dayil:2026-09-19T23:01:00.000Z",
+          "houstonastros:stevenokert": "15dayil:2026-09-19T21:36:00.000Z",
+          "houstonastros:carloscorrea": "60dayil:2026-09-17T21:11:00.000Z",
+          "seattlemariners:nickdavila": "60dayil:2026-09-06T20:31:00.000Z",
+          "seattlemariners:mattbrash": "60dayil:2026-09-05T00:34:00.000Z",
+          "seattlemariners:brendandonovan": "7dayil:2026-09-03T23:44:00.000Z",
+          "seattlemariners:brennendavis": "60dayil:2026-09-03T22:50:00.000Z",
+          "seattlemariners:coltemerson": "60dayil:2026-08-31T20:15:00.000Z",
+          "seattlemariners:emersonhancock": "15dayil:2026-08-30T17:08:00.000Z",
+          "seattlemariners:lukeraley": "60dayil:2026-08-19T21:56:00.000Z",
+          "seattlemariners:colewilcox": "15dayil:2026-08-07T21:02:00.000Z",
+          "seattlemariners:willwilson": "60dayil:2026-06-17T13:00:00.000Z",
+          "houstonastros:brandonwalter": "60dayil:2026-06-04T15:03:00.000Z",
+          "seattlemariners:loganevans": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118958": {
+        "gameId": "823492",
+        "receivedAt": 1790188953291,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "tampabayrays": "669438",
+          "newyorkyankees": "543037"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "newyorkyankees:fernandocruz": "15dayil:2026-09-23T14:15:00.000Z",
+          "newyorkyankees:aaronjudge": "10dayil:2026-09-22T15:57:00.000Z",
+          "newyorkyankees:clarkeschmidt": "daytoday:2026-09-22T15:49:00.000Z",
+          "tampabayrays:manuelrodriguez": "15dayil:2026-09-22T15:33:00.000Z",
+          "tampabayrays:shanemcclanahan": "15dayil:2026-09-21T01:44:00.000Z",
+          "newyorkyankees:trentgrisham": "10dayil:2026-09-20T20:17:00.000Z",
+          "tampabayrays:garrettcleavinger": "15dayil:2026-09-19T02:48:00.000Z",
+          "newyorkyankees:ryanweathers": "15dayil:2026-09-19T00:27:00.000Z",
+          "tampabayrays:tylerwells": "15dayil:2026-09-15T18:00:00.000Z",
+          "tampabayrays:gavinlux": "60dayil:2026-09-11T21:41:00.000Z",
+          "newyorkyankees:kervincastro": "60dayil:2026-08-26T20:37:00.000Z",
+          "newyorkyankees:giancarlostanton": "60dayil:2026-08-25T18:38:00.000Z",
+          "tampabayrays:edwinuceta": "60dayil:2026-08-15T02:52:00.000Z",
+          "tampabayrays:jonathanheasley": "60dayil:2026-06-08T18:24:00.000Z",
+          "tampabayrays:ryanpepiot": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118959": {
+        "gameId": "824710",
+        "receivedAt": 1790188797867,
+        "independentSnapshots": 1,
+        "playerIds": {
+          "clevelandguardians": "656492",
+          "bostonredsox": "543243"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "bostonredsox:curtismead": "10dayil:2026-09-23T13:20:00.000Z",
+          "bostonredsox:ceddannerafaela": "10dayil:2026-09-23T02:11:00.000Z",
+          "bostonredsox:willsoncontreras": "daytoday:2026-09-22T19:56:00.000Z",
+          "bostonredsox:garrettcrochet": "60dayil:2026-09-22T19:44:00.000Z",
+          "bostonredsox:eliwhite": "10dayil:2026-09-22T18:54:00.000Z",
+          "bostonredsox:tannerhouck": "60dayil:2026-09-20T14:45:00.000Z",
+          "bostonredsox:aroldischapman": "daytoday:2026-09-19T14:08:00.000Z",
+          "clevelandguardians:colinholderman": "15dayil:2026-09-18T21:08:00.000Z",
+          "bostonredsox:johanoviedo": "60dayil:2026-09-18T12:57:00.000Z",
+          "bostonredsox:justinslaten": "15dayil:2026-09-15T23:02:00.000Z",
+          "bostonredsox:anthonyseigler": "10dayil:2026-09-13T17:41:00.000Z",
+          "clevelandguardians:shawnarmstrong": "60dayil:2026-09-12T15:33:00.000Z",
+          "clevelandguardians:rhyshoskins": "10dayil:2026-09-12T12:07:00.000Z",
+          "bostonredsox:kuttercrawford": "60dayil:2026-09-07T03:03:00.000Z",
+          "bostonredsox:eduardorivera": "60dayil:2026-09-01T15:59:00.000Z",
+          "bostonredsox:masatakayoshida": "10dayil:2026-08-18T21:28:00.000Z",
+          "bostonredsox:tristoncasas": "60dayil:2026-08-06T14:52:00.000Z",
+          "bostonredsox:zackkelly": "60dayil:2026-07-21T17:29:00.000Z"
+        },
+        "quarantined": []
+      },
+      "118960": {
+        "gameId": "823168",
+        "receivedAt": 1790188951632,
+        "independentSnapshots": 2,
+        "playerIds": {
+          "minnesotatwins": "687570",
+          "sanfranciscogiants": "702885"
+        },
+        "observedChangeIds": [],
+        "injuryFacts": {
+          "sanfranciscogiants:osleivisbasabe": "daytoday:2026-09-23T04:56:00.000Z",
+          "sanfranciscogiants:bladetidwell": "15dayil:2026-09-23T04:49:00.000Z",
+          "sanfranciscogiants:landenroupp": "out:2026-09-22T22:21:00.000Z",
+          "sanfranciscogiants:willyadames": "10dayil:2026-09-21T23:31:00.000Z",
+          "sanfranciscogiants:bryceeldridge": "7dayil:2026-09-21T23:11:00.000Z",
+          "sanfranciscogiants:junghoolee": "10dayil:2026-09-21T23:06:00.000Z",
+          "sanfranciscogiants:reiversanmartin": "15dayil:2026-09-19T23:07:00.000Z",
+          "sanfranciscogiants:natefurman": "10dayil:2026-09-19T00:57:00.000Z",
+          "sanfranciscogiants:loganwebb": "15dayil:2026-09-19T00:50:00.000Z",
+          "minnesotatwins:trevorlarnach": "10dayil:2026-09-18T20:40:00.000Z",
+          "minnesotatwins:kaelenculpepper": "10dayil:2026-09-16T16:05:00.000Z",
+          "sanfranciscogiants:randyrodriguez": "60dayil:2026-09-15T16:07:00.000Z",
+          "sanfranciscogiants:rafaeldevers": "60dayil:2026-09-13T21:23:00.000Z",
+          "minnesotatwins:byronbuxton": "10dayil:2026-09-11T20:59:00.000Z",
+          "sanfranciscogiants:carsonwhisenhunt": "60dayil:2026-09-09T18:05:00.000Z",
+          "sanfranciscogiants:jtbrubaker": "15dayil:2026-09-07T20:41:00.000Z",
+          "sanfranciscogiants:jesusrodriguez": "60dayil:2026-09-04T20:03:00.000Z",
+          "sanfranciscogiants:keatonwinn": "60dayil:2026-09-03T20:42:00.000Z",
+          "sanfranciscogiants:adrianhouser": "60dayil:2026-09-01T21:56:00.000Z",
+          "sanfranciscogiants:mattgage": "60dayil:2026-09-01T21:51:00.000Z",
+          "sanfranciscogiants:caseyschmitt": "60dayil:2026-08-30T00:17:00.000Z",
+          "sanfranciscogiants:joelpeguero": "60dayil:2026-08-21T21:23:00.000Z",
+          "sanfranciscogiants:danielsusac": "60dayil:2026-08-19T20:35:00.000Z",
+          "sanfranciscogiants:harrisonbader": "60dayil:2026-08-19T20:16:00.000Z",
+          "sanfranciscogiants:mattchapman": "60dayil:2026-08-14T13:23:00.000Z",
+          "sanfranciscogiants:trevormcdonald": "60dayil:2026-08-13T18:49:00.000Z",
+          "minnesotatwins:mikeparedes": "60dayil:2026-08-02T13:57:00.000Z",
+          "minnesotatwins:colesands": "60dayil:2026-07-31T16:23:00.000Z",
+          "minnesotatwins:davidfesta": "60dayil:2026-07-29T01:58:00.000Z",
+          "minnesotatwins:mickabel": "60dayil:2026-07-20T16:20:00.000Z",
+          "minnesotatwins:anthonybanda": "15dayil:2026-07-09T16:50:00.000Z",
+          "minnesotatwins:pablolopez": "60dayil:2026-05-08T11:02:00.000Z"
+        },
+        "quarantined": []
+      }
+    },
+    "decisions": [
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-min-sf-2026-09-23",
+        "title": "Minnesota Twins win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.4765475059695069,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778710,
+        "bookTime": 1790188790927,
+        "id": "355f24d5-7254-488f-aed0-e626cf93a58f"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-min-sf-2026-09-23",
+        "title": "San Francisco Giants win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5234524940304931,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778710,
+        "bookTime": 1790188790927,
+        "id": "09df96fb-6eef-4b03-ad17-2fcba19a61f5"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-mil-phi-2026-09-23",
+        "title": "Milwaukee Brewers win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.498339535541501,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778747,
+        "bookTime": 1790188791012,
+        "id": "d521f2ea-e408-443a-9b83-a0b71e928d55"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-mil-phi-2026-09-23",
+        "title": "Philadelphia Phillies win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.501660464458499,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778747,
+        "bookTime": 1790188791012,
+        "id": "614cf048-298d-4e93-ab0d-0d5285190bd6"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-tor-bal-2026-09-23",
+        "title": "Toronto Blue Jays win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "A unique reported pitcher is required for Toronto Blue Jays.",
+        "forecastProbability": 0.4743314081742144,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778953,
+        "bookTime": 1790188791717,
+        "id": "6cca35af-b56e-40aa-a72e-c2e6e2c6f408"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-tor-bal-2026-09-23",
+        "title": "Baltimore Orioles win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "A unique reported pitcher is required for Toronto Blue Jays.",
+        "forecastProbability": 0.5256685918257856,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188778953,
+        "bookTime": 1790188791717,
+        "id": "7ecb4039-63dc-4723-8e6b-2fc59a2d4646"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-cle-bos-2026-09-23",
+        "title": "Cleveland Guardians win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.4408966923180827,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188797867,
+        "bookTime": 1790188797916,
+        "id": "c7937ac1-2ddc-4184-a4a7-a752988f92f3"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-cle-bos-2026-09-23",
+        "title": "Boston Red Sox win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5591033076819173,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188797867,
+        "bookTime": 1790188797916,
+        "id": "3fc1a3cf-e7f8-4bc5-8414-d1315d2c1f95"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-stl-pit-2026-09-23",
+        "title": "St. Louis Cardinals win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.43157610363274046,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188797872,
+        "bookTime": 1790188798658,
+        "id": "9d807533-e3b3-40bb-9a22-72b34642b9f1"
+      },
+      {
+        "time": 1790188799408,
+        "slug": "aec-mlb-stl-pit-2026-09-23",
+        "title": "Pittsburgh Pirates win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5684238963672595,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188797872,
+        "bookTime": 1790188798658,
+        "id": "73c5984c-90fd-4239-aae3-a6e94b60ea6a"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-hou-sea-2026-09-23",
+        "title": "Houston Astros win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.4753522669201473,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188884276,
+        "bookTime": 1790188931023,
+        "id": "c1299fbe-56a8-4c79-94c7-cfa6caedbfa5"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-hou-sea-2026-09-23",
+        "title": "Seattle Mariners win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5246477330798527,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188884276,
+        "bookTime": 1790188931023,
+        "id": "7ccbcc3b-ff2f-4a75-9add-07c6519c88ec"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-laa-ath-2026-09-23",
+        "title": "Los Angeles Angels win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.44165776391448675,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188935763,
+        "bookTime": 1790188947031,
+        "id": "85cc3aaa-2a37-4e17-b10b-41370b25d888"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-laa-ath-2026-09-23",
+        "title": "Athletics win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5583422360855133,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188935763,
+        "bookTime": 1790188947031,
+        "id": "5bf83128-3257-4be7-bde3-034f0a29239b"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-az-col-2026-09-23",
+        "title": "Arizona Diamondbacks win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.6042339731677628,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188935855,
+        "bookTime": 1790188947125,
+        "id": "1809e9e9-abe8-4b3d-9159-b1e4e988a9ce"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-az-col-2026-09-23",
+        "title": "Colorado Rockies win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.39576602683223716,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188935855,
+        "bookTime": 1790188947125,
+        "id": "c0787323-1549-4e28-a285-2ab9cd0a65d8"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-min-sf-2026-09-23",
+        "title": "Minnesota Twins win",
+        "side": "YES",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.4765475059695069,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951632,
+        "bookTime": 1790188951673,
+        "id": "e4ca21b8-d815-4365-9f44-b894b6285f0d"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-min-sf-2026-09-23",
+        "title": "San Francisco Giants win",
+        "side": "NO",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.5234524940304931,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951632,
+        "bookTime": 1790188951673,
+        "id": "8939a323-b3ea-4a8f-8a89-d3841538a37a"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-tor-bal-2026-09-23",
+        "title": "Toronto Blue Jays win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "A unique reported pitcher is required for Toronto Blue Jays.",
+        "forecastProbability": 0.4743314081742144,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951821,
+        "bookTime": 1790188952469,
+        "id": "ca8185c8-809c-4eb0-a96c-0f4b5c10950e"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-tor-bal-2026-09-23",
+        "title": "Baltimore Orioles win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "A unique reported pitcher is required for Toronto Blue Jays.",
+        "forecastProbability": 0.5256685918257856,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951821,
+        "bookTime": 1790188952469,
+        "id": "b1af222a-2eb4-47d0-90df-0124b14621e5"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-sd-lad-2026-09-23",
+        "title": "San Diego Padres win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.42771448246920296,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951855,
+        "bookTime": 1790188953173,
+        "id": "ad7f7f31-e619-4348-b02d-6e663b51af5c"
+      },
+      {
+        "time": 1790188953174,
+        "slug": "aec-mlb-sd-lad-2026-09-23",
+        "title": "Los Angeles Dodgers win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.572285517530797,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188951855,
+        "bookTime": 1790188953173,
+        "id": "0661f54c-434f-4b02-a39b-6ca41f9f5ea0"
+      },
+      {
+        "time": 1790188954778,
+        "slug": "aec-mlb-tb-nyy-2026-09-23",
+        "title": "Tampa Bay Rays win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.4612689272687114,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188953291,
+        "bookTime": 1790188953926,
+        "id": "decf01a8-82e4-4e25-b473-301fdc8b99f7"
+      },
+      {
+        "time": 1790188954778,
+        "slug": "aec-mlb-tb-nyy-2026-09-23",
+        "title": "New York Yankees win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5387310727312886,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790188953291,
+        "bookTime": 1790188953926,
+        "id": "7297dba3-6e9c-46d8-87ea-4034b82096ff"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-mia-chc-2026-09-23",
+        "title": "Miami Marlins win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Sports evidence is recorded, stale, future-dated or older than the last accepted snapshot.",
+        "forecastProbability": 0.4093044676087265,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189034029,
+        "bookTime": 1790189095991,
+        "id": "171725ef-8bf8-4000-a6f7-7ea606761cc4"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-mia-chc-2026-09-23",
+        "title": "Chicago Cubs win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Sports evidence is recorded, stale, future-dated or older than the last accepted snapshot.",
+        "forecastProbability": 0.5906955323912735,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189034029,
+        "bookTime": 1790189095991,
+        "id": "f5d78eb9-3239-4724-8223-e9552397fd10"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-cws-kc-2026-09-23",
+        "title": "Chicago White Sox win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.48209178262602526,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189098403,
+        "bookTime": 1790189115205,
+        "id": "0bdebbef-d982-4c79-bc34-d307107e66e6"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-cws-kc-2026-09-23",
+        "title": "Kansas City Royals win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5179082173739747,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189098403,
+        "bookTime": 1790189115205,
+        "id": "a8b03e22-b97b-4369-af85-21f19218594b"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-cin-atl-2026-09-23",
+        "title": "Cincinnati Reds win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.4015698777516781,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189098392,
+        "bookTime": 1790189115281,
+        "id": "83cb3866-ee57-429a-be7e-2a9afd585627"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-cin-atl-2026-09-23",
+        "title": "Atlanta Braves win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5984301222483219,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189098392,
+        "bookTime": 1790189115281,
+        "id": "37acda33-69d7-4dd2-ad4f-d1f2854235de"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-nym-tex-2026-09-23",
+        "title": "New York Mets win",
+        "side": "YES",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.46110844633241277,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121343,
+        "bookTime": 1790189129359,
+        "id": "c6da571c-39b1-43f1-aeac-50efb5e0324f"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-nym-tex-2026-09-23",
+        "title": "Texas Rangers win",
+        "side": "NO",
+        "action": "SKIP",
+        "reason": "Waiting for another independently received sports snapshot. Cached repeats do not confirm stability.",
+        "forecastProbability": 0.5388915536675872,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121343,
+        "bookTime": 1790189129359,
+        "id": "8a35ac97-c715-404f-9db2-1ef18fdd8a51"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-laa-ath-2026-09-23",
+        "title": "Los Angeles Angels win",
+        "side": "YES",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.44165776391448675,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121422,
+        "bookTime": 1790189129441,
+        "id": "5397d7ba-f31e-4169-8a59-4bf18431cc87"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-laa-ath-2026-09-23",
+        "title": "Athletics win",
+        "side": "NO",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.5583422360855133,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121422,
+        "bookTime": 1790189129441,
+        "id": "eda7e6ed-f270-4cd0-9f2c-0356c9e46ad9"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-az-col-2026-09-23",
+        "title": "Arizona Diamondbacks win",
+        "side": "YES",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.6042339731677628,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121456,
+        "bookTime": 1790189130150,
+        "id": "6a40b63c-ead2-4aec-b8cb-c91ce40911fa"
+      },
+      {
+        "time": 1790189130151,
+        "slug": "aec-mlb-az-col-2026-09-23",
+        "title": "Colorado Rockies win",
+        "side": "NO",
+        "action": "WAIT",
+        "reason": "Collecting enough history for a market-specific baseline.",
+        "forecastProbability": 0.39576602683223716,
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "contextTime": 1790189121456,
+        "bookTime": 1790189130150,
+        "id": "480667b9-9294-444e-b177-ec010fed1756"
+      }
+    ],
+    "executions": [],
+    "cycles": 23,
+    "scanned": 18,
+    "universeSize": 14,
+    "cursor": 12,
+    "lastReason": "Observation window ended. No background process remains after this run.",
+    "exitRequests": []
+  },
+  "errors": [
+    {
+      "time": 1790188799408,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US rate limit. Requests paused until 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799417,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799417,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799417,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799419,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799419,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188799419,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188809418,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188819419,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188829422,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188839425,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849429,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849429,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849429,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849429,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849430,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188849430,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188864704,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188864871,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188864900,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188865031,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188865052,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188865053,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188869441,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188879441,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889441,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889441,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889441,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889443,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889443,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188889443,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188899441,
+      "message": "Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188909443,
+      "message": "Polymarket US requested a pause. Retry after 2026-09-23T18:41:59.408Z."
+    },
+    {
+      "time": 1790188954676,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US rate limit. Requests paused until 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188954676,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188954679,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188954679,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188954778,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188963183,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188963183,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188963183,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188963183,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188963183,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188967968,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188973182,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188983184,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993186,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993186,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993186,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993186,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993186,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790188993187,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189003191,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189013199,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189018360,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189018439,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189018550,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189018576,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189023830,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189029787,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189029880,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189029971,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189029973,
+      "message": "aec-mlb-cin-atl-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189029973,
+      "message": "aec-mlb-cws-kc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189030124,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189033898,
+      "message": "aec-mlb-mia-chc-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189033898,
+      "message": "aec-mlb-nym-tex-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189033898,
+      "message": "aec-mlb-az-col-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189033899,
+      "message": "aec-mlb-laa-ath-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189033899,
+      "message": "aec-mlb-sd-lad-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189034006,
+      "message": "aec-mlb-hou-sea-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-min-sf-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-tor-bal-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-mil-phi-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-stl-pit-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-tb-nyy-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189043878,
+      "message": "aec-mlb-cle-bos-2026-09-23: Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189053876,
+      "message": "Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189063876,
+      "message": "Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    },
+    {
+      "time": 1790189073879,
+      "message": "Polymarket US requested a pause. Retry after 2026-09-23T18:44:34.676Z."
+    }
+  ],
+  "samples": [
+    {
+      "time": 1790188790927,
+      "slug": "aec-mlb-min-sf-2026-09-23",
+      "bid": 0.585,
+      "ask": 0.59,
+      "contextTime": 1790188778710,
+      "contextState": "pregame",
+      "players": [
+        "Connor Prielipp",
+        "Cesar Perdomo"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823168",
+        "homeTeamId": "137",
+        "awayTeamId": "142",
+        "yesTeamId": "142",
+        "homeProbability": 0.5234524940304931,
+        "yesProbability": 0.4765475059695069,
+        "homeRating": 1458.571839189975,
+        "awayRating": 1472.2634102361635,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188778710,
+        "generatedAt": 1790188790927,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188791012,
+      "slug": "aec-mlb-mil-phi-2026-09-23",
+      "bid": 0.535,
+      "ask": 0.54,
+      "contextTime": 1790188778747,
+      "contextState": "pregame",
+      "players": [
+        "Logan Henderson",
+        "Aaron Nola"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823410",
+        "homeTeamId": "143",
+        "awayTeamId": "158",
+        "yesTeamId": "158",
+        "homeProbability": 0.501660464458499,
+        "yesProbability": 0.498339535541501,
+        "homeRating": 1539.1896627001174,
+        "awayRating": 1568.035849575713,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188778747,
+        "generatedAt": 1790188791012,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188791717,
+      "slug": "aec-mlb-tor-bal-2026-09-23",
+      "bid": 0.47,
+      "ask": 0.475,
+      "contextTime": 1790188778953,
+      "contextState": "pregame",
+      "players": [],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824784",
+        "homeTeamId": "110",
+        "awayTeamId": "141",
+        "yesTeamId": "141",
+        "homeProbability": 0.5256685918257856,
+        "yesProbability": 0.4743314081742144,
+        "homeRating": 1499.1016493785653,
+        "awayRating": 1511.24959080848,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188778953,
+        "generatedAt": 1790188791717,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188797916,
+      "slug": "aec-mlb-cle-bos-2026-09-23",
+      "bid": 0.445,
+      "ask": 0.45,
+      "contextTime": 1790188797867,
+      "contextState": "pregame",
+      "players": [
+        "Foster Griffin",
+        "Sonny Gray"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824710",
+        "homeTeamId": "111",
+        "awayTeamId": "114",
+        "yesTeamId": "114",
+        "homeProbability": 0.5591033076819173,
+        "yesProbability": 0.4408966923180827,
+        "homeRating": 1522.571923605092,
+        "awayRating": 1511.3098352508223,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188797867,
+        "generatedAt": 1790188797916,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188798658,
+      "slug": "aec-mlb-stl-pit-2026-09-23",
+      "bid": 0.435,
+      "ask": 0.44,
+      "contextTime": 1790188797872,
+      "contextState": "pregame",
+      "players": [
+        "Matthew Liberatore",
+        "Lake Bachar"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823327",
+        "homeTeamId": "134",
+        "awayTeamId": "138",
+        "yesTeamId": "138",
+        "homeProbability": 0.5684238963672595,
+        "yesProbability": 0.43157610363274046,
+        "homeRating": 1501.162601282124,
+        "awayRating": 1483.3166263004991,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188797872,
+        "generatedAt": 1790188798658,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188931023,
+      "slug": "aec-mlb-hou-sea-2026-09-23",
+      "bid": 0.465,
+      "ask": 0.47,
+      "contextTime": 1790188884276,
+      "contextState": "pregame",
+      "players": [
+        "Ethan Pecko",
+        "George Kirby"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823086",
+        "homeTeamId": "136",
+        "awayTeamId": "117",
+        "yesTeamId": "117",
+        "homeProbability": 0.5246477330798527,
+        "yesProbability": 0.4753522669201473,
+        "homeRating": 1488.6617557586208,
+        "awayRating": 1501.5208632325732,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188884276,
+        "generatedAt": 1790188931023,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188947031,
+      "slug": "aec-mlb-laa-ath-2026-09-23",
+      "bid": 0.545,
+      "ask": 0.55,
+      "contextTime": 1790188935763,
+      "contextState": "pregame",
+      "players": [
+        "Walbert Ureña",
+        "Jeffrey Springs"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824951",
+        "homeTeamId": "133",
+        "awayTeamId": "108",
+        "yesTeamId": "108",
+        "homeProbability": 0.5583422360855133,
+        "yesProbability": 0.44165776391448675,
+        "homeRating": 1446.3666336265628,
+        "awayRating": 1435.640788743658,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188935763,
+        "generatedAt": 1790188947031,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188947125,
+      "slug": "aec-mlb-az-col-2026-09-23",
+      "bid": 0.59,
+      "ask": 0.595,
+      "contextTime": 1790188935855,
+      "contextState": "pregame",
+      "players": [
+        "Merrill Kelly",
+        "Mason Adams"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824301",
+        "homeTeamId": "115",
+        "awayTeamId": "109",
+        "yesTeamId": "109",
+        "homeProbability": 0.3957660268322371,
+        "yesProbability": 0.6042339731677628,
+        "homeRating": 1409.288707274667,
+        "awayRating": 1512.7953588552566,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188935855,
+        "generatedAt": 1790188947125,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188951673,
+      "slug": "aec-mlb-min-sf-2026-09-23",
+      "bid": 0.585,
+      "ask": 0.59,
+      "contextTime": 1790188951632,
+      "contextState": "pregame",
+      "players": [
+        "Connor Prielipp",
+        "Cesar Perdomo"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823168",
+        "homeTeamId": "137",
+        "awayTeamId": "142",
+        "yesTeamId": "142",
+        "homeProbability": 0.5234524940304931,
+        "yesProbability": 0.4765475059695069,
+        "homeRating": 1458.571839189975,
+        "awayRating": 1472.2634102361635,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188951632,
+        "generatedAt": 1790188951673,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188952469,
+      "slug": "aec-mlb-tor-bal-2026-09-23",
+      "bid": 0.47,
+      "ask": 0.475,
+      "contextTime": 1790188951821,
+      "contextState": "pregame",
+      "players": [],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824784",
+        "homeTeamId": "110",
+        "awayTeamId": "141",
+        "yesTeamId": "141",
+        "homeProbability": 0.5256685918257856,
+        "yesProbability": 0.4743314081742144,
+        "homeRating": 1499.1016493785653,
+        "awayRating": 1511.24959080848,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188951821,
+        "generatedAt": 1790188952469,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188953173,
+      "slug": "aec-mlb-sd-lad-2026-09-23",
+      "bid": 0.335,
+      "ask": 0.34,
+      "contextTime": 1790188951855,
+      "contextState": "pregame",
+      "players": [
+        "Robbie Ray",
+        "Yoshinobu Yamamoto"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823894",
+        "homeTeamId": "119",
+        "awayTeamId": "135",
+        "yesTeamId": "135",
+        "homeProbability": 0.572285517530797,
+        "yesProbability": 0.42771448246920296,
+        "homeRating": 1556.635850609289,
+        "awayRating": 1536.0523306669481,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188951855,
+        "generatedAt": 1790188953173,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790188953926,
+      "slug": "aec-mlb-tb-nyy-2026-09-23",
+      "bid": 0.445,
+      "ask": 0.45,
+      "contextTime": 1790188953291,
+      "contextState": "pregame",
+      "players": [
+        "Mason Englert",
+        "Gerrit Cole"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "823492",
+        "homeTeamId": "147",
+        "awayTeamId": "139",
+        "yesTeamId": "139",
+        "homeProbability": 0.5387310727312886,
+        "yesProbability": 0.4612689272687114,
+        "homeRating": 1542.6682199722272,
+        "awayRating": 1545.701089817494,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790188953291,
+        "generatedAt": 1790188953926,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189095991,
+      "slug": "aec-mlb-mia-chc-2026-09-23",
+      "bid": 0.385,
+      "ask": 0.39,
+      "contextTime": 1790189034029,
+      "contextState": "pregame",
+      "players": [
+        "Ryan Gusto",
+        "Kevin Gausman"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824625",
+        "homeTeamId": "112",
+        "awayTeamId": "146",
+        "yesTeamId": "146",
+        "homeProbability": 0.5906955323912735,
+        "yesProbability": 0.4093044676087265,
+        "homeRating": 1527.4541278059062,
+        "awayRating": 1493.7272473575438,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189034029,
+        "generatedAt": 1790189095991,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189115205,
+      "slug": "aec-mlb-cws-kc-2026-09-23",
+      "bid": 0.52,
+      "ask": 0.525,
+      "contextTime": 1790189098403,
+      "contextState": "pregame",
+      "players": [
+        "Bryan Hudson",
+        "Seth Lugo"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824060",
+        "homeTeamId": "118",
+        "awayTeamId": "145",
+        "yesTeamId": "145",
+        "homeProbability": 0.5179082173739747,
+        "yesProbability": 0.48209178262602526,
+        "homeRating": 1469.895556931833,
+        "awayRating": 1487.4463277706561,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189098403,
+        "generatedAt": 1790189115205,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189115281,
+      "slug": "aec-mlb-cin-atl-2026-09-23",
+      "bid": 0.295,
+      "ask": 0.3,
+      "contextTime": 1790189098392,
+      "contextState": "pregame",
+      "players": [
+        "Andrew Abbott",
+        "Chris Sale"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824868",
+        "homeTeamId": "144",
+        "awayTeamId": "113",
+        "yesTeamId": "113",
+        "homeProbability": 0.5984301222483219,
+        "yesProbability": 0.4015698777516781,
+        "homeRating": 1532.3507928793283,
+        "awayRating": 1493.0498659128634,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189098392,
+        "generatedAt": 1790189115281,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189129359,
+      "slug": "aec-mlb-nym-tex-2026-09-23",
+      "bid": 0.5,
+      "ask": 0.505,
+      "contextTime": 1790189121343,
+      "contextState": "pregame",
+      "players": [
+        "Nolan McLean",
+        "Cody Bradford"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "822841",
+        "homeTeamId": "140",
+        "awayTeamId": "121",
+        "yesTeamId": "121",
+        "homeProbability": 0.5388915536675872,
+        "yesProbability": 0.46110844633241277,
+        "homeRating": 1495.3952027398084,
+        "awayRating": 1498.3158830353855,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189121343,
+        "generatedAt": 1790189129359,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189129441,
+      "slug": "aec-mlb-laa-ath-2026-09-23",
+      "bid": 0.545,
+      "ask": 0.55,
+      "contextTime": 1790189121422,
+      "contextState": "pregame",
+      "players": [
+        "Walbert Ureña",
+        "Jeffrey Springs"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824951",
+        "homeTeamId": "133",
+        "awayTeamId": "108",
+        "yesTeamId": "108",
+        "homeProbability": 0.5583422360855133,
+        "yesProbability": 0.44165776391448675,
+        "homeRating": 1446.3666336265628,
+        "awayRating": 1435.640788743658,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189121422,
+        "generatedAt": 1790189129441,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    },
+    {
+      "time": 1790189130150,
+      "slug": "aec-mlb-az-col-2026-09-23",
+      "bid": 0.59,
+      "ask": 0.595,
+      "contextTime": 1790189121456,
+      "contextState": "pregame",
+      "players": [
+        "Merrill Kelly",
+        "Mason Adams"
+      ],
+      "forecast": {
+        "status": "available",
+        "modelId": "mlb-team-elo-baseline",
+        "modelVersion": "mlb-elo-v1-2026-09-23",
+        "gameId": "824301",
+        "homeTeamId": "115",
+        "awayTeamId": "109",
+        "yesTeamId": "109",
+        "homeProbability": 0.3957660268322371,
+        "yesProbability": 0.6042339731677628,
+        "homeRating": 1409.288707274667,
+        "awayRating": 1512.7953588552566,
+        "ratingsThroughDay": "2026-09-22",
+        "sportsReceivedAt": 1790189121456,
+        "generatedAt": 1790189130150,
+        "purpose": "EXPERIMENTAL_PAPER_FORECAST",
+        "playerImpactModeled": false,
+        "marketValueEstablished": false,
+        "missingFeatures": [
+          "Starting pitchers",
+          "Lineups and player availability",
+          "Bullpen workload",
+          "Injuries and replacements",
+          "Weather and park effects",
+          "Current market calibration"
+        ]
+      }
+    }
+  ]
+}

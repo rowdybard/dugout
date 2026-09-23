@@ -143,7 +143,7 @@ export async function getFeed(): Promise<Feed> {
       return m;
     });
     await db()
-      .prepare("DELETE FROM cache WHERE updated < ? AND key NOT LIKE 'simulation:%'")
+      .prepare("DELETE FROM cache WHERE updated < ? AND key NOT LIKE 'simulation:%' AND key NOT LIKE 'bot-archive:%'")
       .bind(Date.now() - 7 * 86400000)
       .run();
     await db()

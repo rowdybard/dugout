@@ -1,0 +1,1150 @@
+{
+  "dataCutoffExclusive": "2026-09-23",
+  "design": {
+    "asOfDateExclusive": "2026-09-23",
+    "exclusions": "Not final, not regular season, ties, malformed identity/score/date, any reschedule/resume metadata, conflicting duplicate game IDs.",
+    "grid": [
+      {
+        "homeAdvantage": 15,
+        "k": 4,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 30,
+        "k": 4,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 45,
+        "k": 4,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 15,
+        "k": 8,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 30,
+        "k": 8,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 45,
+        "k": 8,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 15,
+        "k": 16,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 30,
+        "k": 16,
+        "seasonCarry": 0.67
+      },
+      {
+        "homeAdvantage": 45,
+        "k": 16,
+        "seasonCarry": 0.67
+      }
+    ],
+    "holdoutEndExclusive": "2026-01-01",
+    "holdoutStart": "2025-07-01",
+    "initialRating": 1500,
+    "probabilityScale": 400,
+    "sameDayRule": "Predict every game on a date from the same pre-day ratings; accumulate all updates after predictions.",
+    "seasonCarry": 0.67,
+    "selectionMetric": "minimum validation Brier; ties log-loss then K then home advantage",
+    "validationEndExclusive": "2025-07-01",
+    "validationStart": "2025-01-01",
+    "warmupSeason": 2024
+  },
+  "generatedAt": "2026-09-23T18:29:08.095029+00:00",
+  "holdout": {
+    "brierDifferenceVsHome": {
+      "dayBootstrap95PercentileInterval": [
+        -0.007354785574939015,
+        0.0004952688897556066
+      ],
+      "interpretation": "Negative favors model; this measures outcome forecasts, not trading returns.",
+      "mean": -0.003608986113387558,
+      "replicates": 1000,
+      "seed": 20260923
+    },
+    "constantHomeWin": {
+      "brier": 0.24853392448766745,
+      "calibrationBins": [
+        {
+          "games": 1150,
+          "homeWinRate": 0.5391304347826087,
+          "lower": 0.5,
+          "meanForecast": 0.5310610225398571,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.008069412242751595,
+      "games": 1150,
+      "homeWinRate": 0.5391304347826087,
+      "logLoss": 0.690212493837817,
+      "meanForecast": 0.5310610225398571,
+      "probabilityFrozenBeforePeriod": 0.5310610225398571
+    },
+    "end": "2025-09-28",
+    "fairCoin": {
+      "brier": 0.25,
+      "calibrationBins": [
+        {
+          "games": 1150,
+          "homeWinRate": 0.5391304347826087,
+          "lower": 0.5,
+          "meanForecast": 0.5,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.03913043478260869,
+      "games": 1150,
+      "homeWinRate": 0.5391304347826087,
+      "logLoss": 0.6931471805599453,
+      "meanForecast": 0.5
+    },
+    "model": {
+      "brier": 0.2449249383742799,
+      "calibrationBins": [
+        {
+          "games": 28,
+          "homeWinRate": 0.35714285714285715,
+          "lower": 0.3,
+          "meanForecast": 0.3852714251079649,
+          "upper": 0.4
+        },
+        {
+          "games": 250,
+          "homeWinRate": 0.5,
+          "lower": 0.4,
+          "meanForecast": 0.46789638465245237,
+          "upper": 0.5
+        },
+        {
+          "games": 676,
+          "homeWinRate": 0.5458579881656804,
+          "lower": 0.5,
+          "meanForecast": 0.5498289383397638,
+          "upper": 0.6
+        },
+        {
+          "games": 184,
+          "homeWinRate": 0.5706521739130435,
+          "lower": 0.6,
+          "meanForecast": 0.6306890670961315,
+          "upper": 0.7
+        },
+        {
+          "games": 12,
+          "homeWinRate": 0.9166666666666666,
+          "lower": 0.7,
+          "meanForecast": 0.7116054598498952,
+          "upper": 0.8
+        }
+      ],
+      "expectedCalibrationError": 0.021743816421808445,
+      "games": 1150,
+      "homeWinRate": 0.5391304347826087,
+      "logLoss": 0.6827381777768035,
+      "meanForecast": 0.542636619345829
+    },
+    "start": "2025-07-01"
+  },
+  "later2026": {
+    "brierDifferenceVsHome": {
+      "dayBootstrap95PercentileInterval": [
+        -0.005770548702389981,
+        -0.0011105921590981564
+      ],
+      "interpretation": "Negative favors model; this measures outcome forecasts, not trading returns.",
+      "mean": -0.0034170452268981466,
+      "replicates": 1000,
+      "seed": 20260923
+    },
+    "constantHomeWin": {
+      "brier": 0.24909114228427293,
+      "calibrationBins": [
+        {
+          "games": 2329,
+          "homeWinRate": 0.5302705023615285,
+          "lower": 0.5,
+          "meanForecast": 0.5329991645781119,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.0027286622165834107,
+      "games": 2329,
+      "homeWinRate": 0.5302705023615285,
+      "logLoss": 0.6913284056170139,
+      "meanForecast": 0.5329991645781119,
+      "probabilityFrozenBeforePeriod": 0.5329991645781119
+    },
+    "end": "2026-09-22",
+    "fairCoin": {
+      "brier": 0.25,
+      "calibrationBins": [
+        {
+          "games": 2329,
+          "homeWinRate": 0.5302705023615285,
+          "lower": 0.5,
+          "meanForecast": 0.5,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.030270502361528503,
+      "games": 2329,
+      "homeWinRate": 0.5302705023615285,
+      "logLoss": 0.6931471805599453,
+      "meanForecast": 0.5
+    },
+    "model": {
+      "brier": 0.24567409705737478,
+      "calibrationBins": [
+        {
+          "games": 25,
+          "homeWinRate": 0.28,
+          "lower": 0.3,
+          "meanForecast": 0.38414839621738844,
+          "upper": 0.4
+        },
+        {
+          "games": 496,
+          "homeWinRate": 0.4657258064516129,
+          "lower": 0.4,
+          "meanForecast": 0.4705104212512431,
+          "upper": 0.5
+        },
+        {
+          "games": 1464,
+          "homeWinRate": 0.5382513661202186,
+          "lower": 0.5,
+          "meanForecast": 0.5494000100118576,
+          "upper": 0.6
+        },
+        {
+          "games": 332,
+          "homeWinRate": 0.5993975903614458,
+          "lower": 0.6,
+          "meanForecast": 0.6253274912068523,
+          "upper": 0.7
+        },
+        {
+          "games": 12,
+          "homeWinRate": 0.8333333333333334,
+          "lower": 0.7,
+          "meanForecast": 0.7099586217706686,
+          "upper": 0.8
+        }
+      ],
+      "expectedCalibrationError": 0.013476907309075841,
+      "games": 2329,
+      "homeWinRate": 0.5302705023615285,
+      "logLoss": 0.6844054131255017,
+      "meanForecast": 0.5424760515437242
+    },
+    "start": "2026-03-25"
+  },
+  "league": "MLB",
+  "limitations": [
+    "Outcome-only team strength; no starting pitcher, lineup, bullpen, injury, weather, park or player features.",
+    "Home advantage uses scheduled home identity; neutral and international sites are not modeled separately.",
+    "Retrospective final schedule responses are not archived point-in-time publication records; rescheduled/resumed games are excluded conservatively.",
+    "Predicts all games on a source calendar date before any updates from that date.",
+    "A new season regresses ratings 33% toward 1500; this is fixed design, not learned from holdout.",
+    "Brier/log-loss comparisons are forecast evaluation, not profitability or performance versus market prices.",
+    "No Polymarket price alignment or historical trading-cost backtest is present.",
+    "Use only for experimental paper decisions; missing player impact remains a separate entry veto."
+  ],
+  "marketFamily": "FULL_GAME_WINNER",
+  "modelId": "mlb-team-elo-baseline",
+  "modelVersion": "mlb-elo-v1-2026-09-23",
+  "parameters": {
+    "homeAdvantage": 30,
+    "initialRating": 1500,
+    "k": 4,
+    "probabilityScale": 400,
+    "seasonCarry": 0.67
+  },
+  "phase": "PREGAME",
+  "ratingsThroughDay": "2026-09-22",
+  "recordCounts": {
+    "2024": {
+      "acceptedFinalGames": 2392,
+      "excluded": {
+        "malformed_or_cutoff": 1,
+        "rescheduled_or_resumed": 76
+      },
+      "firstAcceptedDay": "2024-03-20",
+      "lastAcceptedDay": "2024-09-29",
+      "scheduleRows": 2469
+    },
+    "2025": {
+      "acceptedFinalGames": 2396,
+      "excluded": {
+        "rescheduled_or_resumed": 68
+      },
+      "firstAcceptedDay": "2025-03-18",
+      "lastAcceptedDay": "2025-09-28",
+      "scheduleRows": 2464
+    },
+    "2026": {
+      "acceptedFinalGames": 2329,
+      "excluded": {
+        "rescheduled_or_resumed": 57
+      },
+      "firstAcceptedDay": "2026-03-25",
+      "lastAcceptedDay": "2026-09-22",
+      "scheduleRows": 2386
+    }
+  },
+  "schemaVersion": 1,
+  "selection": {
+    "candidates": [
+      {
+        "config": {
+          "homeAdvantage": 15,
+          "k": 4,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24313446206078518,
+          "calibrationBins": [
+            {
+              "games": 47,
+              "homeWinRate": 0.3191489361702128,
+              "lower": 0.3,
+              "meanForecast": 0.37074374795199205,
+              "upper": 0.4
+            },
+            {
+              "games": 385,
+              "homeWinRate": 0.4987012987012987,
+              "lower": 0.4,
+              "meanForecast": 0.4682315317015426,
+              "upper": 0.5
+            },
+            {
+              "games": 686,
+              "homeWinRate": 0.5553935860058309,
+              "lower": 0.5,
+              "meanForecast": 0.5413406823567299,
+              "upper": 0.6
+            },
+            {
+              "games": 128,
+              "homeWinRate": 0.7109375,
+              "lower": 0.6,
+              "meanForecast": 0.6302675558806409,
+              "upper": 0.7
+            }
+          ],
+          "expectedCalibrationError": 0.027385121347681337,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6791894732980527,
+          "meanForecast": 0.5214510843565621
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 30,
+          "k": 4,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24262482481735725,
+          "calibrationBins": [
+            {
+              "games": 32,
+              "homeWinRate": 0.3125,
+              "lower": 0.3,
+              "meanForecast": 0.3833509383254833,
+              "upper": 0.4
+            },
+            {
+              "games": 239,
+              "homeWinRate": 0.4602510460251046,
+              "lower": 0.4,
+              "meanForecast": 0.4702345266575833,
+              "upper": 0.5
+            },
+            {
+              "games": 788,
+              "homeWinRate": 0.5532994923857868,
+              "lower": 0.5,
+              "meanForecast": 0.5485616392439824,
+              "upper": 0.6
+            },
+            {
+              "games": 182,
+              "homeWinRate": 0.6538461538461539,
+              "lower": 0.6,
+              "meanForecast": 0.6361146540164986,
+              "upper": 0.7
+            },
+            {
+              "games": 5,
+              "homeWinRate": 0.8,
+              "lower": 0.7,
+              "meanForecast": 0.7038960789599136,
+              "upper": 0.8
+            }
+          ],
+          "expectedCalibrationError": 0.009706551161731502,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6781320689055935,
+          "meanForecast": 0.5427064213865477
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 45,
+          "k": 4,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24301727048836386,
+          "calibrationBins": [
+            {
+              "games": 11,
+              "homeWinRate": 0.18181818181818182,
+              "lower": 0.3,
+              "meanForecast": 0.3880137205072216,
+              "upper": 0.4
+            },
+            {
+              "games": 146,
+              "homeWinRate": 0.4315068493150685,
+              "lower": 0.4,
+              "meanForecast": 0.4648701132138782,
+              "upper": 0.5
+            },
+            {
+              "games": 791,
+              "homeWinRate": 0.5436156763590392,
+              "lower": 0.5,
+              "meanForecast": 0.5559532415809024,
+              "upper": 0.6
+            },
+            {
+              "games": 283,
+              "homeWinRate": 0.607773851590106,
+              "lower": 0.6,
+              "meanForecast": 0.6357319715568193,
+              "upper": 0.7
+            },
+            {
+              "games": 15,
+              "homeWinRate": 0.8,
+              "lower": 0.7,
+              "meanForecast": 0.7126900773224049,
+              "upper": 0.8
+            }
+          ],
+          "expectedCalibrationError": 0.020963080526519476,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6789070912690996,
+          "meanForecast": 0.5638047356787442
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 15,
+          "k": 8,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24333099030291552,
+          "calibrationBins": [
+            {
+              "games": 16,
+              "homeWinRate": 0.25,
+              "lower": 0.2,
+              "meanForecast": 0.28670650453004703,
+              "upper": 0.3
+            },
+            {
+              "games": 80,
+              "homeWinRate": 0.4,
+              "lower": 0.3,
+              "meanForecast": 0.36103640144759225,
+              "upper": 0.4
+            },
+            {
+              "games": 386,
+              "homeWinRate": 0.5129533678756477,
+              "lower": 0.4,
+              "meanForecast": 0.4586460506041867,
+              "upper": 0.5
+            },
+            {
+              "games": 561,
+              "homeWinRate": 0.5579322638146168,
+              "lower": 0.5,
+              "meanForecast": 0.5471068101854994,
+              "upper": 0.6
+            },
+            {
+              "games": 179,
+              "homeWinRate": 0.6368715083798883,
+              "lower": 0.6,
+              "meanForecast": 0.6407079859575098,
+              "upper": 0.7
+            },
+            {
+              "games": 24,
+              "homeWinRate": 0.75,
+              "lower": 0.7,
+              "meanForecast": 0.7237669352326503,
+              "upper": 0.8
+            }
+          ],
+          "expectedCalibrationError": 0.02572746304189632,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6794617736679194,
+          "meanForecast": 0.5212613548696206
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 30,
+          "k": 8,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24281538830812663,
+          "calibrationBins": [
+            {
+              "games": 3,
+              "homeWinRate": 0.3333333333333333,
+              "lower": 0.2,
+              "meanForecast": 0.2958502455612484,
+              "upper": 0.3
+            },
+            {
+              "games": 67,
+              "homeWinRate": 0.3582089552238806,
+              "lower": 0.3,
+              "meanForecast": 0.35472030659737214,
+              "upper": 0.4
+            },
+            {
+              "games": 293,
+              "homeWinRate": 0.49146757679180886,
+              "lower": 0.4,
+              "meanForecast": 0.46160795097937335,
+              "upper": 0.5
+            },
+            {
+              "games": 596,
+              "homeWinRate": 0.5536912751677853,
+              "lower": 0.5,
+              "meanForecast": 0.5512221930423868,
+              "upper": 0.6
+            },
+            {
+              "games": 240,
+              "homeWinRate": 0.6083333333333333,
+              "lower": 0.6,
+              "meanForecast": 0.6381369771647993,
+              "upper": 0.7
+            },
+            {
+              "games": 47,
+              "homeWinRate": 0.723404255319149,
+              "lower": 0.7,
+              "meanForecast": 0.7249453377558563,
+              "upper": 0.8
+            }
+          ],
+          "expectedCalibrationError": 0.014279243519382413,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.678410822475124,
+          "meanForecast": 0.5422621776589115
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 45,
+          "k": 8,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.2431752661083012,
+          "calibrationBins": [
+            {
+              "games": 48,
+              "homeWinRate": 0.3541666666666667,
+              "lower": 0.3,
+              "meanForecast": 0.3535127897610813,
+              "upper": 0.4
+            },
+            {
+              "games": 225,
+              "homeWinRate": 0.48,
+              "lower": 0.4,
+              "meanForecast": 0.46469316366075103,
+              "upper": 0.5
+            },
+            {
+              "games": 554,
+              "homeWinRate": 0.5306859205776173,
+              "lower": 0.5,
+              "meanForecast": 0.5534366380313896,
+              "upper": 0.6
+            },
+            {
+              "games": 350,
+              "homeWinRate": 0.5971428571428572,
+              "lower": 0.6,
+              "meanForecast": 0.6369804922039026,
+              "upper": 0.7
+            },
+            {
+              "games": 69,
+              "homeWinRate": 0.7391304347826086,
+              "lower": 0.7,
+              "meanForecast": 0.7327192544295595,
+              "upper": 0.8
+            }
+          ],
+          "expectedCalibrationError": 0.02445013278725142,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6791898748646418,
+          "meanForecast": 0.5631053563632394
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 15,
+          "k": 16,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24547395585593676,
+          "calibrationBins": [
+            {
+              "games": 40,
+              "homeWinRate": 0.325,
+              "lower": 0.2,
+              "meanForecast": 0.256035929832649,
+              "upper": 0.3
+            },
+            {
+              "games": 133,
+              "homeWinRate": 0.48120300751879697,
+              "lower": 0.3,
+              "meanForecast": 0.36301355588346496,
+              "upper": 0.4
+            },
+            {
+              "games": 342,
+              "homeWinRate": 0.5175438596491229,
+              "lower": 0.4,
+              "meanForecast": 0.4566163053306655,
+              "upper": 0.5
+            },
+            {
+              "games": 424,
+              "homeWinRate": 0.5448113207547169,
+              "lower": 0.5,
+              "meanForecast": 0.5474102740758993,
+              "upper": 0.6
+            },
+            {
+              "games": 235,
+              "homeWinRate": 0.6085106382978723,
+              "lower": 0.6,
+              "meanForecast": 0.6353918542509607,
+              "upper": 0.7
+            },
+            {
+              "games": 68,
+              "homeWinRate": 0.6911764705882353,
+              "lower": 0.7,
+              "meanForecast": 0.7321916216278164,
+              "upper": 0.8
+            },
+            {
+              "games": 4,
+              "homeWinRate": 1.0,
+              "lower": 0.8,
+              "meanForecast": 0.8070896031915404,
+              "upper": 0.9
+            }
+          ],
+          "expectedCalibrationError": 0.04036492557478975,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6839524784682065,
+          "meanForecast": 0.5209642433302641
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 30,
+          "k": 16,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.2449422020322152,
+          "calibrationBins": [
+            {
+              "games": 30,
+              "homeWinRate": 0.3,
+              "lower": 0.2,
+              "meanForecast": 0.26044203416457207,
+              "upper": 0.3
+            },
+            {
+              "games": 98,
+              "homeWinRate": 0.4387755102040816,
+              "lower": 0.3,
+              "meanForecast": 0.36322290626630727,
+              "upper": 0.4
+            },
+            {
+              "games": 297,
+              "homeWinRate": 0.4983164983164983,
+              "lower": 0.4,
+              "meanForecast": 0.45789530749815466,
+              "upper": 0.5
+            },
+            {
+              "games": 433,
+              "homeWinRate": 0.5404157043879908,
+              "lower": 0.5,
+              "meanForecast": 0.549009517919095,
+              "upper": 0.6
+            },
+            {
+              "games": 299,
+              "homeWinRate": 0.6086956521739131,
+              "lower": 0.6,
+              "meanForecast": 0.6403068465804296,
+              "upper": 0.7
+            },
+            {
+              "games": 83,
+              "homeWinRate": 0.6867469879518072,
+              "lower": 0.7,
+              "meanForecast": 0.7398207287214383,
+              "upper": 0.8
+            },
+            {
+              "games": 6,
+              "homeWinRate": 1.0,
+              "lower": 0.8,
+              "meanForecast": 0.8179581678548665,
+              "upper": 0.9
+            }
+          ],
+          "expectedCalibrationError": 0.031513826402311026,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6829035125185344,
+          "meanForecast": 0.5416450642403791
+        }
+      },
+      {
+        "config": {
+          "homeAdvantage": 45,
+          "k": 16,
+          "seasonCarry": 0.67
+        },
+        "validation": {
+          "brier": 0.24525743213519863,
+          "calibrationBins": [
+            {
+              "games": 25,
+              "homeWinRate": 0.24,
+              "lower": 0.2,
+              "meanForecast": 0.2704898881740704,
+              "upper": 0.3
+            },
+            {
+              "games": 68,
+              "homeWinRate": 0.4411764705882353,
+              "lower": 0.3,
+              "meanForecast": 0.36299117940086745,
+              "upper": 0.4
+            },
+            {
+              "games": 243,
+              "homeWinRate": 0.49794238683127573,
+              "lower": 0.4,
+              "meanForecast": 0.4573728584124997,
+              "upper": 0.5
+            },
+            {
+              "games": 437,
+              "homeWinRate": 0.5469107551487414,
+              "lower": 0.5,
+              "meanForecast": 0.5506581248478486,
+              "upper": 0.6
+            },
+            {
+              "games": 356,
+              "homeWinRate": 0.5786516853932584,
+              "lower": 0.6,
+              "meanForecast": 0.6450648437232258,
+              "upper": 0.7
+            },
+            {
+              "games": 107,
+              "homeWinRate": 0.6542056074766355,
+              "lower": 0.7,
+              "meanForecast": 0.7419809326272343,
+              "upper": 0.8
+            },
+            {
+              "games": 10,
+              "homeWinRate": 0.7,
+              "lower": 0.8,
+              "meanForecast": 0.8202005346503964,
+              "upper": 0.9
+            }
+          ],
+          "expectedCalibrationError": 0.041582578228291825,
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "logLoss": 0.6837029449461146,
+          "meanForecast": 0.5621684607218655
+        }
+      }
+    ],
+    "selected": {
+      "config": {
+        "homeAdvantage": 30,
+        "k": 4,
+        "seasonCarry": 0.67
+      },
+      "validation": {
+        "brier": 0.24262482481735725,
+        "calibrationBins": [
+          {
+            "games": 32,
+            "homeWinRate": 0.3125,
+            "lower": 0.3,
+            "meanForecast": 0.3833509383254833,
+            "upper": 0.4
+          },
+          {
+            "games": 239,
+            "homeWinRate": 0.4602510460251046,
+            "lower": 0.4,
+            "meanForecast": 0.4702345266575833,
+            "upper": 0.5
+          },
+          {
+            "games": 788,
+            "homeWinRate": 0.5532994923857868,
+            "lower": 0.5,
+            "meanForecast": 0.5485616392439824,
+            "upper": 0.6
+          },
+          {
+            "games": 182,
+            "homeWinRate": 0.6538461538461539,
+            "lower": 0.6,
+            "meanForecast": 0.6361146540164986,
+            "upper": 0.7
+          },
+          {
+            "games": 5,
+            "homeWinRate": 0.8,
+            "lower": 0.7,
+            "meanForecast": 0.7038960789599136,
+            "upper": 0.8
+          }
+        ],
+        "expectedCalibrationError": 0.009706551161731502,
+        "games": 1246,
+        "homeWinRate": 0.5449438202247191,
+        "logLoss": 0.6781320689055935,
+        "meanForecast": 0.5427064213865477
+      }
+    },
+    "usedHoldoutForSelection": false
+  },
+  "sources": [
+    {
+      "declaredTotalGames": 2469,
+      "file": "sources/mlb-schedule-2024.json.gz",
+      "rawBytes": 3238226,
+      "rawSha256": "9733d248b6a6d1635eb91802f504d70ebedc49b5aa87e7ae962cafb40b18879b",
+      "retrievedAt": "2026-09-23T18:24:02.735734+00:00",
+      "scheduleRows": 2469,
+      "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2024&gameType=R",
+      "year": 2024
+    },
+    {
+      "declaredTotalGames": 2464,
+      "file": "sources/mlb-schedule-2025.json.gz",
+      "rawBytes": 3228414,
+      "rawSha256": "a8e90faf13a67f04762e019c465e38c66def1d7c4fbc8621c47cb0785fac2948",
+      "retrievedAt": "2026-09-23T18:24:02.067820+00:00",
+      "scheduleRows": 2464,
+      "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2025&gameType=R",
+      "year": 2025
+    },
+    {
+      "declaredTotalGames": 2386,
+      "file": "sources/mlb-schedule-2026.json.gz",
+      "rawBytes": 3125721,
+      "rawSha256": "debbaa2ced12b158b8759c3777ffb67f5c2152e2cca0d35bdd16567e4c68d145",
+      "retrievedAt": "2026-09-23T18:24:02.593914+00:00",
+      "scheduleRows": 2386,
+      "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&gameType=R&startDate=2026-01-01&endDate=2026-09-22",
+      "year": 2026
+    }
+  ],
+  "status": "EXPERIMENTAL_PAPER_ONLY",
+  "teamRatings": {
+    "108": {
+      "id": "108",
+      "name": "Los Angeles Angels",
+      "rating": 1435.640788743658
+    },
+    "109": {
+      "id": "109",
+      "name": "Arizona Diamondbacks",
+      "rating": 1512.7953588552566
+    },
+    "110": {
+      "id": "110",
+      "name": "Baltimore Orioles",
+      "rating": 1499.1016493785653
+    },
+    "111": {
+      "id": "111",
+      "name": "Boston Red Sox",
+      "rating": 1522.571923605092
+    },
+    "112": {
+      "id": "112",
+      "name": "Chicago Cubs",
+      "rating": 1527.4541278059062
+    },
+    "113": {
+      "id": "113",
+      "name": "Cincinnati Reds",
+      "rating": 1493.0498659128634
+    },
+    "114": {
+      "id": "114",
+      "name": "Cleveland Guardians",
+      "rating": 1511.3098352508223
+    },
+    "115": {
+      "id": "115",
+      "name": "Colorado Rockies",
+      "rating": 1409.288707274667
+    },
+    "116": {
+      "id": "116",
+      "name": "Detroit Tigers",
+      "rating": 1487.7015294998314
+    },
+    "117": {
+      "id": "117",
+      "name": "Houston Astros",
+      "rating": 1501.5208632325732
+    },
+    "118": {
+      "id": "118",
+      "name": "Kansas City Royals",
+      "rating": 1469.895556931833
+    },
+    "119": {
+      "id": "119",
+      "name": "Los Angeles Dodgers",
+      "rating": 1556.635850609289
+    },
+    "120": {
+      "id": "120",
+      "name": "Washington Nationals",
+      "rating": 1472.5588791819962
+    },
+    "121": {
+      "id": "121",
+      "name": "New York Mets",
+      "rating": 1498.3158830353855
+    },
+    "133": {
+      "id": "133",
+      "name": "Athletics",
+      "rating": 1446.3666336265628
+    },
+    "134": {
+      "id": "134",
+      "name": "Pittsburgh Pirates",
+      "rating": 1501.162601282124
+    },
+    "135": {
+      "id": "135",
+      "name": "San Diego Padres",
+      "rating": 1536.0523306669481
+    },
+    "136": {
+      "id": "136",
+      "name": "Seattle Mariners",
+      "rating": 1488.6617557586208
+    },
+    "137": {
+      "id": "137",
+      "name": "San Francisco Giants",
+      "rating": 1458.571839189975
+    },
+    "138": {
+      "id": "138",
+      "name": "St. Louis Cardinals",
+      "rating": 1483.3166263004991
+    },
+    "139": {
+      "id": "139",
+      "name": "Tampa Bay Rays",
+      "rating": 1545.701089817494
+    },
+    "140": {
+      "id": "140",
+      "name": "Texas Rangers",
+      "rating": 1495.3952027398084
+    },
+    "141": {
+      "id": "141",
+      "name": "Toronto Blue Jays",
+      "rating": 1511.24959080848
+    },
+    "142": {
+      "id": "142",
+      "name": "Minnesota Twins",
+      "rating": 1472.2634102361635
+    },
+    "143": {
+      "id": "143",
+      "name": "Philadelphia Phillies",
+      "rating": 1539.1896627001174
+    },
+    "144": {
+      "id": "144",
+      "name": "Atlanta Braves",
+      "rating": 1532.3507928793283
+    },
+    "145": {
+      "id": "145",
+      "name": "Chicago White Sox",
+      "rating": 1487.4463277706561
+    },
+    "146": {
+      "id": "146",
+      "name": "Miami Marlins",
+      "rating": 1493.7272473575438
+    },
+    "147": {
+      "id": "147",
+      "name": "New York Yankees",
+      "rating": 1542.6682199722272
+    },
+    "158": {
+      "id": "158",
+      "name": "Milwaukee Brewers",
+      "rating": 1568.035849575713
+    }
+  },
+  "validation": {
+    "constantHomeWin": {
+      "brier": 0.2484258704374395,
+      "calibrationBins": [
+        {
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "lower": 0.5,
+          "meanForecast": 0.5238294314381271,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.021114388786591998,
+      "games": 1246,
+      "homeWinRate": 0.5449438202247191,
+      "logLoss": 0.6899969652719808,
+      "meanForecast": 0.5238294314381271,
+      "probabilityFrozenBeforePeriod": 0.5238294314381271
+    },
+    "end": "2025-06-30",
+    "fairCoin": {
+      "brier": 0.25,
+      "calibrationBins": [
+        {
+          "games": 1246,
+          "homeWinRate": 0.5449438202247191,
+          "lower": 0.5,
+          "meanForecast": 0.5,
+          "upper": 0.6
+        }
+      ],
+      "expectedCalibrationError": 0.0449438202247191,
+      "games": 1246,
+      "homeWinRate": 0.5449438202247191,
+      "logLoss": 0.6931471805599453,
+      "meanForecast": 0.5
+    },
+    "model": {
+      "brier": 0.24262482481735725,
+      "calibrationBins": [
+        {
+          "games": 32,
+          "homeWinRate": 0.3125,
+          "lower": 0.3,
+          "meanForecast": 0.3833509383254833,
+          "upper": 0.4
+        },
+        {
+          "games": 239,
+          "homeWinRate": 0.4602510460251046,
+          "lower": 0.4,
+          "meanForecast": 0.4702345266575833,
+          "upper": 0.5
+        },
+        {
+          "games": 788,
+          "homeWinRate": 0.5532994923857868,
+          "lower": 0.5,
+          "meanForecast": 0.5485616392439824,
+          "upper": 0.6
+        },
+        {
+          "games": 182,
+          "homeWinRate": 0.6538461538461539,
+          "lower": 0.6,
+          "meanForecast": 0.6361146540164986,
+          "upper": 0.7
+        },
+        {
+          "games": 5,
+          "homeWinRate": 0.8,
+          "lower": 0.7,
+          "meanForecast": 0.7038960789599136,
+          "upper": 0.8
+        }
+      ],
+      "expectedCalibrationError": 0.009706551161731502,
+      "games": 1246,
+      "homeWinRate": 0.5449438202247191,
+      "logLoss": 0.6781320689055935,
+      "meanForecast": 0.5427064213865477
+    },
+    "start": "2025-03-18"
+  }
+}

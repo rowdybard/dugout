@@ -1,0 +1,20 @@
+import type {Market} from '../market/types';
+import type {BotInput} from './types';
+import type {SportsContext} from '../sports-context/types';
+import {cached} from '../server/storage';
+import {book,metadata,numeric,settlement} from '../server/polymarket';
+import {getSportsContext} from '../sports-context/server';
+import {replayData} from '../server/replay';
+import model from '../../data/models/mlb-elo-2026-09-23.json';
+import {forecastInput} from './forecast-input';
+
+/** Reference/context I/O finishes before the executable snapshot is fetched. */
+export async function loadBotInput(market:Market,held=false):Promise<BotInput>{
+  const noContext:SportsContext={slug:market.slug,league:market.league,status:'unavailable',receivedAt:Date.now(),source:{name:'Exit check',url:'https://docs.polymarket.us',support:'official'},game:null,players:[],changes:[],injuryStatus:'not_verified',limitations:['Sports entry vetoes do not prevent exits.']};
+  const [meta,context,replay]=await Promise.all([cached(`bot:metadata:${market.slug}`,120000,()=>metadata(market.slug)),held?Promise.resolve(noContext):getSportsContext(market),replayData()]);
+  const minimum=numeric(meta.minimumTradeQty),tick=numeric(meta.orderPriceMinTickSize),fee=numeric(meta.feeCoefficient);
+  if(minimum===null||minimum<=0||tick===null||tick<=0||tick>=1||fee===null||fee<0)throw new Error('Verified quantity, price tick, or fee metadata is missing.');
+  const depth=await book(market.slug),receivedAt=Date.now();
+  const settled=!replay&&held&&depth.state!=='MARKET_STATE_OPEN'?await settlement(market.slug):null;
+  return {market:{...market,fee},executionMarket:{slug:market.slug,league:market.league,active:depth.state==='MARKET_STATE_OPEN',minimumTradeQty:minimum,quantityIncrement:minimum,priceIncrement:tick,feeCoefficient:fee},book:depth,receivedAt,source:replay?'REPLAY':'REST',context,settlement:settled,forecast:held?undefined:forecastInput(model,market,context,meta,receivedAt)};
+}
