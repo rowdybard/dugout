@@ -150,6 +150,7 @@ export async function getFeed(): Promise<Feed> {
       .prepare("DELETE FROM snapshots WHERE time < ?")
       .bind(Date.now() - 30 * 86400000)
       .run();
+    await db().prepare("DELETE FROM trading_observations WHERE time < ?").bind(Date.now()-7*86400000).run();
     return {
       games: unique,
       markets,

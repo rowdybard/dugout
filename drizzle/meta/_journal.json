@@ -15,6 +15,13 @@
       "when": 1790177602613,
       "tag": "0001_silky_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790181793713,
+      "tag": "0002_huge_aqueduct",
+      "breakpoints": true
     }
   ]
 }

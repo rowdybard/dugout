@@ -3,6 +3,7 @@ import {replayData} from '@/lib/server/replay';
 import {bbo, book, history, amount, metadata, numeric} from '@/lib/server/polymarket';
 import {loadMarketDetail} from '@/lib/server/market-detail';
 import type {DetailRange} from '@/lib/market/detail';
+import { recordTradingObservation } from '@/lib/server/trading';
 
 const ranges = new Set<DetailRange>(['15m', '1h', '6h', '24h', 'ALL']);
 
@@ -34,9 +35,12 @@ export async function GET(req: Request) {
     history: () => history(slug, range),
     metadata: async () => {
       const market = await metadata(slug);
+      const min=numeric(market.minimumTradeQty), tick=numeric(market.orderPriceMinTickSize);
       return {
         question: typeof market.question === 'string' ? market.question : null,
         rules: typeof market.description === 'string' ? market.description : null,
+        executionRules: {minimumTradeQty:min!==null&&min>0?min:1,quantityIncrement:min!==null&&min>0?min:1,
+          priceIncrement:tick!==null&&tick>0&&tick<1?tick:.01,feeCoefficient:numeric(market.feeCoefficient)??.0695},
       };
     },
     activity: async () => {
@@ -48,5 +52,8 @@ export async function GET(req: Request) {
     replayAt: async () => (await replayData())?.recordedAt,
   });
 
+  if(data.book) {
+    try {await recordTradingObservation(slug,data.book,data.replayAt?'REPLAY':'REST',data.bookReceivedAt??data.retrievedAt);} catch { /* Chart snapshots must not hide a current quote. */ }
+  }
   return Response.json(data, {headers: {'Cache-Control': 'no-store'}});
 }

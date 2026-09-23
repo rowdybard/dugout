@@ -37,6 +37,7 @@ import {
 import { MarketCard, gameTime } from "@/components/dugout/market-card";
 import { MarketDetail } from "@/components/dugout/market-detail";
 import { PaperPortfolio } from "@/components/dugout/portfolio";
+import { TradingWorkspace } from "@/components/dugout/trading-workspace";
 import MlbSimulation from "@/components/dugout/mlb-simulation";
 import { glossary } from "@/lib/market/explain";
 import { scan, activitySignals, DEFAULT_CONFIG } from "@/lib/market/scanner";
@@ -230,7 +231,7 @@ export default function Home() {
     setGame(null);
   };
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${beginner ? "" : "advanced-shell"}`}>
       {feed?.replayAt && (
         <div className="development-banner">
           DEVELOPMENT REPLAY · Real API responses recorded{" "}
@@ -271,6 +272,23 @@ export default function Home() {
           </button>
         </div>
       </header>
+      {!beginner ? (
+        <TradingWorkspace
+          feed={feed}
+          markets={all}
+          profile={profile}
+          onProfile={setProfile}
+          onRefresh={load}
+          onRetryProfile={loadProfile}
+          loading={loading}
+          error={error}
+          profileError={profileError}
+          tab={tab}
+          onTab={setTab}
+          onWatch={(m) => watch("market", m.slug, m.title, m.price)}
+          onSettings={() => setSettings(true)}
+        />
+      ) : (<>
       <Tabs
         value={tab === "simulation" ? "portfolio" : tab}
         onValueChange={(v) => {
@@ -619,7 +637,7 @@ export default function Home() {
                   <span>
                     <Radio size={14} /> Refreshes every 60 seconds while open
                   </span>
-                  <span>Real markets. No automatic orders.</span>
+                  <span>Paper trading · real-money orders disabled</span>
                 </div>
                 <p className="coverage">{feed?.coverage}</p>
               </div>
@@ -747,8 +765,9 @@ export default function Home() {
           Data source ↗
         </a>
       </footer>
+      </>)}
       <MarketDetail
-        market={selected}
+        market={beginner ? selected : null}
         watched={!!selected && !!profile?.watches.some(w => w.kind === "market" && w.key === selected.slug)}
         close={() => setSelected(null)}
         profile={profile}

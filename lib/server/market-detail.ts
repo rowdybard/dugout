@@ -5,7 +5,7 @@ export type DetailSources = {
   quote: () => Promise<Omit<DetailQuote, 'source'> | null>;
   book: () => Promise<Book>;
   history: () => Promise<Point[]>;
-  metadata: () => Promise<{question: string | null; rules: string | null}>;
+  metadata: () => Promise<{question: string | null; rules: string | null; executionRules?: import('../market/detail.ts').MarketDetailData['executionRules']}>;
   activity: () => Promise<{time: number; volume: number}[]>;
   replayAt: () => Promise<number | undefined>;
 };
@@ -16,10 +16,11 @@ export async function loadMarketDetail(
   range: DetailRange,
   sources: DetailSources,
 ): Promise<MarketDetailData> {
+  let bookReceivedAt: number | undefined;
   const [quoteResult, bookResult, historyResult, metadataResult, activityResult, replayResult] =
     await Promise.allSettled([
       sources.quote(),
-      sources.book(),
+      sources.book().then(value=>{bookReceivedAt=Date.now();return value;}),
       sources.history(),
       sources.metadata(),
       sources.activity(),
@@ -70,8 +71,10 @@ export async function loadMarketDetail(
     activity: activityResult.status === 'fulfilled' ? activityResult.value : [],
     question: metadata?.question ?? null,
     rules: metadata?.rules ?? null,
+    executionRules: metadata?.executionRules,
     warnings,
     retrievedAt: Date.now(),
+    bookReceivedAt,
     replayAt: replayResult.status === 'fulfilled' ? replayResult.value : undefined,
   };
 }

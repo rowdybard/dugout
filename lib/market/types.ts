@@ -102,6 +102,7 @@ export type Config = {
   stale: number;
 };
 export type Profile = {
+  trading?: import('../trading/workspace').TradingState;
   cash: number;
   positions: Position[];
   watches: Watch[];

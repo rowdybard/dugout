@@ -13,6 +13,7 @@ export type DetailQuote = {
 };
 
 export type MarketDetailData = {
+  executionRules?: {minimumTradeQty:number;quantityIncrement:number;priceIncrement:number;feeCoefficient:number};
   slug: string;
   range: DetailRange;
   quote: DetailQuote | null;
@@ -23,5 +24,6 @@ export type MarketDetailData = {
   rules: string | null;
   warnings: Partial<Record<DetailSection, string>>;
   retrievedAt: number;
+  bookReceivedAt?: number;
   replayAt?: number;
 };

@@ -1,4 +1,15 @@
-# vinext-starter
+# Dugout
+
+MLB/NFL market intelligence and a price-protected paper trading workspace using Polymarket US.
+
+- Beginner mode teaches the market flow; Advanced mode prioritizes charts, editable presets and Ape In / Ape Out controls.
+- `npm test` runs execution, strategy, protocol and transaction regressions.
+- `npm run trading:stream` starts the separate read-only streaming service; it reports `not_configured` without server credentials.
+- See [implementation status](docs/TRADING-IMPLEMENTATION.md), [QA evidence](docs/TRADING-QA.md), and [streaming setup](services/trading/README.md).
+
+Real-money execution is disabled. The live adapter is a tested integration foundation, not a connected trading account. The default paper dip/recovery experiment is a configurable candidate, not a validated edge.
+
+## Framework operations
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

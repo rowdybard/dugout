@@ -134,7 +134,11 @@ export async function history(slug: string, range = "1h"): Promise<Point[]> {
           .bind(slug, Date.now() - (windows[range] || 3600000))
           .all<Point>()
       : null;
-  const result = points.length >= 2 ? points : local?.results || points;
+  const basePoints = points.length >= 2 ? points : local?.results || points;
+  const cutoff=Math.max(basePoints.at(-1)?.time??0,Date.now()-(windows[range]||3600000));
+  const ticks=await db().prepare("SELECT time,ask AS price,(ask-bid) AS spread FROM trading_observations WHERE slug=? AND time>? AND ask IS NOT NULL AND source!='REPLAY' ORDER BY time LIMIT 5000")
+    .bind(slug,cutoff).all<Point>().catch(()=>({results:[] as Point[]}));
+  const result=[...basePoints,...ticks.results];
   return range === "15m"
     ? result.filter((p) => p.time >= Date.now() - 900000)
     : result;
@@ -162,8 +166,8 @@ export async function book(slug: string): Promise<Book> {
       ?.map((l) => ({ price: amount(l.px)!, quantity: numeric(l.qty)! }))
       .filter((l) => l.price !== null && l.quantity > 0) || [];
   return {
-    bids: levels(b.bids),
-    asks: levels(b.offers),
+    bids: levels(b.bids).sort((a,b)=>b.price-a.price),
+    asks: levels(b.offers).sort((a,b)=>a.price-b.price),
     state: b.state,
     time: b.transactTime,
   };
