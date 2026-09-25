@@ -1,26 +1,23 @@
 import type { Market } from '../market/types';
 import type { ScheduleGame, SportsContext } from './types';
-import { cached, db } from '../server/storage';
+import { cached, db,readCached } from '../server/storage';
 import { dateKeys, matchingGame, object } from './shared.ts';
 import { mlbContext, mlbSchedule } from './mlb.ts';
 import { nflContext, nflSchedule } from './nfl.ts';
 import { compactInjuryFeed, reportedInjuries } from './injuries.ts';
 import {nflProbabilityUrl,readNflEstimate} from '../bot/nfl-reference';
+import {createSportsReader,SportsSourceError,type SportsSourceFailure} from './source-reader';
 
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 export const CONTEXT_REFRESH_MS = 30_000;
-async function json(url: string,signal:AbortSignal): Promise<unknown> {
-  signal.throwIfAborted();
-  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal,AbortSignal.timeout(8000)]) });
-  if (!response.ok) {
-    // Fixed public sports endpoints only. Never log cookies, request headers or full bodies.
-    const body=(await response.text()).slice(0,4096);
-    const title=body.match(/<title[^>]*>([^<]{1,160})<\/title>/i)?.[1]??null;
-    console.error('sports-source-failure',JSON.stringify({url,status:response.status,contentType:response.headers.get('content-type'),server:response.headers.get('server'),title}));
-    throw new Error(`${new URL(url).hostname}${new URL(url).pathname} returned HTTP ${response.status}.`);
-  }
-  return response.json();
-}
+const json=createSportsReader({fetch:(...args)=>fetch(...args),now:Date.now,
+  readBlock:async host=>(await readCached<SportsSourceFailure>(`sports:source-block:${host}`))?.value??null,
+  writeBlock:async(host,failure)=>{
+    console.error('sports-source-failure',JSON.stringify(failure));
+    await db().prepare("INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated WHERE json_extract(excluded.value,'$.retryAt')>=json_extract(cache.value,'$.retryAt')")
+      .bind(`sports:source-block:${host}`,JSON.stringify(failure),failure.receivedAt).run();
+  },
+});
 const sourceFor = (market: Market): SportsContext['source'] => market.league === 'MLB'
   ? { name: 'MLB Stats API', url: 'https://statsapi.mlb.com', support: 'official' }
   : { name: 'ESPN public game data', url: `${ESPN}/football/nfl/scoreboard`, support: 'public-undocumented' };
@@ -71,11 +68,12 @@ export async function getSportsContext(market: Market,signal:AbortSignal=AbortSi
         // Retain the oldest component receipt so later entry checks cannot refresh a slow feed.
         const contextReceipt=plays.status==='fulfilled'?Math.min(summary.value.receivedAt,plays.value.receivedAt):summary.value.receivedAt;
         context = nflContext(summary.value.raw, plays.status === 'fulfilled' ? plays.value.raw : null, market, game, contextReceipt, previous);
+        if(plays.status==='rejected'&&plays.reason instanceof SportsSourceError){context.sourceFailure=plays.reason.failure;context.winEstimateReason=plays.reason.message;context.limitations.unshift(plays.reason.message);}
         if(plays.status==='fulfilled'&&context.game?.state==='live'){
           const probabilityUrl=nflProbabilityUrl(plays.value.raw,game.id);
           if(probabilityUrl){
             try{const raw=await json(probabilityUrl,signal),receivedAt=Date.now(),result=receivedAt-plays.value.receivedAt>45000?{reason:'The play feed is stale.'}:readNflEstimate(context,plays.value.raw,raw,receivedAt);context.winEstimate=result.estimate;context.winEstimateReason=result.reason;}
-            catch{context.winEstimateReason='The latest play’s win estimate is temporarily unavailable.';}
+            catch(error){context.winEstimateReason=error instanceof SportsSourceError?error.message:'The latest play’s win estimate is temporarily unavailable.';if(error instanceof SportsSourceError)context.sourceFailure=error.failure;}
           }else context.winEstimateReason='Waiting for the latest play’s probability reference.';
         }
       }
@@ -88,12 +86,14 @@ export async function getSportsContext(market: Market,signal:AbortSignal=AbortSi
         context.injuryReceivedAt = reports.receivedAt;
         context.limitations = context.limitations.filter(line => !line.includes('Injury status has not been verified.'));
         context.limitations.push('Injuries are explicit ESPN source reports, separate from substitution evidence. Report times are not injury occurrence times; absent reports do not mean healthy.');
-      } catch { context.injuries = []; context.injuryStatus = 'not_verified'; }
+      } catch(error) { context.injuries = []; context.injuryStatus = 'not_verified';if(error instanceof SportsSourceError){context.sourceFailure=error.failure;context.limitations.push(error.message);} }
       return context;
     });
     return { ...context, slug: market.slug };
   } catch (error) {
     console.error('sports context', market.league, error instanceof Error ? error.message : 'unavailable');
-    return unavailable(market, 'unavailable', error instanceof Error&&error.message.includes('HTTP 403')?'The sports provider rejected this server’s request (HTTP 403). New entries are waiting for verified game data.':'The sports source is temporarily unavailable. Game context and player changes have not been refreshed.');
+    const context=unavailable(market,'unavailable',error instanceof SportsSourceError?error.message:'The sports source is temporarily unavailable. Game context and player changes have not been refreshed.');
+    if(error instanceof SportsSourceError)context.sourceFailure=error.failure;
+    return context;
   }
 }
