@@ -18,7 +18,7 @@ export async function verifyCredentials(values:Record<string,unknown>,readAccoun
   try{
     const response=await readAccount(secrets);
     if(!response||typeof response!=='object'||!Array.isArray((response as {balances?:unknown}).balances))return {...base,state:'unavailable',message:'Polymarket US returned an unexpected response. The connection is not verified.'};
-    return {...base,state:'verified',message:'Polymarket US credentials verified. Paper mode remains active; streaming is not connected yet.'};
+    return {...base,state:'verified',message:'Polymarket US credentials verified. Paper mode remains active.'};
   }catch(error){
     const status=error&&typeof error==='object'?'status' in error?Number(error.status):null:null;
     if(status===401)return {...base,state:'rejected',message:'Polymarket US rejected these credentials. Check that the key ID and signing secret belong to the same US API key.'};

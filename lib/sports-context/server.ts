@@ -5,6 +5,7 @@ import { dateKeys, matchingGame, object } from './shared.ts';
 import { mlbContext, mlbSchedule } from './mlb.ts';
 import { nflContext, nflSchedule } from './nfl.ts';
 import { compactInjuryFeed, reportedInjuries } from './injuries.ts';
+import {nflProbabilityUrl,readNflEstimate} from '../bot/nfl-reference';
 
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 export const CONTEXT_REFRESH_MS = 30_000;
@@ -49,19 +50,28 @@ export async function getSportsContext(market: Market,signal:AbortSignal=AbortSi
   try {
     const match = matchingGame(market, await schedule(market,signal));
     if (!match.game) return unavailable(market, 'unmatched', match.reason);
-    const game = match.game, key = `sports:context:v1:${market.league}:${game.id}`;
-    const ttl = game.state === 'final' ? 300_000 : game.state === 'live' ? CONTEXT_REFRESH_MS : 60_000;
+    const game = match.game, key = `sports:context:v2:${market.league}:${game.id}`;
+    const ttl = game.state === 'final' ? 300_000 : game.state === 'live' ? (market.league==='NFL'?10000:CONTEXT_REFRESH_MS) : 60_000;
     const context = await cached(key, ttl, async () => {
       const previous = await lastContext(key);
       let context: SportsContext;
       if (market.league === 'MLB') context = mlbContext(await json(game.sourceUrl,signal), market, game, Date.now(), previous);
       else {
         const [summary, plays] = await Promise.allSettled([
-          json(game.sourceUrl,signal),
-          json(`https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/${game.id}/competitions/${game.id}/plays?limit=500`,signal),
+          json(game.sourceUrl,signal).then(raw=>({raw,receivedAt:Date.now()})),
+          json(`https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/${game.id}/competitions/${game.id}/plays?limit=500`,signal).then(raw=>({raw,receivedAt:Date.now()})),
         ]);
         if (summary.status !== 'fulfilled') throw new Error('NFL game summary is unavailable.');
-        context = nflContext(summary.value, plays.status === 'fulfilled' ? plays.value : null, market, game, Date.now(), previous);
+        // Retain the oldest component receipt so later entry checks cannot refresh a slow feed.
+        const contextReceipt=plays.status==='fulfilled'?Math.min(summary.value.receivedAt,plays.value.receivedAt):summary.value.receivedAt;
+        context = nflContext(summary.value.raw, plays.status === 'fulfilled' ? plays.value.raw : null, market, game, contextReceipt, previous);
+        if(plays.status==='fulfilled'&&context.game?.state==='live'){
+          const probabilityUrl=nflProbabilityUrl(plays.value.raw,game.id);
+          if(probabilityUrl){
+            try{const raw=await json(probabilityUrl,signal),receivedAt=Date.now(),result=receivedAt-plays.value.receivedAt>45000?{reason:'The play feed is stale.'}:readNflEstimate(context,plays.value.raw,raw,receivedAt);context.winEstimate=result.estimate;context.winEstimateReason=result.reason;}
+            catch{context.winEstimateReason='The latest play’s win estimate is temporarily unavailable.';}
+          }else context.winEstimateReason='Waiting for the latest play’s probability reference.';
+        }
       }
       const injuryUrl = `${ESPN}/${market.league === 'MLB' ? 'baseball/mlb' : 'football/nfl'}/injuries`;
       try {

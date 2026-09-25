@@ -42,6 +42,8 @@ export type SportsContext = {
   limitations: string[];
   injuryStatus: 'source_reports' | 'not_verified';
   injuryReceivedAt?: number;
+  winEstimate?: {provider:'ESPN';gameId:string;playId:string;playTime:number;receivedAt:number;homeProbability:number;awayProbability:number;tieProbability:number;sourceUrl:string};
+  winEstimateReason?: string;
   injuries?: { name: string; team: string; position: string; status: string; detail: string; reportedAt: string | null; sourceUrl: string }[];
 };
 

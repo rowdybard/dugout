@@ -1,20 +1,24 @@
 import { profile } from '@/lib/server/storage';
-import { getFeed } from '@/lib/server/ingestion';
-import { serviceRequest } from '@/lib/server/trading-service';
+import { getCatalog } from '@/lib/server/ingestion';
+import { marketStream } from '@/lib/server/polymarket-market-stream';
+import { botUniverse } from '@/lib/bot/engine';
+import { replayData } from '@/lib/server/replay';
+import type {StreamSelection} from '@/lib/trading/stream-types';
 export async function GET(req:Request) {
   try {
-    const slug=new URL(req.url).searchParams.get('slug');
-    if(!slug||!/^[a-zA-Z0-9_.-]+$/.test(slug))return Response.json({error:'Choose an MLB or NFL market.'},{status:400});
-    const status=await serviceRequest('/v1/status');
-    if(!status)return Response.json({error:'Streaming is not connected.'},{status:503});
-    if(!status.ok)return Response.json({error:'Streaming service unavailable.'},{status:503});
-    const [p,feed]=await Promise.all([profile(req),getFeed()]);
-    const market=feed.games.flatMap(g=>g.markets).find(m=>m.slug===slug);
-    if(!market)return Response.json({error:'Market is outside MLB/NFL coverage.'},{status:400});
-    const subscribe=await serviceRequest('/v1/subscriptions',{method:'POST',body:JSON.stringify({ownerId:`${p.id}:${slug}`,markets:[{slug,league:market.league,detail:'book'}]})});
-    if(!subscribe?.ok)return Response.json({error:'Could not subscribe to this market.'},{status:503});
-    const upstream=await serviceRequest(`/v1/events?markets=${encodeURIComponent(slug)}&ownerId=${encodeURIComponent(`${p.id}:${slug}`)}`,{signal:req.signal});
-    if(!upstream?.ok||!upstream.body)return Response.json({error:'Streaming unavailable.'},{status:503});
-    return new Response(upstream.body,{headers:{'Content-Type':'text/event-stream','Cache-Control':'no-store, no-transform','X-Accel-Buffering':'no'}});
+    if(await replayData())return Response.json({error:'Recorded development preview; no live stream.'},{status:409});
+    const params=new URL(req.url).searchParams,slug=params.get('slug'),bot=params.get('scope')==='bot';
+    if(!bot&&(!slug||!/^[a-zA-Z0-9_.-]+$/.test(slug)))return Response.json({error:'Choose an MLB or NFL market.'},{status:400});
+    const p=await profile(req),session=p.data.trading?.autopilot;
+    if(bot&&(!session||session.status==='stopped'))return Response.json({error:'Start a paper session first.'},{status:409});
+    const held=bot?session!.positions.filter(p=>p.status==='open'):[];
+    let selections:StreamSelection[];
+    if(held.length)selections=held.map(p=>({slug:p.slug,league:p.league,detail:'book'}));
+    else{
+      const catalog=await getCatalog(bot?session!.config.leagues:undefined);
+      const selected=bot?botUniverse(catalog.markets,session!,Date.now()).slice(0,16):catalog.games.flatMap(g=>g.markets).filter(m=>m.slug===slug);
+      selections=selected.map(m=>({slug:m.slug,league:m.league,detail:'book'}));
+    }
+    return await marketStream(req,selections);
   }catch{return Response.json({error:'Streaming connection interrupted.'},{status:503});}
 }

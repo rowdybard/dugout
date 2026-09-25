@@ -9,6 +9,8 @@ import model from '../../data/models/mlb-elo-2026-09-23.json';
 import {forecastInput} from './forecast-input';
 import {abortable} from '../server/request-budget';
 import {recordTradingObservation} from '../server/trading';
+import {currentStreamBook} from '../server/stream-books';
+import {nflReferenceInput} from './nfl-reference';
 
 /** Reference/context I/O finishes before the executable snapshot is fetched. */
 export async function loadBotInput(market:Market,held=false,signal:AbortSignal=AbortSignal.timeout(22000)):Promise<BotInput>{
@@ -20,9 +22,11 @@ export async function loadBotInput(market:Market,held=false,signal:AbortSignal=A
   signal.throwIfAborted();
   const minimum=numeric(meta.minimumTradeQty),tick=numeric(meta.orderPriceMinTickSize),fee=numeric(meta.feeCoefficient);
   if(minimum===null||minimum<=0||tick===null||tick<=0||tick>=1||fee===null||fee<0)throw new Error('Verified quantity, price tick, or fee metadata is missing.');
-  const depth=await book(market.slug,signal),receivedAt=Date.now();
+  const live=!replay?await currentStreamBook(market.slug).catch(()=>null):null;
+  const depth=live?.book??await book(market.slug,signal),receivedAt=live?.receivedAt??Date.now();
   const settled=!replay&&held&&depth.state!=='MARKET_STATE_OPEN'?await settlement(market.slug,signal):null;
   signal.throwIfAborted();
-  await recordTradingObservation(market.slug,depth,replay?'REPLAY':'REST',receivedAt).catch(()=>{});
-  return {market:{...market,fee},executionMarket:{slug:market.slug,league:market.league,active:depth.state==='MARKET_STATE_OPEN',minimumTradeQty:minimum,quantityIncrement:minimum,priceIncrement:tick,feeCoefficient:fee},book:depth,receivedAt,source:replay?'REPLAY':'REST',context,settlement:settled,forecast:held?undefined:forecastInput(model,market,context,meta,receivedAt)};
+  const source=replay?'REPLAY':live?'WEBSOCKET':'REST';
+  await recordTradingObservation(market.slug,depth,source,receivedAt).catch(()=>{});
+  return {market:{...market,fee},executionMarket:{slug:market.slug,league:market.league,active:depth.state==='MARKET_STATE_OPEN',minimumTradeQty:minimum,quantityIncrement:minimum,priceIncrement:tick,feeCoefficient:fee},book:depth,receivedAt,source,context,settlement:settled,settlementReceivedAt:settled===null?undefined:Date.now(),forecast:held?undefined:market.league==='NFL'?nflReferenceInput(market,context,meta,Date.now()):forecastInput(model,market,context,meta,Date.now())};
 }
