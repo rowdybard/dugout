@@ -1,7 +1,7 @@
 /** Internal Dugout contracts, not Polymarket response types. All times are UTC ms. */
 export type StreamSelection = {
   slug: string;
-  league: "MLB" | "NFL";
+  league: "MLB" | "NFL" | "ATP" | "WTA";
   detail: "book" | "lite";
 };
 
@@ -44,7 +44,7 @@ export type StreamHealth = {
 export type StreamLevel = { price: string; quantity: string };
 export type StreamQuote = {
   slug: string;
-  league: "MLB" | "NFL";
+  league: "MLB" | "NFL" | "ATP" | "WTA";
   /** Display numbers only. Execution must use the accompanying decimal strings. */
   bid: number | null;
   ask: number | null;
@@ -129,4 +129,54 @@ export function streamBookForDisplay(quote: StreamQuote) {
     state: quote.state ?? "UNKNOWN",
     time: new Date(quote.sourceTime ?? quote.receivedAt).toISOString(),
   };
+}
+
+type TennisStreamCandidate = {
+  slug: string;
+  league: string;
+  active: boolean;
+  ended: boolean;
+  live: boolean;
+  startTime: string;
+};
+type TennisStreamSelectionResult =
+  | { ok: true; selections: StreamSelection[] }
+  | { ok: false; status: 400 | 404; error: string };
+
+/** Only server-verified catalog or persisted position markets may become subscriptions. */
+export function selectTennisStreamMarkets(
+  catalog: readonly TennisStreamCandidate[],
+  protectedMarkets: readonly TennisStreamCandidate[],
+  requestedSlug: string | null = null,
+): TennisStreamSelectionResult {
+  const isTennis = (market: TennisStreamCandidate) =>
+    (market.league === 'ATP' || market.league === 'WTA') && /^[a-zA-Z0-9._:-]{1,250}$/.test(market.slug);
+  if (requestedSlug !== null && !/^[a-zA-Z0-9._:-]{1,250}$/.test(requestedSlug)) {
+    return { ok: false, status: 400, error: 'Choose a valid tennis market.' };
+  }
+  const protectedTennis = protectedMarkets.filter(isTennis);
+  const activeTennis = catalog.filter(market => isTennis(market) && market.active && !market.ended);
+  const knownMarkets = new Map([...activeTennis, ...protectedTennis].map(market => [market.slug, market]));
+  if (requestedSlug !== null && !knownMarkets.has(requestedSlug)) {
+    return { ok: false, status: 404, error: 'This tennis market is not in the verified catalog or your paper session.' };
+  }
+  const selections = new Map<string, StreamSelection>();
+  const add = (market: TennisStreamCandidate) => selections.set(market.slug, {
+    slug: market.slug, league: market.league as 'ATP' | 'WTA', detail: 'book',
+  });
+  // Position exits remain subscribed even if discovery no longer returns their markets.
+  for (const market of protectedTennis) add(market);
+  if (requestedSlug !== null) add(knownMarkets.get(requestedSlug)!);
+  else {
+    const start = (market: TennisStreamCandidate) => {
+      const time = Date.parse(market.startTime);
+      return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
+    };
+    activeTennis.sort((a, b) => Number(b.live) - Number(a.live) || start(a) - start(b) || a.slug.localeCompare(b.slug));
+    for (const market of activeTennis) {
+      if (selections.size >= 12) break;
+      add(market);
+    }
+  }
+  return { ok: true, selections: [...selections.values()] };
 }

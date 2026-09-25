@@ -7,7 +7,7 @@ export type TradeSource = 'MANUAL' | 'AUTOMATIC';
 /** These are our normalized fields, not a claimed Polymarket API schema. */
 export type ExecutionMarket = {
   slug: string;
-  league: League;
+  league: League | 'ATP' | 'WTA';
   active: boolean;
   minimumTradeQty: number;
   quantityIncrement: number;

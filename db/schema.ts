@@ -10,3 +10,14 @@ export const tradingObservations = sqliteTable('trading_observations', {
   id: text('id').primaryKey(), slug: text('slug').notNull(), time: integer('time').notNull(),
   price: real('price'), bid: real('bid'), ask: real('ask'), depth: real('depth'), source: text('source').notNull(),
 }, t => [index('trading_observations_slug_time').on(t.slug, t.time)]);
+
+export const tennisSessions = sqliteTable('tennis_sessions', {
+  ownerId: text('owner_id').primaryKey(), value: text('value').notNull(), revision: integer('revision').notNull().default(0),
+});
+export const tennisJournal = sqliteTable('tennis_journal', {
+  id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), sessionId: text('session_id').notNull(),
+  kind: text('kind').notNull(), value: text('value').notNull(), createdAt: integer('created_at').notNull(),
+}, t => [index('tennis_journal_session_time').on(t.sessionId,t.createdAt)]);
+export const tennisObservations = sqliteTable('tennis_observations', {
+  id: text('id').primaryKey(), slug: text('slug').notNull(), time: integer('time').notNull(), value:text('value').notNull(),
+}, t => [index('tennis_observations_slug_time').on(t.slug,t.time)]);

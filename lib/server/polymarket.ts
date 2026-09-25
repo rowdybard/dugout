@@ -2,7 +2,7 @@ import { replayData } from "./replay";
 import { PolymarketUS } from "polymarket-us";
 import { cached, db } from "./storage";
 import type { Book, Point } from "@/lib/market/types";
-import {createPublicSourceBudget} from '../bot/public-source-budget';
+import {createPublicSourceBudget,publicRetryAfterMs} from '../bot/public-source-budget';
 import {abortable} from './request-budget';
 export const sdk = new PolymarketUS({ timeout: 12000 });
 const requestBudget=createPublicSourceBudget();
@@ -55,7 +55,7 @@ export async function publicGet(path: string, signal?:AbortSignal): Promise<Raw>
   }
   return publicRead(async()=>{
     const r = await fetch(BASE + path, { signal: signal?AbortSignal.any([signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000) });
-    if (!r.ok) throw Object.assign(new Error(`Polymarket US returned ${r.status}.`),{status:r.status,retryAfterMs:Math.max(0,Number(r.headers.get('Retry-After'))*1000)});
+    if (!r.ok) throw Object.assign(new Error(`Polymarket US returned ${r.status}.`),{status:r.status,retryAfterMs:publicRetryAfterMs(r.headers.get('Retry-After'))});
     return r.json();
   },signal);
 }

@@ -1,3 +1,16 @@
+/** Retry-After permits either a seconds value or an HTTP date. Invalid data uses the caller's default. */
+export function publicRetryAfterMs(header:string|null,now=Date.now()):number|undefined{
+  const value=header?.trim();
+  if(!value||!Number.isFinite(now))return undefined;
+  if(/^\d+(\.\d+)?$/.test(value)){
+    const milliseconds=Number(value)*1000;
+    return Number.isFinite(milliseconds)&&now+milliseconds<=8640000000000000?milliseconds:undefined;
+  }
+  if(/^[+-]?\d/.test(value)&&!/[a-z]/i.test(value))return undefined;
+  const deadline=Date.parse(value);
+  return Number.isFinite(deadline)?Math.max(0,deadline-now):undefined;
+}
+
 /** Conservative per-process pacing; server adapters also persist provider backoff. */
 export function createPublicSourceBudget(options:{spacingMs?:number;now?:()=>number;delay?:(ms:number)=>Promise<void>}={}){
   const now=options.now??Date.now,delay=options.delay??(ms=>new Promise(resolve=>setTimeout(resolve,ms))),spacing=options.spacingMs??750;

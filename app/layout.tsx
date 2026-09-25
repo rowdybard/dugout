@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dugout — MLB & NFL Market Radar",
-  description: "Real MLB and NFL market movement. Plain-English explanations. Paper trading.",
+  title: "Dugout — Tennis Paper Lab",
+  description: "Live tennis markets. Test dip-and-recovery trading with a fake balance and transparent execution.",
   other: {
     "codex-preview": "development",
   },
