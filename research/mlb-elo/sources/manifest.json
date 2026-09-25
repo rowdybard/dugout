@@ -1,0 +1,32 @@
+[
+  {
+    "year": 2024,
+    "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2024&gameType=R",
+    "retrievedAt": "2026-09-23T18:24:02.735734+00:00",
+    "rawSha256": "9733d248b6a6d1635eb91802f504d70ebedc49b5aa87e7ae962cafb40b18879b",
+    "rawBytes": 3238226,
+    "scheduleRows": 2469,
+    "declaredTotalGames": 2469,
+    "file": "sources/mlb-schedule-2024.json.gz"
+  },
+  {
+    "year": 2025,
+    "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2025&gameType=R",
+    "retrievedAt": "2026-09-23T18:24:02.067820+00:00",
+    "rawSha256": "a8e90faf13a67f04762e019c465e38c66def1d7c4fbc8621c47cb0785fac2948",
+    "rawBytes": 3228414,
+    "scheduleRows": 2464,
+    "declaredTotalGames": 2464,
+    "file": "sources/mlb-schedule-2025.json.gz"
+  },
+  {
+    "year": 2026,
+    "url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&gameType=R&startDate=2026-01-01&endDate=2026-09-22",
+    "retrievedAt": "2026-09-23T18:24:02.593914+00:00",
+    "rawSha256": "debbaa2ced12b158b8759c3777ffb67f5c2152e2cca0d35bdd16567e4c68d145",
+    "rawBytes": 3125721,
+    "scheduleRows": 2386,
+    "declaredTotalGames": 2386,
+    "file": "sources/mlb-schedule-2026.json.gz"
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "sourceGameId": "824223",
+    "marketSlug": "aec-mlb-wsh-det-2026-09-23",
+    "capturedAt": 1790185312559,
+    "start": "2026-09-23T17:10:00.000Z",
+    "awayTeam": "Washington Nationals",
+    "awayTeamId": "120",
+    "homeTeam": "Detroit Tigers",
+    "homeTeamId": "116",
+    "awayProbability": 0.4353976358401841,
+    "homeProbability": 0.5646023641598159,
+    "ratingsThroughDay": "2026-09-22",
+    "purpose": "Calculation from observed team identities, not a claim of live context or an actionable trade."
+  },
+  {
+    "sourceGameId": "824785",
+    "marketSlug": "aec-mlb-tor-bal-2026-09-22",
+    "capturedAt": 1790185312539,
+    "start": "2026-09-23T17:35:00.000Z",
+    "awayTeam": "Toronto Blue Jays",
+    "awayTeamId": "141",
+    "homeTeam": "Baltimore Orioles",
+    "homeTeamId": "110",
+    "awayProbability": 0.4743314081742144,
+    "homeProbability": 0.5256685918257856,
+    "ratingsThroughDay": "2026-09-22",
+    "purpose": "Calculation from observed team identities, not a claim of live context or an actionable trade."
+  },
+  {
+    "sourceGameId": "823168",
+    "marketSlug": "aec-mlb-min-sf-2026-09-23",
+    "capturedAt": 1790185312646,
+    "start": "2026-09-23T19:45:00.000Z",
+    "awayTeam": "Minnesota Twins",
+    "awayTeamId": "142",
+    "homeTeam": "San Francisco Giants",
+    "homeTeamId": "137",
+    "awayProbability": 0.4765475059695069,
+    "homeProbability": 0.5234524940304931,
+    "ratingsThroughDay": "2026-09-22",
+    "purpose": "Calculation from observed team identities, not a claim of live context or an actionable trade."
+  },
+  {
+    "sourceGameId": "824784",
+    "marketSlug": "aec-mlb-tor-bal-2026-09-23",
+    "capturedAt": 1790185318648,
+    "start": "2026-09-23T22:35:00.000Z",
+    "awayTeam": "Toronto Blue Jays",
+    "awayTeamId": "141",
+    "homeTeam": "Baltimore Orioles",
+    "homeTeamId": "110",
+    "awayProbability": 0.4743314081742144,
+    "homeProbability": 0.5256685918257856,
+    "ratingsThroughDay": "2026-09-22",
+    "purpose": "Calculation from observed team identities, not a claim of live context or an actionable trade."
+  }
+]

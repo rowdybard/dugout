@@ -1,0 +1,3 @@
+import {z} from 'zod';
+import {profile,saveProfile,sameOrigin} from '@/lib/server/storage';
+export async function POST(req:Request){try{sameOrigin(req);const b=z.record(z.number().finite().positive().max(10000)).parse(await req.json());const p=await profile(req);for(const k of ['move','wide','spreadChange','activity','thin','stale'] as const){if(b[k]!==undefined){const n=Number(b[k]);if(!Number.isFinite(n)||n<=0||n>10000)throw new Error('Use positive scanner thresholds.');p.data.config[k]=n;}}await saveProfile(p);return Response.json(p.data);}catch(e){return Response.json({error:e instanceof Error?e.message:'Settings failed'},{status:400});}}

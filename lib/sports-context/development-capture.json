@@ -1,0 +1,1835 @@
+{
+  "note": "Actual provider responses normalized for development preview QA. Never treated as current production data.",
+  "contexts": [
+    {
+      "marketGameId": "118952",
+      "context": {
+        "slug": "aec-mlb-wsh-det-2026-09-23",
+        "league": "MLB",
+        "status": "available",
+        "receivedAt": 1790185312559,
+        "source": {
+          "name": "MLB Stats API",
+          "url": "https://statsapi.mlb.com/api/v1.1/game/824223/feed/live",
+          "support": "official"
+        },
+        "game": {
+          "id": "824223",
+          "start": "2026-09-23T17:10:00.000Z",
+          "state": "live",
+          "statusText": "In Progress",
+          "away": {
+            "id": "120",
+            "name": "Washington Nationals",
+            "abbreviation": "WSH",
+            "score": 0
+          },
+          "home": {
+            "id": "116",
+            "name": "Detroit Tigers",
+            "abbreviation": "DET",
+            "score": 0
+          },
+          "period": "Top 3rd"
+        },
+        "players": [
+          {
+            "id": "695418",
+            "name": "Brad Lord",
+            "team": "Washington Nationals",
+            "role": "current_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "0.2"
+              },
+              {
+                "label": "Game pitches",
+                "value": "7"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "2"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "3.90"
+              }
+            ],
+            "observedAt": "2026-09-23T17:38:17.807Z"
+          },
+          {
+            "id": "664285",
+            "name": "Framber Valdez",
+            "team": "Detroit Tigers",
+            "role": "current_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "2.0"
+              },
+              {
+                "label": "Game pitches",
+                "value": "28"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "3"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "4.01"
+              }
+            ],
+            "observedAt": "2026-09-23T17:41:37.213Z"
+          }
+        ],
+        "changes": [
+          {
+            "id": "824223:pitcher:12:1:695418",
+            "type": "pitcher_change",
+            "team": "Washington Nationals",
+            "previous": {
+              "id": "663992",
+              "name": "Richard Lovelady"
+            },
+            "replacement": {
+              "id": "695418",
+              "name": "Brad Lord"
+            },
+            "sourceEventTime": "2026-09-23T17:33:59.856Z",
+            "detectedAt": 1790185312559,
+            "description": "Brad Lord replaced Richard Lovelady for Washington Nationals.",
+            "implications": [
+              "Richard Lovelady: 19 pitches across 1.1 innings in this game.",
+              "Brad Lord: season ERA 3.90 across 80.2 innings."
+            ]
+          }
+        ],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "Pitcher changes are official play events. Workload and season ERA describe observations; no win-probability impact is calculated.",
+          "Probable starters can change before first pitch.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Jack Flaherty",
+            "team": "Detroit Tigers",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Forearm",
+            "reportedAt": "2026-09-22T20:15:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Colt Keith",
+            "team": "Detroit Tigers",
+            "position": "3B",
+            "status": "10-Day-IL",
+            "detail": "Thumb",
+            "reportedAt": "2026-09-21T22:19:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Troy Melton",
+            "team": "Detroit Tigers",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Arm",
+            "reportedAt": "2026-09-21T22:13:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Justin Verlander",
+            "team": "Detroit Tigers",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-21T17:57:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Kyle Finnegan",
+            "team": "Detroit Tigers",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Groin",
+            "reportedAt": "2026-09-17T23:04:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Kerry Carpenter",
+            "team": "Detroit Tigers",
+            "position": "RF",
+            "status": "10-Day-IL",
+            "detail": "Foot",
+            "reportedAt": "2026-09-17T14:22:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Connelly Early",
+            "team": "Washington Nationals",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-17T13:22:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Matt Waldron",
+            "team": "Washington Nationals",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Chest",
+            "reportedAt": "2026-09-12T19:36:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Wenceel Perez",
+            "team": "Detroit Tigers",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Orbital",
+            "reportedAt": "2026-09-11T19:44:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Drew Millas",
+            "team": "Washington Nationals",
+            "position": "C",
+            "status": "60-Day-IL",
+            "detail": "Finger",
+            "reportedAt": "2026-09-10T15:12:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Orlando Ribalta",
+            "team": "Washington Nationals",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Forearm",
+            "reportedAt": "2026-09-09T00:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Matt Vierling",
+            "team": "Detroit Tigers",
+            "position": "CF",
+            "status": "60-Day-IL",
+            "detail": "Thigh",
+            "reportedAt": "2026-09-06T15:27:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Will Vest",
+            "team": "Detroit Tigers",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-08-11T19:49:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "PJ Poulin",
+            "team": "Washington Nationals",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Forearm",
+            "reportedAt": "2026-08-02T23:18:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Mitchell Parker",
+            "team": "Washington Nationals",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-30T21:08:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Burch Smith",
+            "team": "Detroit Tigers",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-07-24T20:30:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Bailey Horn",
+            "team": "Detroit Tigers",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-18T00:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Parker Meadows",
+            "team": "Detroit Tigers",
+            "position": "CF",
+            "status": "60-Day-IL",
+            "detail": "Arm",
+            "reportedAt": "2026-06-25T22:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Ken Waldichuk",
+            "team": "Washington Nationals",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-06-11T16:11:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Trey Sweeney",
+            "team": "Detroit Tigers",
+            "position": "SS",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-06-05T19:14:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Reese Olson",
+            "team": "Detroit Tigers",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-05-08T11:02:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "117727",
+      "context": {
+        "slug": "aec-mlb-tor-bal-2026-09-22",
+        "league": "MLB",
+        "status": "available",
+        "receivedAt": 1790185312539,
+        "source": {
+          "name": "MLB Stats API",
+          "url": "https://statsapi.mlb.com/api/v1.1/game/824785/feed/live",
+          "support": "official"
+        },
+        "game": {
+          "id": "824785",
+          "start": "2026-09-23T17:35:00.000Z",
+          "state": "live",
+          "statusText": "In Progress",
+          "away": {
+            "id": "141",
+            "name": "Toronto Blue Jays",
+            "abbreviation": "TOR",
+            "score": 0
+          },
+          "home": {
+            "id": "110",
+            "name": "Baltimore Orioles",
+            "abbreviation": "BAL",
+            "score": 0
+          },
+          "period": "Top 1st"
+        },
+        "players": [
+          {
+            "id": "453286",
+            "name": "Max Scherzer",
+            "team": "Toronto Blue Jays",
+            "role": "probable_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "0.0"
+              },
+              {
+                "label": "Game pitches",
+                "value": "0"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "0"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "6.07"
+              }
+            ]
+          },
+          {
+            "id": "605135",
+            "name": "Chris Bassitt",
+            "team": "Baltimore Orioles",
+            "role": "current_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "0.1"
+              },
+              {
+                "label": "Game pitches",
+                "value": "10"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "0"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "4.62"
+              }
+            ],
+            "observedAt": "2026-09-23T17:41:24.647Z"
+          }
+        ],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "Pitcher changes are official play events. Workload and season ERA describe observations; no win-probability impact is calculated.",
+          "Probable starters can change before first pitch.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Samuel Basallo",
+            "team": "Baltimore Orioles",
+            "position": "C",
+            "status": "7-Day IL",
+            "detail": "Concussion",
+            "reportedAt": "2026-09-23T16:19:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Brett Bateman",
+            "team": "Toronto Blue Jays",
+            "position": "CF",
+            "status": "Day-To-Day",
+            "detail": "Hip",
+            "reportedAt": "2026-09-23T15:50:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jackson Holliday",
+            "team": "Baltimore Orioles",
+            "position": "2B",
+            "status": "10-Day-IL",
+            "detail": "Wrist",
+            "reportedAt": "2026-09-23T15:37:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Dylan Cease",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "Day-To-Day",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-21T20:29:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Tyler O'Neill",
+            "team": "Baltimore Orioles",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-19T17:59:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Ryan Helsley",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-19T17:08:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Anthony Santander",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-18T21:55:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Shane Bieber",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-18T21:53:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Kyle Bradish",
+            "team": "Baltimore Orioles",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Abdomen",
+            "reportedAt": "2026-09-16T22:05:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jameson Taillon",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-15T21:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Rudy Martin Jr.",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "10-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-14T19:31:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Blaze Alexander",
+            "team": "Baltimore Orioles",
+            "position": "3B",
+            "status": "10-Day-IL",
+            "detail": "Back",
+            "reportedAt": "2026-09-09T20:49:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Ryan Mountcastle",
+            "team": "Baltimore Orioles",
+            "position": "1B",
+            "status": "60-Day-IL",
+            "detail": "Oblique",
+            "reportedAt": "2026-09-08T18:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Cody Ponce",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Knee",
+            "reportedAt": "2026-09-07T17:42:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Patrick Corbin",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-07T17:37:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Luis Robert Jr.",
+            "team": "Baltimore Orioles",
+            "position": "CF",
+            "status": "10-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-06T16:30:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jonatan Clase",
+            "team": "Toronto Blue Jays",
+            "position": "LF",
+            "status": "60-Day-IL",
+            "detail": "Foot",
+            "reportedAt": "2026-08-27T21:43:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Yimi Garcia",
+            "team": "Toronto Blue Jays",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-08-26T17:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jake Bloss",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-08-12T19:38:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Luis Urias",
+            "team": "Toronto Blue Jays",
+            "position": "2B",
+            "status": "10-Day-IL",
+            "detail": "Quadriceps",
+            "reportedAt": "2026-08-10T20:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Colin Selby",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-07-31T20:48:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Addison Barger",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-27T20:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Keegan Akin",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-15T20:40:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jose Berrios",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-27T17:29:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jordan Westburg",
+            "team": "Baltimore Orioles",
+            "position": "3B",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-15T21:13:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Bowden Francis",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-08T11:02:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "118960",
+      "context": {
+        "slug": "aec-mlb-min-sf-2026-09-23",
+        "league": "MLB",
+        "status": "available",
+        "receivedAt": 1790185312646,
+        "source": {
+          "name": "MLB Stats API",
+          "url": "https://statsapi.mlb.com/api/v1.1/game/823168/feed/live",
+          "support": "official"
+        },
+        "game": {
+          "id": "823168",
+          "start": "2026-09-23T19:45:00.000Z",
+          "state": "pregame",
+          "statusText": "Pre-Game",
+          "away": {
+            "id": "142",
+            "name": "Minnesota Twins",
+            "abbreviation": "MIN",
+            "score": 0
+          },
+          "home": {
+            "id": "137",
+            "name": "San Francisco Giants",
+            "abbreviation": "SF",
+            "score": 0
+          },
+          "period": "Top 1st"
+        },
+        "players": [
+          {
+            "id": "687570",
+            "name": "Connor Prielipp",
+            "team": "Minnesota Twins",
+            "role": "probable_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "0.0"
+              },
+              {
+                "label": "Game pitches",
+                "value": "0"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "0"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "4.94"
+              }
+            ]
+          },
+          {
+            "id": "702885",
+            "name": "Cesar Perdomo",
+            "team": "San Francisco Giants",
+            "role": "current_pitcher",
+            "stats": [
+              {
+                "label": "Game innings",
+                "value": "0.0"
+              },
+              {
+                "label": "Game pitches",
+                "value": "0"
+              },
+              {
+                "label": "Game strikeouts",
+                "value": "0"
+              },
+              {
+                "label": "Game walks",
+                "value": "0"
+              },
+              {
+                "label": "Season ERA",
+                "value": "3.72"
+              }
+            ],
+            "observedAt": "2026-09-23T16:43:02.176Z"
+          }
+        ],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "Pitcher changes are official play events. Workload and season ERA describe observations; no win-probability impact is calculated.",
+          "Probable starters can change before first pitch.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Osleivis Basabe",
+            "team": "San Francisco Giants",
+            "position": "2B",
+            "status": "Day-To-Day",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-23T04:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Blade Tidwell",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-23T04:49:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Landen Roupp",
+            "team": "San Francisco Giants",
+            "position": "SP",
+            "status": "Out",
+            "detail": "Rest",
+            "reportedAt": "2026-09-22T22:21:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Willy Adames",
+            "team": "San Francisco Giants",
+            "position": "SS",
+            "status": "10-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-21T23:31:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Bryce Eldridge",
+            "team": "San Francisco Giants",
+            "position": "DH",
+            "status": "7-Day IL",
+            "detail": "Concussion",
+            "reportedAt": "2026-09-21T23:11:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jung Hoo Lee",
+            "team": "San Francisco Giants",
+            "position": "RF",
+            "status": "10-Day-IL",
+            "detail": "Groin",
+            "reportedAt": "2026-09-21T23:06:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Reiver Sanmartin",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Oblique",
+            "reportedAt": "2026-09-19T23:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Nate Furman",
+            "team": "San Francisco Giants",
+            "position": "2B",
+            "status": "10-Day-IL",
+            "detail": "Oblique",
+            "reportedAt": "2026-09-19T00:57:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Logan Webb",
+            "team": "San Francisco Giants",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Finger",
+            "reportedAt": "2026-09-19T00:50:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Trevor Larnach",
+            "team": "Minnesota Twins",
+            "position": "LF",
+            "status": "10-Day-IL",
+            "detail": "Wrist",
+            "reportedAt": "2026-09-18T20:40:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Kaelen Culpepper",
+            "team": "Minnesota Twins",
+            "position": "SS",
+            "status": "10-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-16T16:05:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Randy Rodriguez",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-15T16:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Rafael Devers",
+            "team": "San Francisco Giants",
+            "position": "1B",
+            "status": "60-Day-IL",
+            "detail": "Abdomen",
+            "reportedAt": "2026-09-13T21:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Byron Buxton",
+            "team": "Minnesota Twins",
+            "position": "CF",
+            "status": "10-Day-IL",
+            "detail": "Hip",
+            "reportedAt": "2026-09-11T20:59:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Carson Whisenhunt",
+            "team": "San Francisco Giants",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-09T18:05:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "JT Brubaker",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Ribs",
+            "reportedAt": "2026-09-07T20:41:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jesus Rodriguez",
+            "team": "San Francisco Giants",
+            "position": "C",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-04T20:03:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Keaton Winn",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-03T20:42:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Adrian Houser",
+            "team": "San Francisco Giants",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Forearm",
+            "reportedAt": "2026-09-01T21:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Matt Gage",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-01T21:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Casey Schmitt",
+            "team": "San Francisco Giants",
+            "position": "LF",
+            "status": "60-Day-IL",
+            "detail": "Knee",
+            "reportedAt": "2026-08-30T00:17:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Joel Peguero",
+            "team": "San Francisco Giants",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-08-21T21:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Daniel Susac",
+            "team": "San Francisco Giants",
+            "position": "C",
+            "status": "60-Day-IL",
+            "detail": "Knee",
+            "reportedAt": "2026-08-19T20:35:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Harrison Bader",
+            "team": "San Francisco Giants",
+            "position": "CF",
+            "status": "60-Day-IL",
+            "detail": "Foot",
+            "reportedAt": "2026-08-19T20:16:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Matt Chapman",
+            "team": "San Francisco Giants",
+            "position": "3B",
+            "status": "60-Day-IL",
+            "detail": "Abdomen",
+            "reportedAt": "2026-08-14T13:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Trevor McDonald",
+            "team": "San Francisco Giants",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-08-13T18:49:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Mike Paredes",
+            "team": "Minnesota Twins",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Oblique",
+            "reportedAt": "2026-08-02T13:57:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Cole Sands",
+            "team": "Minnesota Twins",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-31T16:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "David Festa",
+            "team": "Minnesota Twins",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-07-29T01:58:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Mick Abel",
+            "team": "Minnesota Twins",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-20T16:20:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Anthony Banda",
+            "team": "Minnesota Twins",
+            "position": "RP",
+            "status": "15-Day-IL",
+            "detail": "Lat",
+            "reportedAt": "2026-07-09T16:50:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Pablo Lopez",
+            "team": "Minnesota Twins",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-08T11:02:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "118946",
+      "context": {
+        "slug": "aec-mlb-tor-bal-2026-09-23",
+        "league": "MLB",
+        "status": "available",
+        "receivedAt": 1790185318648,
+        "source": {
+          "name": "MLB Stats API",
+          "url": "https://statsapi.mlb.com/api/v1.1/game/824784/feed/live",
+          "support": "official"
+        },
+        "game": {
+          "id": "824784",
+          "start": "2026-09-23T22:35:00.000Z",
+          "state": "pregame",
+          "statusText": "Scheduled",
+          "away": {
+            "id": "141",
+            "name": "Toronto Blue Jays",
+            "abbreviation": "TOR",
+            "score": null
+          },
+          "home": {
+            "id": "110",
+            "name": "Baltimore Orioles",
+            "abbreviation": "BAL",
+            "score": null
+          }
+        },
+        "players": [],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "Pitcher changes are official play events. Workload and season ERA describe observations; no win-probability impact is calculated.",
+          "Probable starters can change before first pitch.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Samuel Basallo",
+            "team": "Baltimore Orioles",
+            "position": "C",
+            "status": "7-Day IL",
+            "detail": "Concussion",
+            "reportedAt": "2026-09-23T16:19:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Brett Bateman",
+            "team": "Toronto Blue Jays",
+            "position": "CF",
+            "status": "Day-To-Day",
+            "detail": "Hip",
+            "reportedAt": "2026-09-23T15:50:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jackson Holliday",
+            "team": "Baltimore Orioles",
+            "position": "2B",
+            "status": "10-Day-IL",
+            "detail": "Wrist",
+            "reportedAt": "2026-09-23T15:37:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Dylan Cease",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "Day-To-Day",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-21T20:29:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Tyler O'Neill",
+            "team": "Baltimore Orioles",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-19T17:59:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Ryan Helsley",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-19T17:08:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Anthony Santander",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-18T21:55:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Shane Bieber",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-18T21:53:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Kyle Bradish",
+            "team": "Baltimore Orioles",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Abdomen",
+            "reportedAt": "2026-09-16T22:05:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jameson Taillon",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "15-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-15T21:23:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Rudy Martin Jr.",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "10-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-14T19:31:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Blaze Alexander",
+            "team": "Baltimore Orioles",
+            "position": "3B",
+            "status": "10-Day-IL",
+            "detail": "Back",
+            "reportedAt": "2026-09-09T20:49:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Ryan Mountcastle",
+            "team": "Baltimore Orioles",
+            "position": "1B",
+            "status": "60-Day-IL",
+            "detail": "Oblique",
+            "reportedAt": "2026-09-08T18:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Cody Ponce",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Knee",
+            "reportedAt": "2026-09-07T17:42:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Patrick Corbin",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-07T17:37:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Luis Robert Jr.",
+            "team": "Baltimore Orioles",
+            "position": "CF",
+            "status": "10-Day-IL",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-06T16:30:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jonatan Clase",
+            "team": "Toronto Blue Jays",
+            "position": "LF",
+            "status": "60-Day-IL",
+            "detail": "Foot",
+            "reportedAt": "2026-08-27T21:43:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Yimi Garcia",
+            "team": "Toronto Blue Jays",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-08-26T17:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jake Bloss",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-08-12T19:38:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Luis Urias",
+            "team": "Toronto Blue Jays",
+            "position": "2B",
+            "status": "10-Day-IL",
+            "detail": "Quadriceps",
+            "reportedAt": "2026-08-10T20:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Colin Selby",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Shoulder",
+            "reportedAt": "2026-07-31T20:48:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Addison Barger",
+            "team": "Toronto Blue Jays",
+            "position": "RF",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-27T20:51:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Keegan Akin",
+            "team": "Baltimore Orioles",
+            "position": "RP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-07-15T20:40:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jose Berrios",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-27T17:29:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Jordan Westburg",
+            "team": "Baltimore Orioles",
+            "position": "3B",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-15T21:13:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          },
+          {
+            "name": "Bowden Francis",
+            "team": "Toronto Blue Jays",
+            "position": "SP",
+            "status": "60-Day-IL",
+            "detail": "Elbow",
+            "reportedAt": "2026-05-08T11:02:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "108683",
+      "context": {
+        "slug": "aec-nfl-atl-gb-2026-09-24",
+        "league": "NFL",
+        "status": "available",
+        "receivedAt": 1790185319805,
+        "source": {
+          "name": "ESPN public game data",
+          "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872948",
+          "support": "public-undocumented"
+        },
+        "game": {
+          "id": "401872948",
+          "start": "2026-09-25T00:15:00.000Z",
+          "away": {
+            "id": "1",
+            "name": "Atlanta Falcons",
+            "abbreviation": "ATL",
+            "score": null
+          },
+          "home": {
+            "id": "9",
+            "name": "Green Bay Packers",
+            "abbreviation": "GB",
+            "score": null
+          },
+          "state": "pregame",
+          "statusText": "Thu, September 24th at 8:15 PM EDT",
+          "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872948"
+        },
+        "players": [],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "ESPN’s public JSON feeds are undocumented and have no guaranteed delivery delay.",
+          "Quarterback changes require same-team, quarterback-tagged passing plays. A substitution before the next pass may not be visible; no win-probability impact is calculated.",
+          "Complete typed play history is unavailable. No quarterback change is inferred from box-score order.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Jayden Reed",
+            "team": "Green Bay Packers",
+            "position": "WR",
+            "status": "Doubtful",
+            "detail": "Neck",
+            "reportedAt": "2026-09-22T22:16:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Billy Bowman Jr.",
+            "team": "Atlanta Falcons",
+            "position": "CB",
+            "status": "Questionable",
+            "detail": "Achilles",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Javon Hargrave",
+            "team": "Green Bay Packers",
+            "position": "DT",
+            "status": "Questionable",
+            "detail": "Concussion",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Warren Brinson",
+            "team": "Green Bay Packers",
+            "position": "DT",
+            "status": "Questionable",
+            "detail": "Calf",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Anthony Belton",
+            "team": "Green Bay Packers",
+            "position": "OT",
+            "status": "Questionable",
+            "detail": "Elbow",
+            "reportedAt": "2026-09-22T20:32:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Zach Bako-Bewele",
+            "team": "Green Bay Packers",
+            "position": "OT",
+            "status": "Out",
+            "detail": "Knee",
+            "reportedAt": "2026-09-22T18:32:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "A.J. Terrell Jr.",
+            "team": "Atlanta Falcons",
+            "position": "CB",
+            "status": "Injured Reserve",
+            "detail": "Groin",
+            "reportedAt": "2026-09-22T17:09:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Anthony Campbell",
+            "team": "Green Bay Packers",
+            "position": "DT",
+            "status": "Questionable",
+            "detail": "Ankle",
+            "reportedAt": "2026-09-22T01:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Donovan Jennings",
+            "team": "Green Bay Packers",
+            "position": "G",
+            "status": "Questionable",
+            "detail": "Hand",
+            "reportedAt": "2026-09-22T01:00:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Edgerrin Cooper",
+            "team": "Green Bay Packers",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-21T23:30:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Brandon Cisse",
+            "team": "Green Bay Packers",
+            "position": "CB",
+            "status": "Questionable",
+            "detail": "Teeth",
+            "reportedAt": "2026-09-21T21:12:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Samson Ebukam",
+            "team": "Atlanta Falcons",
+            "position": "DE",
+            "status": "Questionable",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-20T18:30:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "111298",
+      "context": {
+        "slug": "aec-nfl-car-cle-2026-09-27",
+        "league": "NFL",
+        "status": "available",
+        "receivedAt": 1790185319813,
+        "source": {
+          "name": "ESPN public game data",
+          "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872949",
+          "support": "public-undocumented"
+        },
+        "game": {
+          "id": "401872949",
+          "start": "2026-09-27T17:00:00.000Z",
+          "away": {
+            "id": "29",
+            "name": "Carolina Panthers",
+            "abbreviation": "CAR",
+            "score": null
+          },
+          "home": {
+            "id": "5",
+            "name": "Cleveland Browns",
+            "abbreviation": "CLE",
+            "score": null
+          },
+          "state": "pregame",
+          "statusText": "Sun, September 27th at 1:00 PM EDT",
+          "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872949"
+        },
+        "players": [],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "ESPN’s public JSON feeds are undocumented and have no guaranteed delivery delay.",
+          "Quarterback changes require same-team, quarterback-tagged passing plays. A substitution before the next pass may not be visible; no win-probability impact is calculated.",
+          "Complete typed play history is unavailable. No quarterback change is inferred from box-score order.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Jonathon Brooks",
+            "team": "Carolina Panthers",
+            "position": "RB",
+            "status": "Injured Reserve",
+            "detail": "Abdomen",
+            "reportedAt": "2026-09-23T13:48:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Tyson Campbell",
+            "team": "Cleveland Browns",
+            "position": "CB",
+            "status": "Questionable",
+            "detail": "Hip",
+            "reportedAt": "2026-09-22T23:06:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Patrick Jones II",
+            "team": "Carolina Panthers",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Back",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Bobby Brown III",
+            "team": "Carolina Panthers",
+            "position": "DT",
+            "status": "Questionable",
+            "detail": "Back",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Teven Jenkins",
+            "team": "Cleveland Browns",
+            "position": "G",
+            "status": "Questionable",
+            "detail": "Back",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Trevis Gipson",
+            "team": "Carolina Panthers",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Head",
+            "reportedAt": "2026-09-20T19:53:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Claudin Cherelus",
+            "team": "Carolina Panthers",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-20T18:13:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Nick Scott",
+            "team": "Carolina Panthers",
+            "position": "S",
+            "status": "Questionable",
+            "detail": "Abdomen",
+            "reportedAt": "2026-09-20T17:53:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Dylan Sampson",
+            "team": "Cleveland Browns",
+            "position": "RB",
+            "status": "Injured Reserve",
+            "detail": "Knee",
+            "reportedAt": "2026-09-15T19:33:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Jeremiah Owusu-Koramoah",
+            "team": "Cleveland Browns",
+            "position": "LB",
+            "status": "Out",
+            "detail": "Neck",
+            "reportedAt": "2026-09-08T20:42:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "111299",
+      "context": {
+        "slug": "aec-nfl-ten-nyg-2026-09-27",
+        "league": "NFL",
+        "status": "available",
+        "receivedAt": 1790185320011,
+        "source": {
+          "name": "ESPN public game data",
+          "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872956",
+          "support": "public-undocumented"
+        },
+        "game": {
+          "id": "401872956",
+          "start": "2026-09-27T17:00:00.000Z",
+          "away": {
+            "id": "10",
+            "name": "Tennessee Titans",
+            "abbreviation": "TEN",
+            "score": null
+          },
+          "home": {
+            "id": "19",
+            "name": "New York Giants",
+            "abbreviation": "NYG",
+            "score": null
+          },
+          "state": "pregame",
+          "statusText": "Sun, September 27th at 1:00 PM EDT",
+          "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872956"
+        },
+        "players": [],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "ESPN’s public JSON feeds are undocumented and have no guaranteed delivery delay.",
+          "Quarterback changes require same-team, quarterback-tagged passing plays. A substitution before the next pass may not be visible; no win-probability impact is calculated.",
+          "Complete typed play history is unavailable. No quarterback change is inferred from box-score order.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Jaxson Dart",
+            "team": "New York Giants",
+            "position": "QB",
+            "status": "Out",
+            "detail": "Knee - Meniscus",
+            "reportedAt": "2026-09-23T16:04:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Tyjae Spears",
+            "team": "Tennessee Titans",
+            "position": "RB",
+            "status": "Questionable",
+            "detail": "Undisclosed",
+            "reportedAt": "2026-09-23T16:37:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Tony Pollard",
+            "team": "Tennessee Titans",
+            "position": "RB",
+            "status": "Questionable",
+            "detail": "Undisclosed",
+            "reportedAt": "2026-09-23T16:32:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Cor'Dale Flott",
+            "team": "Tennessee Titans",
+            "position": "CB",
+            "status": "Questionable",
+            "detail": "Quadriceps",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Brian Burns",
+            "team": "New York Giants",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Ankle",
+            "reportedAt": "2026-09-22T03:14:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Andrew Thomas",
+            "team": "New York Giants",
+            "position": "OT",
+            "status": "Questionable",
+            "detail": "Groin",
+            "reportedAt": "2026-09-22T03:12:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Malik Nabers",
+            "team": "New York Giants",
+            "position": "WR",
+            "status": "Questionable",
+            "detail": "Shoulder",
+            "reportedAt": "2026-09-22T00:58:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Micah McFadden",
+            "team": "New York Giants",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Neck",
+            "reportedAt": "2026-09-21T23:17:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Deonte Banks",
+            "team": "New York Giants",
+            "position": "CB",
+            "status": "Questionable",
+            "detail": "Calf",
+            "reportedAt": "2026-09-21T23:05:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          }
+        ]
+      }
+    },
+    {
+      "marketGameId": "111297",
+      "context": {
+        "slug": "aec-nfl-kc-mia-2026-09-27",
+        "league": "NFL",
+        "status": "available",
+        "receivedAt": 1790185326937,
+        "source": {
+          "name": "ESPN public game data",
+          "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872952",
+          "support": "public-undocumented"
+        },
+        "game": {
+          "id": "401872952",
+          "start": "2026-09-27T17:00:00.000Z",
+          "away": {
+            "id": "12",
+            "name": "Kansas City Chiefs",
+            "abbreviation": "KC",
+            "score": null
+          },
+          "home": {
+            "id": "15",
+            "name": "Miami Dolphins",
+            "abbreviation": "MIA",
+            "score": null
+          },
+          "state": "pregame",
+          "statusText": "Sun, September 27th at 1:00 PM EDT",
+          "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872952"
+        },
+        "players": [],
+        "changes": [],
+        "injuryStatus": "source_reports",
+        "limitations": [
+          "ESPN’s public JSON feeds are undocumented and have no guaranteed delivery delay.",
+          "Quarterback changes require same-team, quarterback-tagged passing plays. A substitution before the next pass may not be visible; no win-probability impact is calculated.",
+          "Complete typed play history is unavailable. No quarterback change is inferred from box-score order.",
+          "Availability contains ESPN source reports. Report times are not injury times; missing reports do not mean healthy."
+        ],
+        "injuries": [
+          {
+            "name": "Caleb Douglas",
+            "team": "Miami Dolphins",
+            "position": "WR",
+            "status": "Questionable",
+            "detail": "Ankle",
+            "reportedAt": "2026-09-23T16:44:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Chop Robinson",
+            "team": "Miami Dolphins",
+            "position": "LB",
+            "status": "Questionable",
+            "detail": "Concussion",
+            "reportedAt": "2026-09-22T20:56:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Jaylen Wright",
+            "team": "Miami Dolphins",
+            "position": "RB",
+            "status": "Questionable",
+            "detail": "Neck",
+            "reportedAt": "2026-09-21T23:07:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Robert Beal Jr.",
+            "team": "Miami Dolphins",
+            "position": "DE",
+            "status": "Questionable",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-20T21:50:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Ronnie Harrison Jr.",
+            "team": "Miami Dolphins",
+            "position": "LB",
+            "status": "Injured Reserve",
+            "detail": "Hamstring",
+            "reportedAt": "2026-09-19T21:21:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Cooper McDonald",
+            "team": "Kansas City Chiefs",
+            "position": "LB",
+            "status": "Injured Reserve",
+            "detail": "Knee",
+            "reportedAt": "2026-09-17T00:38:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          },
+          {
+            "name": "Kyle Louis",
+            "team": "Miami Dolphins",
+            "position": "LB",
+            "status": "Injured Reserve",
+            "detail": "Knee",
+            "reportedAt": "2026-09-17T00:25:00.000Z",
+            "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+          }
+        ]
+      }
+    }
+  ]
+}

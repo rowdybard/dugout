@@ -1,0 +1,56 @@
+.detail-guide {
+  margin: 22px 0 26px;
+  padding: 16px;
+  background: #24351c;
+  border: 1px solid #496233;
+  border-radius: 8px;
+}
+.detail-guide p { margin: 0; color: #bfd3ad; font-size: 14px; line-height: 1.55; }
+.detail-guide p b { color: #edf7e5; }
+.detail-guide button { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding: 8px 0; background: transparent; color: #c4f391; font-size: 14px; font-weight: 650; }
+.detail-step { display: flex; gap: 10px; align-items: center; margin: 18px 0 12px; }
+.detail-step > span { display: inline-grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border: 1px solid #526b3c; border-radius: 50%; color: #b9d998; font-size: 12px; }
+.detail-step h2 { color: #c6d9b5; font-size: 15px; font-weight: 600; }
+.detail-score > div:first-child > small { font-size: 12px; color: #a9be95; margin-top: 7px; }
+.detail-notice { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 14px; margin: 12px 0; color: #d8c992; background: #332e1e; border: 1px solid #625737; border-radius: 6px; font-size: 13px; line-height: 1.5; }
+.detail-notice p { margin: 0; }
+.detail-notice b { display: block; margin-bottom: 4px; }
+.detail-notice-error { color: #f1b3ab; background: #33221e; border-color: #6a4238; }
+.detail-notice button, .practice-recovery button { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 7px 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; font-size: 12px; }
+.detail-loading, .detail-chart-loading { display: flex; align-items: center; justify-content: center; gap: 8px; color: #a6bd90; font-size: 14px; padding: 16px 0; }
+.detail-chart-loading { min-height: 235px; }
+.detail-small-warning { color: #d5c794; margin: 8px 0 14px; font-size: 12px; line-height: 1.5; }
+.calculator { scroll-margin-top: 18px; }
+.calculator > .detail-step { margin-top: 0; }
+.calculator > .section-title { margin-top: 17px; flex-wrap: wrap; gap: 9px; }
+.calculator h3:focus-visible { outline: 2px solid #b8f569; outline-offset: 5px; border-radius: 2px; }
+.practice-instruction { color: #b1c49f; font-size: 13px; line-height: 1.55; margin-top: 13px; }
+.calculator .side-tabs { margin-top: 10px; }
+.calculator .side-tabs button { min-height: 46px; font-size: 13px !important; }
+.calculator .side-caption { color: #a2b68f; font-size: 12px; line-height: 1.55; margin-top: 10px; }
+.calculator .side-caption b { font-weight: 500; color: #ccddbb; }
+.practice-status { color: #b3c6a2; font-size: 13px; line-height: 1.55; margin-top: 12px; }
+.practice-status p { margin: 0; }
+.practice-saved { padding: 12px; background: #283c1e; border-radius: 6px; color: #d4edbf; }
+.practice-saved p { display: flex; gap: 7px; align-items: flex-start; }
+.practice-saved p svg { margin-top: 2px; flex-shrink: 0; }
+.practice-saved button { display: flex; gap: 7px; align-items: center; margin-top: 12px; padding: 9px 10px; color: #223017; background: #b8f569; border-radius: 5px; font-size: 13px; font-weight: 600; }
+.practice-saved button.practice-another { padding: 4px 0; color: #c4d8b2; background: transparent; font-size: 12px; font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+.practice-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; color: #c3d8b0; }
+.market-sheet .primary-action:disabled { cursor: not-allowed; opacity: .6; }
+.market-sheet .book-level { font-size: 12px; }
+.market-sheet .source-note { color: #8ea17b; line-height: 1.6; font-size: 11px; }
+@media (max-width: 600px) {
+  .detail-guide { margin-top: 18px; padding: 13px; }
+  .detail-guide p, .detail-guide button { font-size: 13px; }
+  .detail-score { gap: 20px; }
+  .detail-score > div:first-child > strong { font-size: 57px; }
+  .detail-notice { align-items: flex-start; flex-wrap: wrap; }
+  .calculator .section-title { align-items: center; }
+  .calculator .paper-label { font-size: 9px !important; }
+  .detail-step h2 { font-size: 14px; }
+  .quote-grid small { font-size: 12px; line-height: 1.5; }
+  .spread-line { gap: 9px; }
+  .book-columns { gap: 12px; }
+  .market-sheet .book-level { flex-wrap: wrap; gap: 3px; font-size: 11px; }
+}
