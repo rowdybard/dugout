@@ -28,7 +28,7 @@ type Side = 'YES' | 'NO';
 type Settings = {entryPresets: number[]; exitPresets: number[]; maxPriceDrift: number};
 type Connection = {
   transport: 'stream' | 'rest';
-  state: 'not_configured' | 'ready' | 'reconciling' | 'stale';
+  state: 'not_configured' | 'available' | 'ready' | 'reconciling' | 'stale';
   liveEnabled: false;
   message: string;
   updatedAt?: number;
@@ -195,7 +195,7 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
   const held=profile?.positions.find(position=>position.slug===selectedSlug);
   const selected = selectedSlug ? allMarkets.find(market => market.slug === selectedSlug) ?? (held?heldMarket(held):null) : available[0] ?? null;
   const current = detail?.slug === selected?.slug ? detail : null;
-  const streamEnabled = connection?.transport === 'stream' && connection.state === 'ready';
+  const streamEnabled = connection?.transport === 'stream' && ['available','ready'].includes(connection.state);
   const {quote: streamQuote, connected: streamConnected} = useMarketStream(selected?.slug ?? '', streamEnabled && visible);
   const streamed = streamQuote && selected && streamQuote.slug === selected.slug && streamQuote.valid && streamConnected ? streamQuote : null;
   const streamBook = streamed ? streamBookForDisplay(streamed) : null;
@@ -409,7 +409,7 @@ export function TradingWorkspace({feed, markets, profile, onProfile, onRefresh, 
     <div className="tw-section-heading"><div><h1>{activeTab === 'portfolio' ? 'Your results' : 'Manual trading'}</h1>{beginner && <p>{activeTab === 'portfolio' ? 'All your paper positions, including bot trades.' : 'Choose a game, inspect the chart, then enter or exit.'}</p>}</div>{activeTab === 'portfolio' && <button className="secondary-action" onClick={onSimulation}><FlaskConical size={16}/> $10 MLB experiment</button>}</div>
     {activeTab !== 'portfolio' && <div className="tw-topline">
       <nav aria-label="Trading navigation">{tabItems.map(({value, label, icon: Icon}) => <button key={value} className={activeTab === value ? 'active' : ''} aria-current={activeTab === value ? 'page' : undefined} onClick={() => changeTab(value)}><Icon size={16}/>{label}{value === 'interesting' && markets.filter(market => market.signals.length).length > 0 && <span>{markets.filter(market => market.signals.length).length}</span>}</button>)}</nav>
-      <div className="tw-connection" title={connection?.message ?? 'Checking market connection'}><i className={connection?.transport === 'stream' && connection.state === 'ready' ? 'ready' : ''}/>{feed?.replayAt ? 'RECORDED CAPTURE' : connection?.transport === 'stream' && connection.state === 'ready' ? 'Streaming' : connection?.state === 'stale' ? 'Connection stale' : 'REST snapshots'}<button className="tw-icon" aria-label="Refresh markets" disabled={feedLoading} onClick={onRefresh}><RefreshCw size={14} className={feedLoading ? 'spin' : ''}/></button></div>
+      <div className="tw-connection" title={connection?.message ?? 'Checking market connection'}><i className={streamed ? 'ready' : ''}/>{feed?.replayAt ? 'RECORDED CAPTURE' : streamed ? 'Streaming' : connection?.state === 'stale' ? 'Connection stale' : 'REST snapshots'}<button className="tw-icon" aria-label="Refresh markets" disabled={feedLoading} onClick={onRefresh}><RefreshCw size={14} className={feedLoading ? 'spin' : ''}/></button></div>
     </div>}
     <div className="tw-account-bar"><div><span>Equity</span><b>{equity === null ? '—' : money(equity)}</b></div><div><span>Cash</span><b>{profile ? money(profile.cash) : '—'}</b></div><div><span>Net P/L</span><b className={pnl === null ? '' : pnl < 0 ? 'tw-down' : 'tw-up'}>{pnl === null ? '—' : signedMoney(pnl)}</b></div><div className="tw-open-count"><span>Open</span><b>{openPositions.length}</b></div></div>
     {(feedError || profileError) && <div className="tw-notice" role="alert"><span>{feedError || profileError}</span><button onClick={feedError ? onRefresh : onRetryProfile}>Retry</button></div>}

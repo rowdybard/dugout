@@ -6,6 +6,7 @@ import {normalize} from '../sports-context/shared.ts';
 export function nflContextBlock(s:BotSession,input:BotInput,now:number){
   const c=input.context,g=c.game,old=s.contextBaselines[input.market.gameId];
   if(input.source==='REPLAY'||c.replayAt!==undefined)return 'Recorded data cannot authorize a current entry.';
+  if(c.status!=='available')return c.limitations[0]??'Waiting for the NFL sports source.';
   if(c.status!=='available'||!g||g.state!=='live'||c.league!=='NFL'||c.slug!==input.market.slug)return 'Waiting for a matched live NFL game.';
   if(!Number.isFinite(now)||!Number.isFinite(c.receivedAt)||c.receivedAt<=0||c.receivedAt>now||now-c.receivedAt>45000)return 'NFL game context is stale.';
   if(old&&old.gameId!==g.id)return 'The sports game identity changed.';

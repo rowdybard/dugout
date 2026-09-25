@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import {polymarketSecrets} from '../trading/credentials';
 
 function connection() {
   const values = env as unknown as Record<string, unknown>;
@@ -19,6 +20,8 @@ export async function serviceRequest(path: string, init: RequestInit = {}) {
 }
 export async function tradingStatus() {
   try {
+    if(polymarketSecrets(env as unknown as Record<string,unknown>))return {transport:'stream',state:'available',liveEnabled:false,
+      message:'US market streaming is configured. Connection is verified when a valid market book arrives.',updatedAt:Date.now()};
     const response = await serviceRequest('/v1/status');
     if (!response) return { transport: 'rest', state: 'not_configured', liveEnabled: false,
       message: 'REST quotes · streaming account not connected', updatedAt: Date.now() };

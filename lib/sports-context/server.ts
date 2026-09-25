@@ -12,7 +12,13 @@ export const CONTEXT_REFRESH_MS = 30_000;
 async function json(url: string,signal:AbortSignal): Promise<unknown> {
   signal.throwIfAborted();
   const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal,AbortSignal.timeout(8000)]) });
-  if (!response.ok) throw new Error(`Sports source returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    // Fixed public sports endpoints only. Never log cookies, request headers or full bodies.
+    const body=(await response.text()).slice(0,4096);
+    const title=body.match(/<title[^>]*>([^<]{1,160})<\/title>/i)?.[1]??null;
+    console.error('sports-source-failure',JSON.stringify({url,status:response.status,contentType:response.headers.get('content-type'),server:response.headers.get('server'),title}));
+    throw new Error(`${new URL(url).hostname}${new URL(url).pathname} returned HTTP ${response.status}.`);
+  }
   return response.json();
 }
 const sourceFor = (market: Market): SportsContext['source'] => market.league === 'MLB'
@@ -61,7 +67,7 @@ export async function getSportsContext(market: Market,signal:AbortSignal=AbortSi
           json(game.sourceUrl,signal).then(raw=>({raw,receivedAt:Date.now()})),
           json(`https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/${game.id}/competitions/${game.id}/plays?limit=500`,signal).then(raw=>({raw,receivedAt:Date.now()})),
         ]);
-        if (summary.status !== 'fulfilled') throw new Error('NFL game summary is unavailable.');
+        if (summary.status !== 'fulfilled') throw summary.reason;
         // Retain the oldest component receipt so later entry checks cannot refresh a slow feed.
         const contextReceipt=plays.status==='fulfilled'?Math.min(summary.value.receivedAt,plays.value.receivedAt):summary.value.receivedAt;
         context = nflContext(summary.value.raw, plays.status === 'fulfilled' ? plays.value.raw : null, market, game, contextReceipt, previous);
@@ -88,6 +94,6 @@ export async function getSportsContext(market: Market,signal:AbortSignal=AbortSi
     return { ...context, slug: market.slug };
   } catch (error) {
     console.error('sports context', market.league, error instanceof Error ? error.message : 'unavailable');
-    return unavailable(market, 'unavailable', 'The sports source is temporarily unavailable. Game context and player changes have not been refreshed.');
+    return unavailable(market, 'unavailable', error instanceof Error&&error.message.includes('HTTP 403')?'The sports provider rejected this server’s request (HTTP 403). New entries are waiting for verified game data.':'The sports source is temporarily unavailable. Game context and player changes have not been refreshed.');
   }
 }
