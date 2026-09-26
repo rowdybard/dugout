@@ -4,6 +4,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import type {TennisAction,TennisCatalog,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
 import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote} from '@/lib/tennis/chart-data';
+import {managedMarketStream} from '@/lib/trading/managed-market-stream';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(20000)}).catch(cause=>{
@@ -127,7 +128,6 @@ export function useTennis() {
   useEffect(()=>{
     if(!visible||!runtime?.streamConfigured)return;
     queueMicrotask(()=>setStreamStatus('connecting'));
-    const events=new EventSource('/api/tennis/stream');
     const merge=(quote:StreamQuote)=>{
       if(!quote.valid)return;
       setStreamStatus('live');
@@ -136,11 +136,11 @@ export function useTennis() {
       setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>marketWithStreamQuote(market,quote,sessionRef.current,Date.now()))});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
-    events.addEventListener('snapshot',event=>{try{const data=JSON.parse((event as MessageEvent).data) as StreamSnapshot;health(data.health);data.quotes.forEach(merge);}catch{setStreamStatus('rest');}});
-    events.addEventListener('quote',event=>{try{merge(JSON.parse((event as MessageEvent).data) as StreamQuote);}catch{setStreamStatus('rest');}});
-    events.addEventListener('status',event=>{try{health(JSON.parse((event as MessageEvent).data) as StreamHealth);}catch{setStreamStatus('rest');}});
-    events.onerror=()=>setStreamStatus('rest');
-    return()=>events.close();
+    return managedMarketStream(()=>new EventSource('/api/tennis/stream'),{
+      snapshot:event=>{try{const data=JSON.parse((event as MessageEvent).data) as StreamSnapshot;health(data.health);data.quotes.forEach(merge);}catch{setStreamStatus('rest');}},
+      quote:event=>{try{merge(JSON.parse((event as MessageEvent).data) as StreamQuote);}catch{setStreamStatus('rest');}},
+      status:event=>{try{health(JSON.parse((event as MessageEvent).data) as StreamHealth);}catch{setStreamStatus('rest');}},
+    },setStreamStatus);
   },[visible,runtime?.streamConfigured,leagueKey,focusSlug]);
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}

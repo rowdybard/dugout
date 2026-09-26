@@ -24,17 +24,22 @@ export async function marketStream(request:Request,selections:StreamSelection[])
   const dirty=new Map<string,StreamQuote>();
   let ended=false,timer:ReturnType<typeof setInterval>|undefined,ageTimer:ReturnType<typeof setTimeout>|undefined;
   let writer:ReadableStreamDefaultController<Uint8Array>|undefined,writing=false;
+  let firstBookQueued=false,flushAfterWrite=false;
   let tail=Promise.resolve();
   const send=(type:string,data:unknown)=>{
     if(ended||!writer)return;
     if((writer.desiredSize??0)<-65536){void stop('Slow browser connection. Reconnecting.');return;}
     try{writer.enqueue(encoder.encode(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`));}catch{void stop('Browser disconnected.');}
   };
-  const flush=()=>{
-    if(ended||writing)return;
+  const flush=(urgent=false)=>{
+    if(ended)return;
+    if(writing){if(urgent)flushAfterWrite=true;return;}
     writing=true;const quotes=[...dirty.values()];dirty.clear();
     const connection={id:connectionId,active:state.health.market.state==='connected',updatedAt:Date.now()};
-    tail=tail.then(()=>saveStreamBooks(connection,quotes)).catch(()=>{send('notice',{message:'Live display connected; bot is using REST until book storage recovers.'});}).finally(()=>{writing=false;});
+    tail=tail.then(()=>saveStreamBooks(connection,quotes)).catch(()=>{send('notice',{message:'Live display connected; bot is using REST until book storage recovers.'});}).finally(()=>{
+      writing=false;
+      if(flushAfterWrite&&!ended){flushAfterWrite=false;flush();}
+    });
   };
   async function stop(reason:string){
     if(ended)return;
@@ -54,7 +59,11 @@ export async function marketStream(request:Request,selections:StreamSelection[])
       controller.enqueue(encoder.encode('retry: 10000\n\n'));
       state.onEvent(event=>{
         send(event.type,event.data);
-        if(event.type==='quote'&&event.data.book)dirty.set(event.data.slug,event.data);
+        if(event.type==='quote'&&event.data.valid&&event.data.book){
+          dirty.set(event.data.slug,event.data);
+          // Persist the first usable book without waiting for the periodic batch.
+          if(!firstBookQueued){firstBookQueued=true;flush(true);}
+        }
       });
       socket.binaryType='arraybuffer';
       socket.addEventListener('message',event=>{
@@ -77,7 +86,10 @@ export async function marketStream(request:Request,selections:StreamSelection[])
         flush();send('status',state.health);
       },3000);
       // Refresh catalogue/subscriptions periodically, without ever inventing new quote timestamps.
-      ageTimer=setTimeout(()=>{void stop('Refreshing selected markets.');},180000);
+      ageTimer=setTimeout(()=>{
+        send('refresh',{reason:'Refreshing selected markets.'});
+        void stop('Refreshing selected markets.');
+      },180000);
       request.signal.addEventListener('abort',onAbort,{once:true});
       if(request.signal.aborted)onAbort();
     },cancel(){return stop('Browser disconnected.');},
