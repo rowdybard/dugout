@@ -27,7 +27,7 @@ export function useTennis() {
   const [now,setNow]=useState(()=>Date.now());
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
-  const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false);
+  const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   const accept=useCallback((response:TennisSessionResponse)=>{
     if(!mounted.current)return;
@@ -42,12 +42,14 @@ export function useTennis() {
     setCatalog(current=>current?{...current,markets:current.markets.map(m=>marketWithSessionQuotes(m,response.session))}:current);
     if(response.error)setError(response.error);
   },[]);
-  const refresh=useCallback(async()=>{
-    if(catalogBusy.current)return;
-    catalogBusy.current=true;setRefreshing(true);
+  const refresh=useCallback(async function refreshCatalog(){
+    if(catalogBusy.current){catalogRerun.current=true;return;}
+    catalogBusy.current=true;catalogRerun.current=false;setRefreshing(true);
     try{
       const data=await readJson<TennisCatalog>('/api/tennis');
       if(!mounted.current)return;
+      const selected=sessionRef.current?.config.leagues;
+      if(selected&&data.leagues&&[...selected].sort().join(',')!==[...data.leagues].sort().join(',')){catalogRerun.current=true;return;}
       setCatalog(previous=>({...data,markets:data.markets.map(market=>{
         const existing=previous?.markets.find(row=>row.slug===market.slug);
         const history=mergeTennisHistory(market.history,existing?.history??[]);
@@ -55,7 +57,7 @@ export function useTennis() {
         return marketWithSessionQuotes(newest,sessionRef.current);
       })}));setFeedError(null);
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
-    finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);}}
+    finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);if(catalogRerun.current)void refreshCatalog();}}
   },[]);
   const perform=useCallback(async(action:TennisAction,background=false)=>{
     // User commands wait behind the one in-flight check. Never silently discard a click.
