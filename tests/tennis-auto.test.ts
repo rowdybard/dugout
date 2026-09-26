@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptiveTennisRules} from '../lib/tennis/auto.ts';
 import {quoteAvailabilityIssue} from '../lib/tennis/quote-status.ts';
-import {currentTennisContext} from '../lib/tennis/market-context.ts';
+import {currentTennisContext,retainedTennisContext} from '../lib/tennis/market-context.ts';
 import {applyTennisAction,createTennisSession,defaultTennisConfig,stepTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
 const NOW=Date.parse('2026-09-25T21:00:00Z');
@@ -121,6 +121,36 @@ test('held-match context never invents freshness or accepts a changed outcome ma
   const updated=currentTennisContext(closedRules,{...stored,observedAt:now,score:'0-7'},now);
   assert.equal(updated.active,false);assert.equal(updated.execution,closedRules.execution);
   assert.equal(updated.observedAt,now);assert.equal(updated.score,'0-7');
+});
+
+test('held context survives a missed refresh without regressing or renewing its freshness',()=>{
+  let held=stepTennisSession(queued('momentum'),[input(NOW,.64,.65)],NOW);
+  held.config.maxHoldMs=1200000;
+  const original=structuredClone(held.positions[0].market),later=NOW+90000;
+  const fresh={...input(later,.64,.65),market:{...input(later,.64,.65).market,score:'0-7',contextUpdatedAt:later-3000}};
+  held=stepTennisSession(held,[fresh],later);
+  assert.equal(held.positions[0].lastContext?.score,'0-7');
+  assert.deepEqual(held.positions[0].market,original); // Exchange metadata retains its independent original age.
+  const restored=JSON.parse(JSON.stringify(held)) as TennisSession;
+  const missedAt=later+50000;
+  const retained=retainedTennisContext(original,restored.positions[0].lastContext,missedAt);
+  assert.equal(currentTennisContext(retained,undefined,missedAt).score,'0-7');
+  assert.equal(currentTennisContext(retained,original,missedAt).observedAt,later);
+  assert.equal(currentTennisContext(retained,{...original,observedAt:missedAt,contextUpdatedAt:NOW},missedAt),retained);
+  restored.testRun={startedAt:NOW,endsAt:NOW+10800000,watchedMs:0,lastCheckAt:missedAt-1000,startingCash:100,startingLedgerCount:0,liveSlugs:[],complete:false};
+  const result=stepTennisSession(restored,[{...input(missedAt,.64,.65),market:retained}],missedAt);
+  assert.equal(result.positions[0].lastContext?.score,'0-7');assert.equal(result.testRun?.watchedMs,0);
+  assert.equal(result.cash,held.cash);assert.deepEqual(result.ledger,held.ledger);
+});
+
+test('resumed game context can replace a suspension while closed exchange rules still block activity',()=>{
+  const original=input(NOW,.64,.65).market;
+  const paused=currentTennisContext(original,{...original,observedAt:NOW+1000,active:false,period:'SUSPENDED'},NOW+1000);
+  const later={...original,observedAt:NOW+2000,period:'Q2'};
+  const resumed=currentTennisContext(paused,later,NOW+2000,original.active);
+  assert.equal(resumed.active,true);assert.equal(resumed.period,'Q2');
+  const closed={...paused,execution:{...original.execution!,active:false}};
+  assert.equal(currentTennisContext(closed,later,NOW+2000,false).active,false);
 });
 test('expired Auto entry cannot immediately create a replacement intent',()=>{
   const session=queued('momentum'),later=NOW+40000;

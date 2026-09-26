@@ -3,11 +3,16 @@ import type {ExecutionMarket,PaperExecution,TradeSide} from '../trading/types';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
+export type FootballContext={
+  possessionTeam:string|null;down:number|null;yardsToGo:number|null;
+  fieldPosition:{team:string;yard:number}|null;timeouts:{team:string;remaining:number}[];
+};
 export type TennisPricePoint=Point & {bid?:number;ask?:number;score?:string|null;period?:string|null;scoreUpdatedAt?:number|null};
 export type TennisMarket={
   slug:string;eventId:string;eventSlug:string;title:string;league:TennisLeague;
   yesName:string;noName:string;startTime:string;
   live:boolean;ended:boolean;score:string|null;period:string|null;tournament:string|null;clock?:string|null;
+  football?:FootballContext|null;
   active:boolean;bid:number|null;ask:number|null;price:number|null;
   observedAt:number;contextUpdatedAt:number|null;history:TennisPricePoint[];
   quoteObservedAt?:number;quoteSource?:'CATALOG'|'REST'|'WEBSOCKET'|'REPLAY';
@@ -33,6 +38,7 @@ export type TennisPosition={
   realizedPnl:number;exitFees:number;proceeds:number;
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
+  lastContext?:TennisMarket;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];
 };
 export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy']};

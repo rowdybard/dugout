@@ -24,6 +24,8 @@ export function TennisMatchChart({market,session,now}:{market:TennisMarket;sessi
   const bid=side==='YES'?market.bid:market.ask===null?null:1-market.ask;
   const ask=side==='YES'?market.ask:market.bid===null?null:1-market.bid;
   const football=market.league==='NFL'||market.league==='CFB';
+  const drive=market.football;
+  const gameAge=market.contextUpdatedAt!==null&&market.contextUpdatedAt<=now?Math.floor((now-market.contextUpdatedAt)/1000):null;
   const noun=football?'team':'player';
   const bookIssue=quoteAvailabilityIssue(bid,ask,noun);
   const quoteTime=market.quoteObservedAt??market.observedAt,quoteAge=Math.max(0,Math.floor((now-quoteTime)/1000));
@@ -38,6 +40,11 @@ export function TennisMatchChart({market,session,now}:{market:TennisMarket;sessi
   const gaps=quoteGaps(points);
   return <div className="tennis-match-chart">
     <div className="tennis-score-row"><span><i className={`tennis-dot ${market.live&&market.active?'is-live':''}`}/>{market.ended?'ENDED':market.live&&market.active?'IN PLAY':market.live?'PLAY INTERRUPTED':'UPCOMING'} · {market.league}</span><b>{football?'Feed score: ':''}{market.score||'Score not supplied'}{football&&market.period?` · ${market.period}`:''}{football&&market.clock?` · ${market.clock}`:''}</b><small>{market.contextUpdatedAt?`Score reported ${timestamp(market.contextUpdatedAt)}`:`Match status checked ${timestamp(market.observedAt)}`}</small></div>
+    {football&&<section className="football-drive" aria-label="Reported football situation">
+      <div className="football-drive-grid"><div><span>Reported possession</span><b>{drive?.possessionTeam??'Not supplied'}</b></div><div><span>Down & distance</span><b>{drive?.down!=null?`${['','1st','2nd','3rd','4th'][drive.down]} & ${drive.yardsToGo??'?'}`:'Not supplied'}</b></div><div><span>Ball location</span><b>{drive?.fieldPosition?`${drive.fieldPosition.team} ${drive.fieldPosition.yard}`:'Not supplied'}</b></div></div>
+      {!!drive?.timeouts.length&&<p>Timeouts left: {drive.timeouts.map(t=>`${t.team} ${t.remaining}`).join(' · ')}</p>}
+      <small>{gameAge===null?'Game report time is unverified.':`Game report is ${gameAge<60?`${gameAge}s`:`${Math.floor(gameAge/60)}m ${gameAge%60}s`} old.`} {gameAge!==null&&gameAge>=60?'It may be unchanged during a break. ':''}Quotes refresh separately. The bot currently uses price signals; this context is for your view.</small>
+    </section>}
     <div className="tennis-outcomes" role="group" aria-label={`Choose ${noun} to follow`}>{(['YES','NO'] as const).map(s=><button type="button" key={s} aria-pressed={side===s} onClick={()=>setSide(s)}><span>{s==='YES'?market.yesName:market.noName}</span><small>{side===s?`Following this ${noun}`:`Switch to this ${noun}`}</small></button>)}</div>
     <div className="tennis-quote-stats"><div className="is-ask"><span>Buy quote</span><b>{cents(ask)}</b></div><div className="is-bid"><span>Sell quote</span><b>{cents(bid)}</b></div><div><span>Gap between quotes</span><b>{ask!==null&&bid!==null?cents(ask-bid):'—'}</b><small>Bot limit {session?.config.maxSpreadPoints??2}¢</small></div><div><span>{isBook?'Book checked':'Listing quote'}</span><b className={fresh?'tennis-positive':''}>{quoteAge<60?`${quoteAge}s ago`:`${Math.floor(quoteAge/60)}m ago`}</b><small>{bookIssue?'Entry blocked: incomplete quotes':fresh?'Fresh for a bot check':isBook?'Waiting for a fresh book':'Bot verifies a book before entry'}</small></div></div>
     <div className="tennis-chart-header"><span>{side==='YES'?market.yesName:market.noName} · market prices</span><div className="tennis-ranges" role="group" aria-label="Match chart time range">{ranges.map(r=><button key={r.label} aria-pressed={range===r.label} onClick={()=>setRange(r.label)}>{r.label}</button>)}</div></div>

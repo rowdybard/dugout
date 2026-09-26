@@ -33,17 +33,18 @@ async function withDeadline<T>(promise:Promise<T>,ms:number,message='Tennis disc
 
 export async function gatherTennisInputs(session:TennisSession,action:TennisAction){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis data deadline','TimeoutError')),9500);
-  const chosen=new Map<string,{market:TennisMarket;allowRest:boolean}>(),failures:string[]=[];
+  const chosen=new Map<string,{market:TennisMarket;allowRest:boolean;lastContext?:TennisMarket}>(),failures:string[]=[];
   let cursor=session.scanCursor??0;
   try{
-    for(const p of session.positions.filter(p=>p.status==='open'))chosen.set(p.slug,{market:p.market,allowRest:true});
+    for(const p of session.positions.filter(p=>p.status==='open'))chosen.set(p.slug,{market:p.market,lastContext:p.lastContext,allowRest:true});
     if(session.pending?.market){
       const pending=session.pending;
       // Entry permission must use a current catalog status, not the saved signal.
       const market=pending.action==='BUY'
         ?await withDeadline(getTennisMarket(pending.slug,session.config.leagues),7000).catch(e=>{failures.push(reason(e));return {...pending.market,active:false,live:false};})
         :pending.market;
-      chosen.set(pending.slug,{market,allowRest:true});
+      const held=chosen.get(pending.slug);
+      chosen.set(pending.slug,{market:pending.action==='SELL'&&held?held.market:market,lastContext:held?.lastContext,allowRest:true});
     }
     // Existing positions and pending orders get the entire data budget. A slow
     // discovery request must never delay a possible exit on a known market.
@@ -66,7 +67,7 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     // A slow second book must not age a usable first book past the five-second gate.
     const bookTimer=setTimeout(()=>controller.abort(new DOMException('Book collection deadline','TimeoutError')),4500);
     let responses:PromiseSettledResult<TennisInput>[];
-    try{responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest})=>withDeadline(loadTennisInput(market,controller.signal,{allowRest}),4500,'A book check took too long. Waiting for a fresh quote.')));}
+    try{responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest,lastContext})=>withDeadline(loadTennisInput(market,controller.signal,{allowRest,lastContext}),4500,'A book check took too long. Waiting for a fresh quote.')));}
     finally{clearTimeout(bookTimer);}
     const inputs:TennisInput[]=[];
     responses.forEach((r,i)=>{if(r.status==='fulfilled')inputs.push(r.value);else if([...chosen.values()][i].allowRest)failures.push(reason(r.reason));});

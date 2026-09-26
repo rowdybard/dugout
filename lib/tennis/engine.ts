@@ -11,6 +11,7 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
+import {currentTennisContext} from './market-context.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -484,6 +485,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   const position = holding(session);
   if (position) {
     const input = current.find(item => item.market.slug === position.slug);
+    if(input)position.lastContext=currentTennisContext(position.lastContext??position.market,input.market,now,position.market.active);
     markPosition(session, position, input, now);
     const realised = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
     const completeMark = position.netLiquidationValue !== null && position.liquidationQuantity >= position.quantity - EPSILON;

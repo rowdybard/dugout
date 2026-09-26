@@ -18,6 +18,17 @@ test('allowance reserves twenty sends and reported cost uses integer microdollar
   assert.equal(estimatedAdvisorMicrodollars(18000,512),41120);
   assert.throws(()=>estimatedAdvisorMicrodollars(NaN,2));
 });
+
+test('held-position advice includes the latest verified game facts and independent quote timestamp',()=>{
+  const session=createTennisSession();
+  const market={title:'A vs B',league:'CFB',score:'0-0',period:'Q1',contextUpdatedAt:100,observedAt:200};
+  session.positions=[{status:'open',name:'B',quantity:10,costBasis:5,netLiquidationValue:5.5,openedAt:50,markedAt:400,
+    market,lastContext:{...market,score:'0-7',observedAt:350,contextUpdatedAt:300,football:{possessionTeam:'A',down:4,yardsToGo:12,fieldPosition:{team:'B',yard:12},timeouts:[]}}} as unknown as typeof session.positions[number]];
+  const position=advisorContext(session,'').openPositions[0];
+  assert.equal(position.game.score,'0-7');assert.equal(position.game.football?.down,4);
+  assert.equal(position.game.reportedAt,300);assert.equal(position.game.checkedAt,350);assert.equal(position.markedAt,400);
+  assert.ok(!('book' in position.game));
+});
 test('oversized total context fails before any paid request can be built',()=>{
   assert.throws(()=>advisorPayload(createTennisSession(),'文'.repeat(1200),Array.from({length:6},()=>({role:'user' as const,content:'文'.repeat(1600)})),'hi'),/too long/);
 });

@@ -18,6 +18,25 @@ test('live college football uses explicit teams, fresh status and exchange-speci
   assert.equal(market.contextUpdatedAt,Date.parse(event.eventState.updatedAt));assert.equal(market.observedAt,NOW);
   assert.equal(market.execution?.priceIncrement,.005);assert.equal(market.execution?.minimumTradeQty,.01);assert.equal(market.execution?.feeCoefficient,.0695);
 });
+
+test('football drive context maps possession separately from field territory and keeps zero timeouts',()=>{
+  const footballState={driveState:{possessionTeamId:'1245',down:4,yfd:12,fieldPosition:{teamId:'1157',yard:12}},
+    timeouts:[{teamId:'1245',remaining:0},{teamId:'1157',remaining:3}]};
+  const [market]=normalizeTennisEvent({...event,eventState:{...event.eventState,footballState}},'CFB',NOW);
+  assert.deepEqual(market.football,{possessionTeam:'Navy',down:4,yardsToGo:12,fieldPosition:{team:'UAB',yard:12},
+    timeouts:[{team:'UAB',remaining:3},{team:'Navy',remaining:0}]});
+  // The provider uses down=0 during transitions; it is not a playable zeroth down.
+  const transition=normalizeTennisEvent({...event,eventState:{...event.eventState,footballState:{...footballState,driveState:{...footballState.driveState,down:0,yfd:0}}}},'CFB',NOW)[0];
+  assert.equal(transition.football?.down,null);assert.equal(transition.football?.yardsToGo,null);
+});
+
+test('missing or invalid drive data stays unknown instead of inventing a team or down',()=>{
+  assert.equal(normalizeTennisEvent(event,'CFB',NOW)[0].football,null);
+  const footballState={driveState:{possessionTeamId:'unknown',down:3.5,yfd:-1,fieldPosition:{teamId:'unknown',yard:99}},
+    timeouts:[{teamId:'1245',remaining:4},{teamId:'1157',remaining:2},{teamId:'1157',remaining:1}]};
+  const [market]=normalizeTennisEvent({...event,eventState:{...event.eventState,footballState}},'CFB',NOW);
+  assert.deepEqual(market.football,{possessionTeam:null,down:null,yardsToGo:null,fieldPosition:null,timeouts:[]});
+});
 test('football rejects mismatched teams, missing fees, totals and tennis-market types',()=>{
   assert.equal(normalizeTennisExecution({...winner,sportsMarketType:'football_total'},'CFB'),null);
   assert.equal(normalizeTennisExecution({...winner,sportsMarketType:'tennis_match_winner'},'CFB'),null);
