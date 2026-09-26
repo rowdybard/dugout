@@ -161,17 +161,19 @@ export function TennisDashboard() {
 
       <section className="tennis-command" aria-label="Paper bot controls">
 
-        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.strategy==='momentum'?'FOLLOW A RISE':'WAIT FOR A RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
+        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.strategy==='auto'?'AUTO DECISION ENGINE':session?.config.strategy==='momentum'?'FOLLOW A RISE':'WAIT FOR A RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
 
           <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||!session||entryBudget<1||entryBudget>Math.min(100,session.config.startingCash*.2)} onClick={()=>void bot.perform({action:'start',runForMs:1800000,commandId:tennisCommandId()})}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||!session||session.status==='stopping'} onClick={()=>void bot.perform({action:isPaused?'resume':'pause',...(isPaused?{runForMs:1800000}:{}),commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Resume bot':'Pause bot'}</button>}
 
           {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop bot</button>}
 
           <button className="tennis-secondary" disabled={!session} onClick={()=>setSettingsOpen(true)}>Bot rules</button><button className="tennis-secondary" onClick={()=>setAdvisorOpen(true)}>Ask Claude</button>
+          {session&&session.config.strategy!=='auto'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:{strategy:'auto'},expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use Auto</button>}
 
           {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}</div>
 
           <p className="tennis-reason" role="status">{reason}</p><div className="tennis-runtime"><Clock3 size={12}/>Runs while this page is open and visible · paper only</div>{beginner&&isPaused&&open.length>0&&<p className="tennis-order-help">Exits are still checked. Pause only blocks new entries.</p>}
+          {session?.config.strategy==='auto'&&<p className="tennis-order-help">Compares recoveries and sustained rises, adjusts move sizes, and checks costs automatically. Your budget and exit limits stay fixed. No AI API calls.</p>}
 
         </div>
 

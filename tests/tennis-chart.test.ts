@@ -1,8 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chartFills,marketWithSessionQuotes,mergeTennisHistory,outcomeHistory,quoteGaps,quoteMidpoint,withQuoteGaps} from '../lib/tennis/chart-data.ts';
+import {chartFills,marketWithSessionQuotes,mergeTennisHistory,outcomeHistory,quoteFreshForDisplay,quoteGaps,quoteMidpoint,withQuoteGaps} from '../lib/tennis/chart-data.ts';
 import {createTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisMarket,TennisLedgerEntry} from '../lib/tennis/types.ts';
+test('display tolerates a small clock difference but never labels old or far-future quotes fresh',()=>{
+  assert.equal(quoteFreshForDisplay(100050,100000,5000),true);
+  assert.equal(quoteFreshForDisplay(94000,100000,5000),false);
+  assert.equal(quoteFreshForDisplay(110000,100000,5000),false);
+  assert.equal(quoteFreshForDisplay(NaN,100000,5000),false);
+});
 test('stream midpoint comes from current quotes, and unavailable or crossed pairs stay empty',()=>{
   assert.equal(quoteMidpoint(.39,.41),.4);assert.equal(quoteMidpoint(null,.41),null);assert.equal(quoteMidpoint(.5,.4),null);assert.equal(quoteMidpoint(NaN,.4),null);
 });

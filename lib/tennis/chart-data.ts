@@ -1,6 +1,10 @@
 import type {TennisMarket,TennisPricePoint,TennisSession} from './types';
 const validPrice=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;
 export function quoteMidpoint(bid:number|null,ask:number|null):number|null{return validPrice(bid)&&validPrice(ask)&&bid<=ask?(bid+ask)/2:null;}
+/** Display clocks can differ slightly; execution still uses the strict server clock. */
+export function quoteFreshForDisplay(time:number,now:number,maxAgeMs:number):boolean{
+  return Number.isFinite(time)&&Number.isFinite(now)&&maxAgeMs>0&&Math.abs(now-time)<=maxAgeMs;
+}
 export function mergeTennisHistory(...sources:TennisPricePoint[][]):TennisPricePoint[]{
   const rows=new Map<number,TennisPricePoint>();
   for(const points of sources)for(const point of points){

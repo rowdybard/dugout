@@ -3,7 +3,7 @@ import type {TennisConfig} from './types';
 
 const positive=z.number().finite().positive();
 export const tennisRulesSchema=z.object({
-  strategy:z.enum(['recovery','momentum']),
+  strategy:z.enum(['auto','recovery','momentum']),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA'])).min(1).max(2),
   baselineWindowMs:positive.max(3_600_000),minimumHistoryMs:positive.max(3_600_000),
   minSamples:z.number().int().min(3).max(200),
@@ -45,7 +45,8 @@ export function validateTennisConfig(config:TennisConfig):string|null {
 }
 
 export function describeTennisRules(config:TennisConfig):string {
-  const entry=config.strategy==='momentum'
+  const entry=config.strategy==='auto'?'Automatically compare a recovery and a sustained rise on each live match, adjusting the move size to recent quote noise'
+    :config.strategy==='momentum'
     ?`Follow a ${config.momentumPoints}¢ rise after ${config.momentumConfirmations} confirming quotes`
     :`Wait for a ${config.declinePoints}¢ drop, then a ${config.recoveryPoints}¢ recovery confirmed ${config.recoveryConfirmations} times`;
   return `${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;

@@ -9,6 +9,7 @@ const freshLive = (input:TennisInput,now:number) => input.market.live && input.m
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+import {adaptiveTennisRules} from './auto.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -135,6 +136,7 @@ function stage(session: TennisSession, input: TennisInput, side: TradeSide, acti
     id: id ?? `${session.id}:order:${session.revision}:${now}`, market: structuredClone(input.market), slug: input.market.slug, side, action,
     positionId: action === 'SELL' ? holding(session)?.id : undefined, budget,
     limitPrice, createdAt: now, executeAfter: now + session.config.executionDelayMs, observedAt: input.receivedAt, source, reason,
+    ...(action==='BUY'?{signalConfig:structuredClone(session.config),signalSnapshot:structuredClone(session.signals[keyFor(input.market.slug,side)]),decisionMode:session.config.strategy}:{}),
   };
   record(session, now, input.market.slug, side, 'SIGNAL', action === 'BUY' ? 'ENTRY_PENDING' : 'EXIT_PENDING',
     `${reason} Waiting at least ${session.config.executionDelayMs / 1000}s and for a later fresh book before simulating a fill.`, input);
@@ -169,7 +171,7 @@ function settle(session: TennisSession, position: TennisPosition, input: TennisI
   position.exitPrice = price; position.netLiquidationValue = 0; position.liquidationQuantity = 0; position.markedAt = input.settlementReceivedAt!;
   session.pending = null; session.exitRequested = undefined;
   session.ledger.push({ id: `${position.id}:settlement`, time: now, slug: position.slug, side: position.side, action: 'SETTLE', source: 'AUTOMATIC', positionId: position.id,
-    reason: 'Resolved using an explicit final market settlement value.', cashDelta: proceeds, realizedPnl: pnl, rulesRevision:session.rulesRevision??0,strategy:session.config.strategy });
+    reason: 'Resolved using an explicit final market settlement value.', cashDelta: proceeds, realizedPnl: pnl, rulesRevision:session.rulesRevision??0,strategy:position.strategy??session.config.strategy });
   record(session, now, position.slug, position.side, 'SETTLE', 'SETTLED', 'Final market settlement applied to remaining paper quantity.', input);
   setCooldown(session, position.slug, now);
   return true;
@@ -179,6 +181,7 @@ function setCooldown(session: TennisSession, slug: string, now: number) {
   for (const side of ['YES', 'NO'] as const) {
     session.signals[keyFor(slug, side)] = { phase: 'COOLDOWN', confirmations: 0, cooldownUntil: now + session.config.cooldownMs,
       lastObservedAt: session.consumedBooks[slug], reason: 'Waiting after an entry/exit attempt before looking for another dip.' };
+    for(const strategy of ['recovery','momentum'])if(session.autoSignals)session.autoSignals[`${keyFor(slug,side)}:${strategy}`]=structuredClone(session.signals[keyFor(slug,side)]);
   }
 }
 
@@ -193,7 +196,7 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
         name: intent.side === 'YES' ? input.market.yesName : input.market.noName, quantity: result.filledQty, initialQuantity: result.filledQty,
         costBasis: -result.cashDelta, entryCost: -result.cashDelta, entryPrice: result.averagePrice, entryFees: result.fees, openedAt: now,
         status: 'open', realizedPnl: 0, exitFees: 0, proceeds: 0, netLiquidationValue: null, liquidationQuantity: 0, markedAt: null,
-        market: structuredClone(input.market) });
+        market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy });
     } else if (oldPosition) {
       const full = Math.abs(result.filledQty - oldPosition.quantity) < EPSILON;
       const allocated = full ? oldPosition.costBasis : exact(oldPosition.costBasis * result.filledQty / oldPosition.quantity);
@@ -209,7 +212,7 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
     }
   }
   session.ledger.push({ id: intent.id, time: now, slug: intent.slug, side: intent.side, action: intent.action,
-    source: intent.source, positionId, reason: intent.reason, execution: result, rulesRevision:session.rulesRevision??0,strategy:session.config.strategy,
+    source: intent.source, positionId, reason: intent.reason, execution: result, rulesRevision:session.rulesRevision??0,strategy:intent.signalConfig?.strategy??oldPosition?.strategy??session.config.strategy,
     cashDelta: result.cashDelta, realizedPnl: pnl, quotedPrice: intent.limitPrice, actualPrice: result.averagePrice || undefined,
     executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt });
   record(session, now, intent.slug, intent.side, result.apply ? intent.action : 'SKIP', result.apply ? result.status.toUpperCase() : 'FILL_FAILED',
@@ -237,6 +240,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   if (now < intent.executeAfter) { session.lastReason = 'Paper execution delay is still running.'; return true; }
   if (now - intent.createdAt > Math.max(30_000, session.config.executionDelayMs * 3)) {
     session.pending = null;
+    if(intent.action==='BUY'&&intent.decisionMode==='auto')setCooldown(session,intent.slug,now);
     record(session, now, intent.slug, intent.side, 'SKIP', 'INTENT_EXPIRED', 'The paper order expired before a usable later book arrived.');
     return false;
   }
@@ -253,6 +257,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
       session.pending = null;
       session.consumedBooks[intent.slug] = input.receivedAt;
       record(session, now, intent.slug, intent.side, 'SKIP', issue.code, `Pending entry canceled: ${issue.reason}`, input);
+      if(intent.decisionMode==='auto')setCooldown(session,intent.slug,now);
       return false;
     }
   }
@@ -279,21 +284,25 @@ function beginObservation(session:TennisSession,duration:number|undefined,now:nu
 }
 
 function pendingSignalIssue(session:TennisSession,input:TennisInput,intent:TennisIntent,now:number) {
-  const signal=session.signals[keyFor(intent.slug,intent.side)],quote=quotes(input,intent.side);
+  const signal=intent.signalSnapshot??session.signals[keyFor(intent.slug,intent.side)],quote=quotes(input,intent.side);
+  const config=intent.signalConfig??session.config;
   const price=quote.bid!==undefined&&quote.ask!==undefined?(quote.bid+quote.ask)/2:NaN;
   if(!signal||signal.lastPrice===undefined||signal.lastBid===undefined||signal.baseline===undefined||
     price<signal.lastPrice-EPSILON||quote.bid!<signal.lastBid-EPSILON)
     return {code:'SIGNAL_CHANGED',reason:'The confirmed price or buyers weakened during the execution delay.'};
-  if(session.config.strategy==='recovery') {
-    if(signal.dipAt===undefined||now-signal.dipAt>session.config.baselineWindowMs||price>=signal.baseline||
-      signal.trough===undefined||signal.troughBid===undefined||price-signal.trough<session.config.recoveryPoints/100-EPSILON||
-      quote.bid!-signal.troughBid<session.config.recoveryPoints/100-EPSILON)
+  if(config.strategy==='recovery') {
+    if(signal.dipAt===undefined||now-signal.dipAt>config.baselineWindowMs||price>=signal.baseline||
+      signal.trough===undefined||signal.troughBid===undefined||price-signal.trough<config.recoveryPoints/100-EPSILON||
+      quote.bid!-signal.troughBid<config.recoveryPoints/100-EPSILON)
       return {code:'SIGNAL_CHANGED',reason:'The recovery expired or no longer meets your entry rules.'};
     const issue=recoveryHeadroomIssue(session,input,intent.side,signal.baseline,now);
     if(issue)return {code:'COST_HEADROOM',reason:issue};
-  } else if(signal.dipAt===undefined||now-signal.dipAt>session.config.baselineWindowMs||price-signal.baseline<session.config.momentumPoints/100-EPSILON||signal.baselineBid===undefined||
-    quote.bid!-signal.baselineBid<session.config.momentumPoints/100-EPSILON) {
+  } else if(signal.dipAt===undefined||now-signal.dipAt>config.baselineWindowMs||price-signal.baseline<config.momentumPoints/100-EPSILON||signal.baselineBid===undefined||
+    quote.bid!-signal.baselineBid<config.momentumPoints/100-EPSILON) {
     return {code:'SIGNAL_CHANGED',reason:'The rise is no longer confirmed by current buyers.'};
+  } else {
+    const buy=simulate(session,input,{...freshCommand(session,input,intent.side,'BUY',now,quote.ask!),budget:intent.budget},now);
+    if(!buy.apply||buy.filledQty/-buy.cashDelta-1<session.config.targetReturn-EPSILON)return {code:'COST_HEADROOM',reason:'The maximum payout no longer covers the profit target after entry costs.'};
   }
   return null;
 }
@@ -383,6 +392,50 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
   stage(session, input, side, 'BUY', now, 'AUTOMATIC', 'Temporary price drop followed by confirmed buyer recovery; experimental price-only signal.', session.config.entryBudget);
 }
 
+type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;cost:number};
+function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide,now:number):AutoCandidate[]{
+  const key=keyFor(input.market.slug,side),quote=quotes(input,side),history=session.histories[key]??[];
+  const candidates:AutoCandidate[]=[];
+  if(quote.bid===undefined||quote.ask===undefined)return candidates;
+  session.autoSignals??={};
+  for(const strategy of ['recovery','momentum'] as const){
+    const track=`${key}:${strategy}`,previous=session.autoSignals[track];
+    if(previous?.lastObservedAt!==undefined&&input.receivedAt<=previous.lastObservedAt)continue;
+    const frozen=previous&&['DIP','RECOVERING','RISING'].includes(previous.phase)&&previous.dipAt!==undefined&&input.receivedAt-previous.dipAt<=session.config.baselineWindowMs;
+    const rules=frozen&&previous.autoRules?previous.autoRules:adaptiveTennisRules(history,quote.bid,quote.ask,input.market.execution!.priceIncrement,input.receivedAt);
+    if(!rules){record(session,now,input.market.slug,side,'SKIP','AUTO_NOISE','Recent quote movement is outside the supported automatic range.',input,{strategy});continue;}
+    // Only updateSignal runs in this sandbox. It cannot debit cash or apply fills.
+    // Mutable signal/history/journal containers are isolated from the real account.
+    const sandbox:TennisSession={...session,config:{...session.config,declinePoints:rules.declinePoints,recoveryPoints:rules.recoveryPoints,momentumPoints:rules.momentumPoints,strategy},
+      signals:{...session.signals,[key]:previous??{phase:'WARMING',confirmations:0,reason:'Building history for both entry patterns.'}},
+      histories:{...session.histories,[key]:history},pending:null,decisions:[],rejectionCounts:{},decisionSequence:0,evaluated:0};
+    updateSignal(sandbox,input,side,now);
+    const signal=sandbox.signals[key];signal.autoRules=rules;
+    signal.reason=`${strategy==='recovery'?'Recovery':'Rise'}: ${signal.reason}`;
+    session.autoSignals[track]=signal;
+    const last=sandbox.decisions.at(-1);
+    if(last)record(session,now,input.market.slug,side,last.action==='SIGNAL'?'WAIT':last.action,last.action==='SIGNAL'?'AUTO_READY':last.code,
+      `${strategy==='recovery'?'Recovery':'Rise'}: ${last.reason}`,input,{baseline:last.baseline,price:last.price,strategy,autoRules:rules});
+    if(sandbox.pending){
+      const buy=simulate(session,input,{...freshCommand(session,input,side,'BUY',now,quote.ask),budget:session.config.entryBudget},now);
+      const sell=executePaperCommand({...freshCommand(session,input,side,'SELL',now,quote.bid),quantity:buy.filledQty},
+        {cash:exact(session.cash+buy.cashDelta),marketExposure:-buy.cashDelta,totalExposure:-buy.cashDelta,availableQuantity:buy.filledQty},input.market.execution!,input.book,policy(session,input,now));
+      const intent={...sandbox.pending,decisionMode:'auto' as const,signalSnapshot:structuredClone(signal),reason:`Auto selected ${strategy==='recovery'?'a recovery':'a sustained rise'}. ${sandbox.pending.reason}`};
+      candidates.push({intent,signal,input,cost:1-sell.cashDelta/-buy.cashDelta});
+    }
+  }
+  // Advance shared observations once even if one pattern is waiting or too noisy.
+  if(input.receivedAt>(history.at(-1)?.time??-1)){
+    session.histories[key]=[...history.filter(p=>p.time>=input.receivedAt-session.config.baselineWindowMs&&p.time<input.receivedAt),
+      {time:input.receivedAt,price:exact((quote.bid+quote.ask)/2),bid:quote.bid,ask:quote.ask,score:input.market.score,period:input.market.period,scoreUpdatedAt:input.market.contextUpdatedAt}].slice(-600);
+    session.evaluated++;
+  }
+  const signals=['recovery','momentum'].map(strategy=>session.autoSignals![`${key}:${strategy}`]).filter(Boolean);
+  const priority=(s:TennisSignal)=>['RECOVERING','RISING'].includes(s.phase)?3:s.phase==='DIP'?2:s.phase==='COOLDOWN'?1:0;
+  if(signals.length)session.signals[key]=[...signals].sort((a,b)=>priority(b)-priority(a))[0];
+  return candidates;
+}
+
 /** Pure reducer. Callers persist the complete returned state with one account revision/CAS. */
 export function stepTennisSession(previous: TennisSession, inputs: TennisInput[], now: number): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
@@ -441,6 +494,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (session.status === 'stopping') session.status = 'stopped';
   }
   if (session.status === 'running' && !holding(session) && !session.pending && !processed) {
+    const candidates:AutoCandidate[]=[];
+    const beforeSequence=session.decisionSequence??0;
+    let autoChecked=0;
     for (const input of current.sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
       const issue = dataIssue(session, input, now);
       if (issue) { record(session, now, input.market.slug, 'YES', 'SKIP', 'DATA', issue, input); continue; }
@@ -452,10 +508,25 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       }
       if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) continue;
       for (const side of ['YES', 'NO'] as const) {
-        updateSignal(session, input, side, now);
+        if(session.config.strategy==='auto'){candidates.push(...evaluateAutoSide(session,input,side,now));autoChecked+=2;}
+        else updateSignal(session, input, side, now);
         if (session.pending) break;
       }
       if (session.pending) break;
+    }
+    if(session.config.strategy==='auto'){
+      candidates.sort((a,b)=>a.intent.createdAt-b.intent.createdAt||a.cost-b.cost||a.intent.slug.localeCompare(b.intent.slug)||a.intent.side.localeCompare(b.intent.side)||a.intent.signalConfig!.strategy.localeCompare(b.intent.signalConfig!.strategy));
+      const chosen=candidates[0];
+      if(chosen){
+        session.pending=chosen.intent;session.signals[keyFor(chosen.intent.slug,chosen.intent.side)]=chosen.signal;
+        record(session,now,chosen.intent.slug,chosen.intent.side,'SIGNAL','ENTRY_PENDING',`${chosen.intent.reason} Checking a later fresh book before entry.`,chosen.input,{strategy:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum',autoRules:chosen.signal.autoRules});
+      }else{
+        const latest=session.decisions.filter(d=>Number(d.id.split(':').at(-1))>beforeSequence);
+        const blocker=[...latest].reverse().find(d=>d.action==='SKIP');
+        const progress=[...latest].reverse().find(d=>['DIP','CONFIRMATION','WARMUP'].includes(d.code));
+        session.lastReason=blocker?.reason??progress?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
+      }
+      session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
     }
   }
   const value = tennisEquity(session);
@@ -487,14 +558,14 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     }
     session.config = structuredClone(config);
     session.rulesRevision = (session.rulesRevision ?? 0) + 1;
-    session.histories = {}; session.signals = {};
+    session.histories = {}; session.signals = {}; session.autoSignals={};session.autoStatus=undefined;
     record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}). Gathering a new baseline; balance and history preserved.`);
     return session;
   }
   if (action.action === 'reset') {
     if (holding(session) || session.pending) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
-    session = createTennisSession(defaultTennisConfig(action.bankroll), now);
+    session = createTennisSession({...defaultTennisConfig(action.bankroll),strategy:'auto'}, now);
     session.commandIds = [action.commandId];
     return session;
   }

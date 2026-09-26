@@ -17,14 +17,15 @@ export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string
 export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
-  strategy:'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;
+  strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
   targetReturn:number;stopReturn:number;maxHoldMs:number;cooldownMs:number;
   executionDelayMs:number;maxBookAgeMs:number;maxSessionLossFraction:number;
 };
 export type TennisObservation=TennisPricePoint;
-export type TennisSignal={phase:'WARMING'|'WATCHING'|'DIP'|'RECOVERING'|'RISING'|'COOLDOWN';baseline?:number;baselineBid?:number;trough?:number;troughBid?:number;lastBid?:number;lastPrice?:number;dipAt?:number;confirmations:number;lastObservedAt?:number;cooldownUntil?:number;reason:string};
+export type TennisAutoRules={declinePoints:number;recoveryPoints:number;momentumPoints:number;noisePoints:number};
+export type TennisSignal={phase:'WARMING'|'WATCHING'|'DIP'|'RECOVERING'|'RISING'|'COOLDOWN';baseline?:number;baselineBid?:number;trough?:number;troughBid?:number;lastBid?:number;lastPrice?:number;dipAt?:number;confirmations:number;lastObservedAt?:number;cooldownUntil?:number;reason:string;autoRules?:TennisAutoRules};
 export type TennisPosition={
   id:string;slug:string;league:TennisLeague;title:string;side:TradeSide;name:string;
   quantity:number;initialQuantity:number;costBasis:number;entryCost:number;entryPrice:number;entryFees:number;openedAt:number;
@@ -32,14 +33,17 @@ export type TennisPosition={
   realizedPnl:number;exitFees:number;proceeds:number;
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
+  strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];
 };
-export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string};
-export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number};
+export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy']};
+export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules};
 export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
 export type TennisSession={
   id:string;revision:number;scanCursor?:number;decisionSequence?:number;mode:'paper';status:'idle'|'running'|'paused'|'stopping'|'stopped';
   rulesRevision?:number;coverage?:Record<string,{league:TennisLeague;time:number;live:boolean}>;
   quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY'}>;
+  autoSignals?:Record<string,TennisSignal>;
+  autoStatus?:{time:number;checked:number;qualified:number;reason:string;selected?:'recovery'|'momentum'};
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;

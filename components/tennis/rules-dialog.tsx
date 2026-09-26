@@ -13,9 +13,9 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
   const issue=validateTennisConfig(draft);
   const apply=async()=>{const rules={...draft} as Partial<TennisConfig>;delete rules.startingCash;delete rules.version;if(await onAction({action:'update-rules',rules,expectedRulesRevision:revision,sessionId:session.id,commandId:tennisCommandId()}))onClose();};
   return <Dialog open onOpenChange={open=>!open&&onClose()}><DialogContent className="tennis-market-dialog tennis-rules-dialog">
-    <DialogTitle className="tennis-dialog-title">Your bot. Your rules.</DialogTitle>
-    <DialogDescription className="tennis-dialog-description">Choose how it enters, when it exits, and how much it uses. Changes keep your balance and history.</DialogDescription>
-    <div className="tennis-strategy-choices" role="group" aria-label="Bot strategy">{(['recovery','momentum'] as const).map(strategy=><button key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='recovery'?'Wait for a recovery':'Follow a rise'}</b><span>{strategy==='recovery'?'Watch a dip, then wait for buyers to return.':'Wait for a sustained rise in price and buyers.'}</span></button>)}</div>
+    <DialogTitle className="tennis-dialog-title">Set limits. Let the bot decide.</DialogTitle>
+    <DialogDescription className="tennis-dialog-description">Auto compares both entry patterns on every live match. Set your budget and limits once; changes keep your balance and history.</DialogDescription>
+    <div className="tennis-strategy-choices" role="group" aria-label="Bot strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button className={strategy==='auto'?'is-auto':''} key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='auto'?'Auto — choose the setup for me':strategy==='recovery'?'Fixed: wait for a recovery':'Fixed: follow a rise'}</b><span>{strategy==='auto'?'Compare a bounce and a sustained rise. Adapt to quote movement while keeping your money and risk limits fixed.':strategy==='recovery'?'Watch a dip, then wait for buyers to return.':'Wait for a sustained rise in price and buyers.'}</span></button>)}</div>
     <div className="tennis-tour-choice" role="group" aria-label="Tours the bot can watch">{(['ATP','WTA'] as const).map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':'Women · WTA'}</button>)}</div>
     <div className="tennis-rules-grid">
       {field('entryBudget','Dollars per trade','Maximum spend, including fees',.01,Math.min(100,draft.startingCash*.2),1,.01)}
@@ -23,8 +23,7 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
       {field('stopReturn','Try to exit a loss at','Percent after fees; exit needs buyers',.01,50,.01,.1)}
       {field('maxHoldMs','Hold for at most','Minutes before trying to exit',.1,60,60000,.1)}
       {field('maxSpreadPoints','Largest price gap','Cents between buying and selling',.1,10,1,.1)}
-      {draft.strategy==='recovery'?<>{field('declinePoints','Wait for a drop of','Cents below the recent baseline',.1,40,1,.1)}{field('recoveryPoints','Then a recovery of','Cents above the low',.1,40,1,.1)}</>:field('momentumPoints','Wait for a rise of','Cents above the recent baseline',.1,40,1,.1)}
-      {field(draft.strategy==='recovery'?'recoveryConfirmations':'momentumConfirmations','Confirm the move','Independent fresh quotes',2,20)}
+      {draft.strategy!=='auto'&&<>{draft.strategy==='recovery'?<>{field('declinePoints','Wait for a drop of','Cents below the recent baseline',.1,40,1,.1)}{field('recoveryPoints','Then a recovery of','Cents above the low',.1,40,1,.1)}</>:field('momentumPoints','Wait for a rise of','Cents above the recent baseline',.1,40,1,.1)}{field(draft.strategy==='recovery'?'recoveryConfirmations':'momentumConfirmations','Confirm the move','Independent fresh quotes',2,20)}</>}
     </div>
     <button className="tennis-link" aria-expanded={more} onClick={()=>setMore(!more)}>{more?'Hide timing controls':'More controls'}</button>
     {more&&<div className="tennis-rules-grid">
@@ -39,6 +38,6 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
     <p className="tennis-order-help">Always paper money, live matches, and one position at a time. Each entry is limited to 20% of the starting balance. These strategies are unproven.</p>
     {error&&<p className="tennis-dialog-error" role="alert">{error}</p>}
-    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft(defaultTennisConfig(session.config.startingCash))}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
+    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...defaultTennisConfig(session.config.startingCash),strategy:'auto'})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
   </DialogContent></Dialog>;
 }
