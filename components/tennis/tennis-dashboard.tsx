@@ -154,7 +154,7 @@ export function TennisDashboard() {
 
     <main className="tennis-main">
 
-      <div className="tennis-heading"><div><span className="tennis-kicker">TENNIS · ATP & WTA</span><h1>Let the bot watch.</h1>{beginner&&<p>Real tennis markets. A fake balance. You set the rules. The bot handles the rest.</p>}</div><div className="tennis-feed-indicator"><span className={`tennis-dot ${bot.streamStatus==='live'?'is-live':'is-waiting'}`}/>{bot.streamStatus==='live'?'Live Polymarket US stream':bot.streamStatus==='connecting'?'Connecting live stream…':'Polymarket US · REST checks'}{catalog&&<span>· {age(catalog.updatedAt,now)}</span>}</div></div>
+      <div className="tennis-heading"><div><span className="tennis-kicker">TENNIS · ATP & WTA</span><h1>Let the bot watch.</h1>{beginner&&<p>Real tennis markets. A fake balance. Set your budget and limits. Auto handles the setups.</p>}</div><div className="tennis-feed-indicator"><span className={`tennis-dot ${bot.streamStatus==='live'?'is-live':'is-waiting'}`}/>{bot.streamStatus==='live'?'Live Polymarket US stream':bot.streamStatus==='connecting'?'Connecting live stream…':'Polymarket US · REST checks'}{catalog&&<span>· {age(catalog.updatedAt,now)}</span>}</div></div>
 
       {bot.error&&!selected&&<div className="tennis-error" role="alert"><TriangleAlert size={16}/><span>{bot.error}</span><button aria-label="Dismiss error" onClick={bot.clearError}><X size={15}/></button></div>}
       {bot.connectionIssue&&<div className="tennis-error" role="status"><RefreshCw size={16}/><span>{bot.connectionIssue} Last saved check: {session?age(session.lastTickAt,now):'connecting'}.</span></div>}

@@ -1,9 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptiveTennisRules} from '../lib/tennis/auto.ts';
+import {quoteAvailabilityIssue} from '../lib/tennis/quote-status.ts';
 import {applyTennisAction,createTennisSession,defaultTennisConfig,stepTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
 const NOW=Date.parse('2026-09-25T21:00:00Z');
+test('unusable or inconsistent quotes explain the blocked entry',()=>{
+  assert.match(quoteAvailabilityIssue(null,.01)!,/No usable buyers/);
+  assert.match(quoteAvailabilityIssue(0,.01)!,/No usable buyers/);
+  assert.match(quoteAvailabilityIssue(.99,null)!,/No usable sellers/);
+  assert.match(quoteAvailabilityIssue(null,null)!,/No usable buying or selling/);
+  assert.match(quoteAvailabilityIssue(.8,.7)!,/disagree/);
+  assert.equal(quoteAvailabilityIssue(.7,.71),null);
+});
 function input(time:number,bid:number,ask:number,slug='synthetic-auto',league:'ATP'|'WTA'='ATP'):TennisInput{
   return {receivedAt:time,source:'REST',book:{bids:[{price:bid,quantity:100}],asks:[{price:ask,quantity:100}],state:'MARKET_STATE_OPEN',time:new Date(time).toISOString()},market:{slug,eventId:slug,eventSlug:slug,title:'Synthetic Auto A vs B',league,yesName:'Synthetic A',noName:'Synthetic B',startTime:new Date(NOW-600000).toISOString(),live:true,ended:false,active:true,score:null,period:null,tournament:null,bid,ask,price:(bid+ask)/2,observedAt:time,contextUpdatedAt:null,history:[],execution:{slug,league,active:true,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.01,feeCoefficient:.0695}}};
 }
@@ -49,6 +58,10 @@ test('Auto still rejects a widened execution book and cools both strategy tracks
   const canceled=stepTennisSession(queuedSession,[input(NOW,.60,.65)],NOW);
   assert.equal(canceled.pending,null);assert.equal(canceled.cash,100);assert.equal(canceled.ledger.length,0);
   for(const side of ['YES','NO'])for(const strategy of ['recovery','momentum'])assert.equal(canceled.autoSignals?.[`synthetic-auto:${side}:${strategy}`]?.phase,'COOLDOWN');
+  const waiting=stepTennisSession(canceled,[input(NOW+2000,.64,.65)],NOW+2000);
+  assert.match(waiting.lastReason,/Entry cooldown: 58s/);
+  assert.match(waiting.lastReason,/resumes automatically/);
+  assert.equal(waiting.pending,null);assert.equal(waiting.cash,100);
 });
 test('Auto exit retains chosen strategy after a mode change and cooldown clears both candidates',()=>{
   let session=stepTennisSession(queued('recovery'),[input(NOW,.64,.65)],NOW);
@@ -69,4 +82,19 @@ test('expired Auto entry cannot immediately create a replacement intent',()=>{
   assert.equal(result.pending,null);assert.equal(result.ledger.length,0);assert.equal(result.cash,100);
   assert.ok(result.decisions.some(d=>d.code==='INTENT_EXPIRED'));
   assert.equal(result.autoSignals?.['synthetic-auto:YES:momentum'].phase,'COOLDOWN');
+});
+
+test('Auto replaces old strategy reasons and confirmations when usable buyers disappear',()=>{
+  const session=queued('momentum');session.pending=null;
+  const oneSided=input(NOW,.99,.995);oneSided.book.asks=[];
+  const result=stepTennisSession(session,[oneSided],NOW);
+  assert.equal(result.pending,null);assert.equal(result.cash,100);assert.equal(result.ledger.length,0);
+  assert.match(result.lastReason,/No usable buyers/);
+  for(const strategy of ['recovery','momentum']){
+    const track=result.autoSignals![`synthetic-auto:NO:${strategy}`];
+    assert.match(track.reason,/No usable buyers/);assert.equal(track.confirmations,0);
+    assert.equal(track.lastObservedAt,NOW);
+  }
+  assert.match(result.signals['synthetic-auto:NO'].reason,/No usable buyers/);
+  assert.ok(result.decisions.some(d=>d.code==='BOOK'&&d.side==='NO'&&d.time===NOW));
 });

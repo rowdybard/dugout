@@ -10,6 +10,7 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {adaptiveTennisRules} from './auto.ts';
+import {quoteAvailabilityIssue} from './quote-status.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -353,7 +354,7 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
   session.histories[key] = history.slice(-600);
   session.evaluated++;
   const wait = (code: string, reason: string, skip = false) => { state.reason = reason; record(session, now, input.market.slug, side, skip ? 'SKIP' : 'WAIT', code, reason, input, { baseline: state.baseline, price }); };
-  if (state.cooldownUntil && now < state.cooldownUntil) { state.phase = 'COOLDOWN'; return wait('COOLDOWN', 'Waiting for this match’s post-trade cooldown.'); }
+  if (state.cooldownUntil && now < state.cooldownUntil) { state.phase = 'COOLDOWN'; return wait('COOLDOWN', `Entry cooldown: ${Math.ceil((state.cooldownUntil-now)/1000)}s before checking this match for another entry. The bot resumes automatically.`); }
   if (state.phase === 'COOLDOWN') { state.phase = 'WARMING'; state.confirmations = 0; state.trough = undefined; state.dipAt = undefined; }
   if (history.length < session.config.minSamples || input.receivedAt - history[0].time < session.config.minimumHistoryMs) { state.phase = 'WARMING'; return wait('WARMUP', `Collecting fresh quotes (${history.length}/${session.config.minSamples}; need ${Math.round(session.config.minimumHistoryMs / 1000)}s of history).`); }
   if (session.config.strategy === 'momentum') return updateMomentum(session, input, side, state, history, oldPrice, oldBid, now, wait);
@@ -396,8 +397,18 @@ type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;co
 function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide,now:number):AutoCandidate[]{
   const key=keyFor(input.market.slug,side),quote=quotes(input,side),history=session.histories[key]??[];
   const candidates:AutoCandidate[]=[];
-  if(quote.bid===undefined||quote.ask===undefined)return candidates;
   session.autoSignals??={};
+  const bookIssue=quoteAvailabilityIssue(quote.bid,quote.ask);
+  if(bookIssue){
+    for(const strategy of ['recovery','momentum'] as const){
+      const track=`${key}:${strategy}`;
+      session.autoSignals[track]={phase:'WARMING',confirmations:0,lastObservedAt:input.receivedAt,cooldownUntil:session.autoSignals[track]?.cooldownUntil,reason:bookIssue};
+    }
+    session.signals[key]={...session.autoSignals[`${key}:recovery`]};
+    record(session,now,input.market.slug,side,'SKIP','BOOK',bookIssue,input);
+    return candidates;
+  }
+  if(quote.bid===undefined||quote.ask===undefined)return candidates;
   for(const strategy of ['recovery','momentum'] as const){
     const track=`${key}:${strategy}`,previous=session.autoSignals[track];
     if(previous?.lastObservedAt!==undefined&&input.receivedAt<=previous.lastObservedAt)continue;
@@ -524,7 +535,8 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
         const latest=session.decisions.filter(d=>Number(d.id.split(':').at(-1))>beforeSequence);
         const blocker=[...latest].reverse().find(d=>d.action==='SKIP');
         const progress=[...latest].reverse().find(d=>['DIP','CONFIRMATION','WARMUP'].includes(d.code));
-        session.lastReason=blocker?.reason??progress?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
+        const cooldown=[...latest].reverse().find(d=>d.code==='COOLDOWN');
+        session.lastReason=blocker?.reason??progress?.reason??cooldown?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
       }
       session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
     }
