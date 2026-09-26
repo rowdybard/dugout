@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chartFills,marketWithSessionQuotes,mergeTennisHistory,outcomeHistory,quoteFreshForDisplay,quoteGaps,quoteMidpoint,withQuoteGaps} from '../lib/tennis/chart-data.ts';
+import {chartFills,marketWithSessionQuotes,marketWithStreamQuote,mergeTennisHistory,outcomeHistory,quoteFreshForDisplay,quoteGaps,quoteMidpoint,withQuoteGaps} from '../lib/tennis/chart-data.ts';
+import type {StreamQuote} from '../lib/trading/stream-types.ts';
 import {createTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisMarket,TennisLedgerEntry} from '../lib/tennis/types.ts';
 test('display tolerates a small clock difference but never labels old or far-future quotes fresh',()=>{
@@ -42,6 +43,42 @@ test('fresh REST book updates held-match display without freshening old score or
   const freshStream={...market,quoteObservedAt:2000,bid:.59,ask:.61,price:.6,quoteSource:'WEBSOCKET' as const};
   assert.equal(marketWithSessionQuotes(freshStream,session).price,.6);
 });
+test('known rejected REST spikes disappear from every chart merge while audit evidence stays intact',()=>{
+  const market={slug:'match',observedAt:100,quoteObservedAt:3000,quoteSource:'WEBSOCKET',price:.6225,bid:.62,ask:.625,
+    history:[{time:1000,price:.6225},{time:2000,price:.6525},{time:3000,price:.6225}]} as unknown as TennisMarket;
+  const session=createTennisSession();
+  session.decisions=[{id:'rejected',time:2100,slug:'match',side:'YES',action:'SKIP',code:'BOOK_ORDER',reason:'Older provider time',bookTime:2000}];
+  session.histories['match:YES']=[{time:2000,price:.6525}];
+  const before=structuredClone({market,session});
+  const result=marketWithSessionQuotes(market,session);
+  assert.deepEqual(result.history.map(p=>p.price),[.6225,.6225]);assert.equal(result.price,.6225);
+  assert.deepEqual({market,session},before);
+  // The full owner-fenced exclusion list survives a reload after recent decisions roll off.
+  const reloaded=marketWithSessionQuotes({...market,rejectedQuoteTimes:[2000]},null);
+  assert.deepEqual(reloaded.history,result.history);
+  const rejectedLatest=marketWithSessionQuotes({...market,quoteObservedAt:2000,price:.6525,rejectedQuoteTimes:[2000]},null);
+  assert.equal(rejectedLatest.price,null);assert.equal(rejectedLatest.quoteObservedAt,0);
+});
+
+test('rejected retained history cannot crowd valid saved chart points out of the history limit',()=>{
+  const market={slug:'match',observedAt:0,history:Array.from({length:1800},(_,i)=>({time:i+1,price:.5})),rejectedQuoteTimes:Array.from({length:1200},(_,i)=>i+601)} as unknown as TennisMarket;
+  assert.equal(marketWithSessionQuotes(market,null).history.length,600);
+});
+
+test('visible stream cannot roll provider time backward or disguise a missing timestamp, even while paused',()=>{
+  const session=createTennisSession();session.status='paused';session.bookSourceTimes={match:9500};
+  const market={slug:'match',observedAt:100,quoteObservedAt:10000,quoteSourceTime:9500,price:.6225,bid:.62,ask:.625,history:[{time:10000,price:.6225}]} as unknown as TennisMarket;
+  const quote={slug:'match',valid:true,source:'polymarket_us_websocket',receivedAt:12000,sourceTime:11900,bid:.63,ask:.635} as StreamQuote;
+  for(const sourceTime of [9000,null,NaN,15001])assert.equal(marketWithStreamQuote(market,{...quote,sourceTime},session,12000),market);
+  const ordered=marketWithStreamQuote(market,quote,session,12000);
+  assert.equal(ordered.quoteSourceTime,11900);assert.equal(ordered.quoteObservedAt,12000);assert.equal(ordered.price,.6325000000000001);
+  assert.equal(ordered.history.length,2);assert.equal(ordered.observedAt,100);
+  // A local display watermark also protects against reconnect rollback before a server tick.
+  assert.equal(marketWithStreamQuote(ordered,{...quote,receivedAt:14000,sourceTime:10000},session,14000),ordered);
+  assert.equal(marketWithStreamQuote(market,{...quote,receivedAt:2000},session,12000),market);
+  assert.equal(session.status,'paused');assert.equal(session.ledger.length,0);
+});
+
 test('chart markers include only genuine bot fills for the selected player and window',()=>{
   const session=createTennisSession();
   const fill={id:'a',slug:'match',side:'YES',action:'BUY',source:'AUTOMATIC',time:10,actualPrice:.42,execution:{apply:true,filledQty:2,averagePrice:.43}} as TennisLedgerEntry;

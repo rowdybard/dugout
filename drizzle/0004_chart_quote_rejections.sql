@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS `tennis_journal_order_rejections` ON `tennis_journal` (`owner_id`,`created_at`) WHERE "tennis_journal"."kind"='decision' AND json_extract("tennis_journal"."value",'$.code')='BOOK_ORDER';

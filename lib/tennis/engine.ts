@@ -473,7 +473,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if(dataIssue(session,input,now))continue;
     if(input.sourceTime!==undefined&&input.sourceTime!==null)session.bookSourceTimes[input.market.slug]=input.sourceTime;
     session.coverage[input.market.slug] = {league: input.market.league, time: input.receivedAt, live: freshLive(input,now)};
-    session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source};
+    session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source,sourceTime:input.sourceTime};
   }
   if (session.testRun && !session.testRun.complete) {
     const run = session.testRun;

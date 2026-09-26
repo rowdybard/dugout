@@ -4,6 +4,7 @@ import {currentStreamBook} from '../server/stream-books';
 import {sourceError} from '../server/request-budget';
 import {freshTennisBook,normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from './normalize';
 import {currentTennisContext,retainedTennisContext} from './market-context';
+import {CHART_HISTORY_SQL} from './chart-rejections';
 import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket,TennisPricePoint} from './types';
 
 const CATALOG_TTL=30_000;
@@ -13,10 +14,10 @@ const PAGE_SIZE=4;
 const MAX_PAGES=2;
 type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'|'sourceTime'|'restReceipt'>;
 
-async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
+async function displayHistory(slug:string,rejectedTimes:number[]=[]):Promise<TennisPricePoint[]>{
   // These are captured quotes, never hypothetical fills or a reconstructed sports score.
-  const rows=await db().prepare("SELECT time,json_extract(value,'$.book.bids[0].price') AS bid,json_extract(value,'$.book.asks[0].price') AS ask,json_extract(value,'$.market.score') AS score,json_extract(value,'$.market.period') AS period,json_extract(value,'$.market.contextUpdatedAt') AS scoreUpdatedAt FROM tennis_observations WHERE slug=? AND time>? ORDER BY time DESC LIMIT 600")
-    .bind(slug,Date.now()-6*60*60_000).all<{time:number;bid:number;ask:number;score:string|null;period:string|null;scoreUpdatedAt:number|null}>().catch(()=>({results:[]}));
+  const rows=await db().prepare(CHART_HISTORY_SQL)
+    .bind(slug,Date.now()-6*60*60_000,JSON.stringify(rejectedTimes)).all<{time:number;bid:number;ask:number;score:string|null;period:string|null;scoreUpdatedAt:number|null}>().catch(()=>({results:[]}));
   return rows.results.flatMap(row=>{
     try{
       const {bid,ask}=row;
@@ -27,7 +28,7 @@ async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
 }
 
 /** Four public pages maximum, cached across all clients; no per-market network fanout. */
-export async function getTennisCatalog({includeHistory=true,leagues=['ATP','WTA']}:{includeHistory?:boolean;leagues?:TennisLeague[]}={}):Promise<TennisCatalog>{
+export async function getTennisCatalog({includeHistory=true,leagues=['ATP','WTA'],rejectedBooks={}}:{includeHistory?:boolean;leagues?:TennisLeague[];rejectedBooks?:Record<string,number[]>}={}):Promise<TennisCatalog>{
   const catalog=await cached<TennisCatalog>(`paper-sports:catalog:v2:${[...leagues].sort().join(',')}`,CATALOG_TTL,async()=>{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis discovery deadline','TimeoutError')),CATALOG_DEADLINE);
     const markets:TennisMarket[]=[],errors:string[]=[];
@@ -56,17 +57,17 @@ export async function getTennisCatalog({includeHistory=true,leagues=['ATP','WTA'
     return {markets:unique,updatedAt:now,errors};
   });
   if(!includeHistory)return catalog;
-  const markets=await Promise.all(catalog.markets.map(async market=>({...market,history:await displayHistory(market.slug)})));
+  const markets=await Promise.all(catalog.markets.map(async market=>({...market,rejectedQuoteTimes:rejectedBooks[market.slug]??[],history:await displayHistory(market.slug,rejectedBooks[market.slug])})));
   return {...catalog,markets};
 }
 
-export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP','WTA']):Promise<TennisMarket>{
+export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP','WTA'],rejectedTimes:number[]=[]):Promise<TennisMarket>{
   if(typeof slug!=='string'||slug.length>200||!/^[-a-zA-Z0-9]+$/.test(slug))throw new Error('Choose a verified game market.');
   const current=(await getTennisCatalog({includeHistory:false,leagues})).markets.find(m=>m.slug===slug);
-  if(current)return current;
+  if(current)return {...current,rejectedQuoteTimes:rejectedTimes};
   const previous=await readCached<TennisMarket>(`tennis:verified:${slug}`);
   if(!previous||previous.value.slug!==slug||!['ATP','WTA','NFL','CFB'].includes(previous.value.league))throw new Error('This match is not in the verified tennis/football winner catalog.');
-  return {...previous.value,active:false,history:await displayHistory(slug),unavailableReason:'Match is no longer in the active catalog. New entries are blocked; held positions can still be checked.'};
+  return {...previous.value,active:false,rejectedQuoteTimes:rejectedTimes,history:await displayHistory(slug,rejectedTimes),unavailableReason:'Match is no longer in the active catalog. New entries are blocked; held positions can still be checked.'};
 }
 
 async function refreshedRules(market:TennisMarket,signal?:AbortSignal):Promise<TennisMarket>{

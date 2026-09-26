@@ -3,7 +3,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {TennisAction,TennisCatalog,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
-import {mergeTennisHistory,marketWithSessionQuotes,quoteMidpoint} from '@/lib/tennis/chart-data';
+import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote} from '@/lib/tennis/chart-data';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(20000)}).catch(cause=>{
@@ -53,8 +53,9 @@ export function useTennis() {
       if(selected&&data.leagues&&[...selected].sort().join(',')!==[...data.leagues].sort().join(',')){catalogRerun.current=true;return;}
       setCatalog(previous=>({...data,markets:data.markets.map(market=>{
         const existing=previous?.markets.find(row=>row.slug===market.slug);
-        const history=mergeTennisHistory(market.history,existing?.history??[]);
-        const newest=existing&&(existing.quoteObservedAt??existing.observedAt)>(market.quoteObservedAt??market.observedAt)?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,quoteObservedAt:existing.quoteObservedAt,quoteSource:existing.quoteSource,history}:{...market,history};
+        const rejected=new Set(market.rejectedQuoteTimes??[]);
+        const history=mergeTennisHistory(market.history,(existing?.history??[]).filter(point=>!rejected.has(point.time)));
+        const newest=existing&&(existing.quoteObservedAt??existing.observedAt)>(market.quoteObservedAt??market.observedAt)?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,quoteObservedAt:existing.quoteObservedAt,quoteSource:existing.quoteSource,quoteSourceTime:existing.quoteSourceTime,history}:{...market,history};
         return marketWithSessionQuotes(newest,sessionRef.current);
       })}));setFeedError(null);
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
@@ -131,14 +132,8 @@ export function useTennis() {
       if(!quote.valid)return;
       setStreamStatus('live');
       setNow(Date.now());
-      // The stream price may be a last trade. The chart's midpoint is the current pair.
-      const midpoint=quoteMidpoint(quote.bid,quote.ask);
-      setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>{
-        if(market.slug!==quote.slug||quote.receivedAt<(market.quoteObservedAt??market.observedAt))return market;
-        const points=[...market.history];
-        if(midpoint!==null&&(!points.length||quote.receivedAt-points[points.length-1].time>=1000))points.push({time:quote.receivedAt,price:midpoint,bid:quote.bid??undefined,ask:quote.ask??undefined,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt});
-        return {...market,bid:quote.bid,ask:quote.ask,price:midpoint,quoteObservedAt:quote.receivedAt,quoteSource:'WEBSOCKET' as const,history:points.slice(-1200)};
-      })});
+      // Provider order is checked even while entries are paused; receipt alone is insufficient.
+      setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>marketWithStreamQuote(market,quote,sessionRef.current,Date.now()))});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
     events.addEventListener('snapshot',event=>{try{const data=JSON.parse((event as MessageEvent).data) as StreamSnapshot;health(data.health);data.quotes.forEach(merge);}catch{setStreamStatus('rest');}});

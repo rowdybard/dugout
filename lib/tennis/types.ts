@@ -17,6 +17,7 @@ export type TennisMarket={
   active:boolean;bid:number|null;ask:number|null;price:number|null;
   observedAt:number;contextUpdatedAt:number|null;history:TennisPricePoint[];
   quoteObservedAt?:number;quoteSource?:'CATALOG'|'REST'|'WEBSOCKET'|'REPLAY';
+  quoteSourceTime?:number|null;rejectedQuoteTimes?:number[];
   execution:ExecutionMarket|null;unavailableReason?:string;
 };
 export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string[];leagues?:TennisLeague[]};
@@ -48,7 +49,7 @@ export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;
 export type TennisSession={
   id:string;revision:number;scanCursor?:number;decisionSequence?:number;mode:'paper';status:'idle'|'running'|'paused'|'stopping'|'stopped';
   rulesRevision?:number;coverage?:Record<string,{league:TennisLeague;time:number;live:boolean}>;
-  quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY'}>;
+  quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null}>;
   autoSignals?:Record<string,TennisSignal>;
   bookSourceTimes?:Record<string,number>;
   autoStatus?:{time:number;checked:number;qualified:number;reason:string;selected?:'recovery'|'momentum'};

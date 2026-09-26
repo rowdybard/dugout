@@ -29,6 +29,13 @@
       "when": 1790374265054,
       "tag": "0003_mixed_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790396935253,
+      "tag": "0004_chart_quote_rejections",
+      "breakpoints": true
     }
   ]
 }
