@@ -103,7 +103,7 @@ test('Auto replaces old strategy reasons and confirmations when usable buyers di
 
 test('switching to football cancels tennis entry intents but keeps held tennis exits working',()=>{
   const queuedSession=queued('momentum');
-  const action={action:'update-rules' as const,sessionId:queuedSession.id,expectedRulesRevision:0,commandId:'football-switch',rules:{leagues:['NFL','CFB'] as ('NFL'|'CFB')[]}};
+  const action={action:'update-rules' as const,sessionId:queuedSession.id,expectedRulesRevision:0,commandId:'football-switch',rules:{leagues:['NFL','CFB'] as ('NFL'|'CFB')[],focusSlug:'focused-football'}};
   const canceled=applyTennisAction(queuedSession,action,[],NOW);assert.equal(canceled.pending,null);assert.equal(canceled.cash,100);
   let held=stepTennisSession(queuedSession,[input(NOW,.64,.65)],NOW);
   const cash=held.cash,ledger=structuredClone(held.ledger);
@@ -111,4 +111,36 @@ test('switching to football cancels tennis entry intents but keeps held tennis e
   assert.equal(held.cash,cash);assert.deepEqual(held.ledger,ledger);assert.equal(held.positions[0].status,'open');
   held=stepTennisSession(held,[input(NOW+2000,.75,.76)],NOW+2000);assert.equal(held.pending?.action,'SELL');
   held=stepTennisSession(held,[input(NOW+4000,.75,.76)],NOW+4000);assert.equal(held.positions[0].status,'closed');assert.equal(held.ledger.at(-1)?.action,'SELL');
+});
+
+test('focused game is the only eligible entry and focus is rechecked at execution',()=>{
+  const prepared=queued('momentum',['a-market','b-market'],'CFB');
+  prepared.pending=null;prepared.config.focusSlug='b-market';
+  const result=stepTennisSession(prepared,[input(NOW,.64,.65,'a-market','CFB'),input(NOW,.64,.65,'b-market','CFB')],NOW);
+  assert.equal(result.pending?.slug,'b-market');
+  const restricted=structuredClone(result);restricted.config.focusSlug='a-market';
+  const blocked=stepTennisSession(restricted,[input(NOW+2000,.64,.65,'b-market','CFB')],NOW+2000);
+  assert.equal(blocked.pending,null);assert.equal(blocked.cash,100);assert.equal(blocked.ledger.length,0);
+  assert.ok(blocked.decisions.some(d=>d.code==='FOCUS'));
+});
+
+test('saving focused-game rules cancels buys, retains rest deadlines and preserves saved money',()=>{
+  const prepared=queued('momentum');
+  prepared.signals['other:YES']={phase:'COOLDOWN',confirmations:0,cooldownUntil:NOW+300000,reason:'Resting'};
+  prepared.autoSignals!['other:YES:momentum']={phase:'COOLDOWN',confirmations:0,cooldownUntil:NOW+300000,reason:'Resting'};
+  const result=applyTennisAction(prepared,{action:'update-rules',sessionId:prepared.id,expectedRulesRevision:0,commandId:'focus-change',rules:{focusSlug:'other',targetReturn:.2,maxHoldMs:1200000}},[],NOW);
+  assert.equal(result.pending,null);assert.equal(result.cash,100);assert.deepEqual(result.ledger,prepared.ledger);
+  assert.equal(result.signals['other:YES'].cooldownUntil,NOW+300000);
+  assert.equal(result.autoSignals!['other:YES:momentum'].cooldownUntil,NOW+300000);
+  const reset=applyTennisAction(result,{action:'reset',bankroll:100,commandId:'focus-reset'},[],NOW+1);
+  assert.equal(reset.config.focusSlug,'other');
+});
+
+test('a three-hour football observation preserves the entry pause at its actual end',()=>{
+  const session=createTennisSession({...defaultTennisConfig(),strategy:'auto',leagues:['CFB']},NOW);
+  const running=applyTennisAction(session,{action:'start',runForMs:10800000,commandId:'football-long-watch'},[],NOW);
+  assert.equal(running.testRun?.endsAt,NOW+10800000);
+  assert.equal(stepTennisSession(running,[],NOW+1800001).status,'running');
+  const ended=stepTennisSession(running,[],NOW+10800000);
+  assert.equal(ended.status,'paused');assert.equal(ended.testRun?.complete,true);
 });

@@ -114,7 +114,7 @@ export function TennisDashboard() {
   const chooseSport=async(value:'tennis'|'football'|'both')=>{
     if(!session)return;
     const leagues:TennisLeague[]=value==='football'?['NFL','CFB']:value==='tennis'?['ATP','WTA']:['ATP','WTA','NFL','CFB'];
-    const ok=await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{leagues}});
+    const ok=await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{leagues,focusSlug:null}});
     if(ok){setFilter('ALL');setFollowed(null);setSelected(null);void bot.refresh();}
   };
 
@@ -135,7 +135,14 @@ export function TennisDashboard() {
 
   const selectedMarket=catalog?.markets.find(market=>market.slug===selected)??session?.positions.find(position=>position.slug===selected)?.market??null;
   const liveMarkets=availableMarkets.filter(m=>m.live&&!m.ended);
-  const followedMarket=liveMarkets.find(m=>m.slug===followed)??liveMarkets.find(m=>open.some(p=>p.slug===m.slug))??liveMarkets[0];
+  const focusedMarket=availableMarkets.find(m=>m.slug===session?.config.focusSlug);
+  const followedMarket=liveMarkets.find(m=>m.slug===followed)??focusedMarket??liveMarkets.find(m=>open.some(p=>p.slug===m.slug))??liveMarkets[0];
+
+  const watchDuration=hasFootball?10_800_000:1_800_000;
+  const setGameFocus=async(slug:string|null)=>{
+    if(!session)return;
+    if(await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{focusSlug:slug}}))setFollowed(slug);
+  };
 
   const isRunning=session?.status==='running',isPaused=session?.status==='paused',isIdle=session?.status==='idle',isStopped=session?.status==='stopped';
 
@@ -176,7 +183,7 @@ export function TennisDashboard() {
 
         <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.strategy==='auto'?'AUTO DECISION ENGINE':session?.config.strategy==='momentum'?'FOLLOW A RISE':'WAIT FOR A RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
 
-          <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||!session||entryBudget<1||entryBudget>Math.min(100,session.config.startingCash*.2)} onClick={()=>void bot.perform({action:'start',runForMs:1800000,commandId:tennisCommandId()})}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||!session||session.status==='stopping'} onClick={()=>void bot.perform({action:isPaused?'resume':'pause',...(isPaused?{runForMs:1800000}:{}),commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Resume bot':'Pause bot'}</button>}
+          <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||!session||entryBudget<1||entryBudget>Math.min(100,session.config.startingCash*.2)} onClick={()=>void bot.perform({action:'start',runForMs:watchDuration,commandId:tennisCommandId()})}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||!session||session.status==='stopping'} onClick={()=>void bot.perform({action:isPaused?'resume':'pause',...(isPaused?{runForMs:watchDuration}:{}),commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Resume bot':'Pause bot'}</button>}
 
           {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop bot</button>}
 
@@ -194,9 +201,11 @@ export function TennisDashboard() {
 
       </section>
 
+      <section className="tennis-rule-summary" aria-label="Bot game focus"><b>{session?.config.focusSlug?`Bot focus: ${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}`:'Saved game'}`:'Bot scans all selected leagues'}</b><p>{session?.config.focusSlug?'New entries are limited to this game. Both teams are evaluated; existing positions still receive exit checks.':'The chart is for watching. Focus a game below to restrict new bot entries.'}</p>{session?.config.focusSlug&&<button className="tennis-link" disabled={bot.busy} onClick={()=>void setGameFocus(null)}>Watch all selected games</button>}{followedMarket&&session?.config.focusSlug!==followedMarket.slug&&<button className="tennis-secondary" disabled={bot.busy||!session} onClick={()=>void setGameFocus(followedMarket.slug)}>Focus bot on {followedMarket.yesName} vs. {followedMarket.noName}</button>}</section>
+
       <section className="tennis-live-panel" aria-label="Follow a live match"><div className="tennis-live-panel-head"><div><span className="tennis-kicker">LIVE MATCH WATCH</span><h2>{followedMarket?`${followedMarket.yesName} vs. ${followedMarket.noName}`:'Waiting for a live match'}</h2></div>{liveMarkets.length>1&&<label>Match<select aria-label="Match to follow" value={followedMarket?.slug} onChange={event=>setFollowed(event.target.value)}>{liveMarkets.map(m=><option key={m.slug} value={m.slug}>{m.yesName} vs. {m.noName}</option>)}</select></label>}</div>{followedMarket?<TennisMatchChart key={followedMarket.slug} market={followedMarket} session={session} now={now}/>:<p className="tennis-order-help">The live chart appears when the feed confirms a match is in play. Upcoming matches are listed below.</p>}</section>
 
-      {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':'30-minute paper watch'}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked · {session.testRun.liveSlugs.length} live matches observed</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/><small>{session.testRun.complete?'New entries paused. Existing exits are still managed.':'Keep this page open and visible. Entries pause automatically when the window ends.'}</small></section>}
+      {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':`${Math.round((session.testRun.endsAt-session.testRun.startedAt)/60000)}-minute paper watch`}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked · {session.testRun.liveSlugs.length} live matches observed</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/><small>{session.testRun.complete?'New entries paused. Existing exits are still managed.':'Keep this page open and visible. Entries pause automatically when the window ends.'}</small></section>}
 
       {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Paper entry':'Paper exit'} queued · waiting for a fresh book after {session.config.executionDelayMs/1000}s execution delay.</div>}
 

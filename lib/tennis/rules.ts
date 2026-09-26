@@ -4,6 +4,7 @@ import type {TennisConfig} from './types';
 const positive=z.number().finite().positive();
 export const tennisRulesSchema=z.object({
   strategy:z.enum(['auto','recovery','momentum']),
+  focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
   baselineWindowMs:positive.max(3_600_000),minimumHistoryMs:positive.max(3_600_000),
   minSamples:z.number().int().min(3).max(200),
@@ -18,7 +19,7 @@ export const tennisRulesSchema=z.object({
 export const tennisRulesPatchSchema=tennisRulesSchema.partial();
 
 export function defaultTennisConfig(startingCash=100):TennisConfig {
-  return {version:'tennis-recovery-v1',strategy:'recovery',startingCash,
+  return {version:'tennis-recovery-v1',strategy:'recovery',startingCash,focusSlug:null,
     entryBudget:Math.min(5,Math.round(startingCash*.2*1e6)/1e6),leagues:['ATP','WTA'],
     baselineWindowMs:60_000,minimumHistoryMs:30_000,minSamples:10,
     declinePoints:3,recoveryPoints:1,recoveryConfirmations:2,momentumPoints:3,momentumConfirmations:2,
@@ -49,5 +50,5 @@ export function describeTennisRules(config:TennisConfig):string {
     :config.strategy==='momentum'
     ?`Follow a ${config.momentumPoints}¢ rise after ${config.momentumConfirmations} confirming quotes`
     :`Wait for a ${config.declinePoints}¢ drop, then a ${config.recoveryPoints}¢ recovery confirmed ${config.recoveryConfirmations} times`;
-  return `${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
+  return `${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match${config.focusSlug?' in your focused game':''}. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
 }

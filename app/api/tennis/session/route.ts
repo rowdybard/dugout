@@ -5,7 +5,7 @@ import type {TennisAction} from '@/lib/tennis/types';
 
 import {tennisRulesPatchSchema} from '@/lib/tennis/rules';
 const internalId=z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/);
-const runForMs=z.number().int().min(60_000).max(3_600_000).optional();
+const runForMs=z.number().int().min(60_000).max(21_600_000).optional();
 const schema=z.union([
   z.object({action:z.literal('start'),config:tennisRulesPatchSchema.optional(),runForMs,commandId:z.string().uuid()}).strict(),
   z.object({action:z.enum(['tick','pause','resume','stop']),runForMs,commandId:z.string().uuid().optional(),sessionId:internalId.optional()}).strict(),

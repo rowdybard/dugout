@@ -17,7 +17,7 @@ export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string
 export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
-  strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;
+  strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
   targetReturn:number;stopReturn:number;maxHoldMs:number;cooldownMs:number;

@@ -87,6 +87,7 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   if (!input.market.live) return { code: 'NOT_LIVE', reason: 'Waiting for the match to start. The bot only enters live matches.' };
   if (!Number.isFinite(input.market.observedAt) || input.market.observedAt > now || now - input.market.observedAt > 45_000) return { code: 'MATCH_STALE', reason: 'Live match status needs a fresh update.' };
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This tour is not selected for the experiment.' };
+  if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return {code:'FOCUS',reason:'New entries are restricted to the focused game.'};
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
   const quote = quotes(input, side);
   if (quote.bid === undefined || quote.ask === undefined || quote.bid > quote.ask) return { code: 'BOOK', reason: 'A valid two-sided book is required.' };
@@ -279,7 +280,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
 
 function beginObservation(session:TennisSession,duration:number|undefined,now:number) {
   if(duration===undefined)return;
-  if(!Number.isFinite(duration)||duration<60_000||duration>3_600_000)return;
+  if(!Number.isFinite(duration)||duration<60_000||duration>21_600_000)return;
   session.testRun={startedAt:now,endsAt:now+duration,watchedMs:0,lastCheckAt:now,startingCash:session.cash,
     startingLedgerCount:session.ledger.length,liveSlugs:[],complete:false};
 }
@@ -509,6 +510,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     const beforeSequence=session.decisionSequence??0;
     let autoChecked=0;
     for (const input of current.sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
+      if(session.config.focusSlug && session.config.focusSlug!==input.market.slug) continue;
       const issue = dataIssue(session, input, now);
       if (issue) { record(session, now, input.market.slug, 'YES', 'SKIP', 'DATA', issue, input); continue; }
       if (!session.config.leagues.includes(input.market.league) || input.market.ended || !input.market.active || input.book.state !== 'MARKET_STATE_OPEN') {
@@ -570,14 +572,15 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     }
     session.config = structuredClone(config);
     session.rulesRevision = (session.rulesRevision ?? 0) + 1;
-    session.histories = {}; session.signals = {}; session.autoSignals={};session.autoStatus=undefined;
+    const keepCooldowns=(signals:Record<string,TennisSignal>)=>Object.fromEntries(Object.entries(signals).filter(([,signal])=>(signal.cooldownUntil??0)>now).map(([key,signal])=>[key,{phase:'COOLDOWN' as const,confirmations:0,cooldownUntil:signal.cooldownUntil,reason:'Resting after the previous attempt; rule changes keep this rest period.'}]));
+    session.histories = {}; session.signals = keepCooldowns(session.signals); session.autoSignals=keepCooldowns(session.autoSignals??{});session.autoStatus=undefined;
     record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}). Gathering a new baseline; balance and history preserved.`);
     return session;
   }
   if (action.action === 'reset') {
     if (holding(session) || session.pending) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
-    session = createTennisSession({...defaultTennisConfig(action.bankroll),strategy:'auto',leagues:session.config.leagues}, now);
+    session = createTennisSession({...defaultTennisConfig(action.bankroll),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug}, now);
     session.commandIds = [action.commandId];
     return session;
   }

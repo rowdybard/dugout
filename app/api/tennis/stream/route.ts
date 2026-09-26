@@ -22,6 +22,8 @@ export async function GET(req: Request) {
       markets = [];
     }
     if (slug === null) markets = markets.filter(market => session.config.leagues.includes(market.league));
+    const focused = markets.find(market => market.slug === session.config.focusSlug && market.active && !market.ended);
+    if (focused) protectedMarkets.push(focused);
     const selected = selectTennisStreamMarkets(markets, protectedMarkets, slug);
     if (!selected.ok) return Response.json({ error: selected.error }, { status: selected.status });
     // The existing adapter preserves source timestamps, generation invalidation,

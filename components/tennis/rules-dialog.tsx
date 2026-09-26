@@ -16,7 +16,7 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
     <DialogTitle className="tennis-dialog-title">Set limits. Let the bot decide.</DialogTitle>
     <DialogDescription className="tennis-dialog-description">Auto compares both entry patterns on every live match. Set your budget and limits once; changes keep your balance and history.</DialogDescription>
     <div className="tennis-strategy-choices" role="group" aria-label="Bot strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button className={strategy==='auto'?'is-auto':''} key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='auto'?'Auto — choose the setup for me':strategy==='recovery'?'Fixed: wait for a recovery':'Fixed: follow a rise'}</b><span>{strategy==='auto'?'Compare a bounce and a sustained rise. Adapt to quote movement while keeping your money and risk limits fixed.':strategy==='recovery'?'Watch a dip, then wait for buyers to return.':'Wait for a sustained rise in price and buyers.'}</span></button>)}</div>
-    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{(['ATP','WTA','NFL','CFB'] as const).map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':'NFL'}</button>)}</div>
+    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{(['ATP','WTA','NFL','CFB'] as const).map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':'NFL'}</button>)}</div>
     <div className="tennis-rules-grid">
       {field('entryBudget','Dollars per trade','Maximum spend, including fees',.01,Math.min(100,draft.startingCash*.2),1,.01)}
       {field('targetReturn','Take profit at','Percent after fees',.01,100,.01,.1)}
@@ -36,8 +36,8 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
       {field('maxSessionLossFraction','Stop the session at','Percent lost from the starting balance',.1,50,.01,.1)}
     </div>}
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
-    <p className="tennis-order-help">Always paper money, live matches, and one position at a time. Each entry is limited to 20% of the starting balance. These strategies are unproven.</p>
+    <p className="tennis-order-help">Always paper money, live matches, and one position at a time. Each entry is limited to 20% of the starting balance. Changes apply to held positions too. An exit already triggered remains active. These strategies are unproven.</p>
     {error&&<p className="tennis-dialog-error" role="alert">{error}</p>}
-    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...defaultTennisConfig(session.config.startingCash),strategy:'auto',leagues:draft.leagues})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
+    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...defaultTennisConfig(session.config.startingCash),strategy:'auto',leagues:draft.leagues,focusSlug:draft.focusSlug})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
   </DialogContent></Dialog>;
 }

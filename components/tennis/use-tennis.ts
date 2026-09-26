@@ -27,6 +27,7 @@ export function useTennis() {
   const [now,setNow]=useState(()=>Date.now());
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
+  const focusSlug=session?.config.focusSlug;
   const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   const accept=useCallback((response:TennisSessionResponse)=>{
@@ -145,7 +146,7 @@ export function useTennis() {
     events.addEventListener('status',event=>{try{health(JSON.parse((event as MessageEvent).data) as StreamHealth);}catch{setStreamStatus('rest');}});
     events.onerror=()=>setStreamStatus('rest');
     return()=>events.close();
-  },[visible,runtime?.streamConfigured,leagueKey]);
+  },[visible,runtime?.streamConfigured,leagueKey,focusSlug]);
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
