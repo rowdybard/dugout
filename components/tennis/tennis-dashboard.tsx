@@ -143,7 +143,10 @@ export function TennisDashboard() {
 
   const status=!session?'Connecting':session.status==='stopping'?'Exiting position':isStopped?'Stopped':tickStale?'Waiting for a fresh check':isPaused?'Entries paused':session.pending?'Order pending':isRunning?(open.length?'Managing position':'Scanning'):'Ready';
 
-  const reason=!session?'Loading your saved paper session…':!bot.visible?'Page is hidden. Live checks resume when you return.':tickStale?'The last bot check is older than 20 seconds. No fills are made using stale data.':session.lastReason;
+  const reasonDecision=session?.decisions.findLast(d=>d.reason===session.lastReason);
+  const reasonMarket=catalog?.markets.find(m=>m.slug===reasonDecision?.slug)??session?.positions.find(p=>p.slug===reasonDecision?.slug)?.market;
+  const namedReason=reasonMarket&&reasonDecision?`${reasonDecision.side==='YES'?reasonMarket.yesName:reasonMarket.noName}: ${session?.lastReason}`:session?.lastReason;
+  const reason=!session?'Loading your saved paper session…':!bot.visible?'Page is hidden. Live checks resume when you return.':tickStale?'The last bot check is older than 20 seconds. No fills are made using stale data.':namedReason;
 
   const decisions=[...(session?.decisions??[])].reverse().filter(d=>showAll||!['WARMUP','CONFIRMATION','NO_DIP','NO_MOMENTUM'].includes(d.code));
 
