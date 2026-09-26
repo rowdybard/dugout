@@ -24,6 +24,7 @@ import {TennisRulesDialog} from './rules-dialog';
 
 import {TennisAdvisor} from './advisor';
 import {TennisMatchChart} from './match-chart';
+import {GamePicker} from './game-picker';
 
 import {describeTennisRules} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
@@ -131,13 +132,15 @@ export function TennisDashboard() {
 
   const feedUnavailable=!!bot.feedError||!!catalog?.errors.length;
 
-  const availableMarkets=(catalog?.markets??[]).filter(m=>!session||session.config.leagues.includes(m.league));
+  const availableMarkets=[...new Map([...(catalog?.markets??[]).filter(m=>!session||session.config.leagues.includes(m.league)),...open.filter(p=>!catalog?.markets.some(m=>m.slug===p.slug)).map(p=>p.lastContext??p.market)].map(m=>[m.slug,m])).values()];
   const markets=availableMarkets.filter(market=>filter==='ALL'||market.league===filter);
 
   const selectedMarket=catalog?.markets.find(market=>market.slug===selected)??session?.positions.find(position=>position.slug===selected)?.market??null;
   const liveMarkets=availableMarkets.filter(m=>m.live&&!m.ended);
   const focusedMarket=availableMarkets.find(m=>m.slug===session?.config.focusSlug);
-  const followedMarket=liveMarkets.find(m=>m.slug===followed)??focusedMarket??liveMarkets.find(m=>open.some(p=>p.slug===m.slug))??liveMarkets[0];
+  const followedMarket=availableMarkets.find(m=>m.slug===followed)??focusedMarket??availableMarkets.find(m=>open.some(p=>p.slug===m.slug))??liveMarkets[0];
+  const watchMarket=bot.watchMarket;
+  useEffect(()=>{watchMarket(selected??followedMarket?.slug??null);},[selected,followedMarket?.slug,watchMarket]);
 
   const watchDuration=hasFootball?10_800_000:1_800_000;
   const setGameFocus=async(slug:string|null)=>{
@@ -204,6 +207,8 @@ export function TennisDashboard() {
       </section>
 
       <section className="tennis-rule-summary" aria-label="Bot game focus"><b>{session?.config.focusSlug?`Bot focus: ${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}`:'Saved game'}`:'Bot scans all selected leagues'}</b><p>{session?.config.focusSlug?'New entries are limited to this game. Both teams are evaluated; existing positions still receive exit checks.':'The chart is for watching. Focus a game below to restrict new bot entries.'}</p>{session?.config.focusSlug&&<button className="tennis-link" disabled={bot.busy} onClick={()=>void setGameFocus(null)}>Watch all selected games</button>}{followedMarket&&session?.config.focusSlug!==followedMarket.slug&&<button className="tennis-secondary" disabled={bot.busy||!session} onClick={()=>void setGameFocus(followedMarket.slug)}>Focus bot on {followedMarket.yesName} vs. {followedMarket.noName}</button>}</section>
+
+      <GamePicker markets={availableMarkets} selected={followedMarket?.slug??null} focused={session?.config.focusSlug??null} busy={bot.busy||!session} loading={catalog?.discovery?.complete===false} now={now} onSelect={setFollowed} onFocus={slug=>void setGameFocus(slug)}/>
 
       <section className="tennis-live-panel" aria-label="Follow a live match"><div className="tennis-live-panel-head"><div><span className="tennis-kicker">LIVE MATCH WATCH</span><h2>{followedMarket?`${followedMarket.yesName} vs. ${followedMarket.noName}`:'Waiting for a live match'}</h2></div>{liveMarkets.length>1&&<label>Match<select aria-label="Match to follow" value={followedMarket?.slug} onChange={event=>setFollowed(event.target.value)}>{liveMarkets.map(m=><option key={m.slug} value={m.slug}>{m.yesName} vs. {m.noName}</option>)}</select></label>}</div>{followedMarket?<TennisMatchChart key={followedMarket.slug} market={followedMarket} session={session} now={now}/>:<p className="tennis-order-help">The live chart appears when the feed confirms a match is in play. Upcoming matches are listed below.</p>}</section>
 

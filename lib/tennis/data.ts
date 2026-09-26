@@ -5,13 +5,11 @@ import {sourceError} from '../server/request-budget';
 import {freshTennisBook,normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from './normalize';
 import {currentTennisContext,retainedTennisContext} from './market-context';
 import {CHART_HISTORY_SQL} from './chart-rejections';
+import {advanceLeagueDiscovery,visibleLeagueMarkets,type LeagueDiscoveryState} from './catalog-discovery';
 import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket,TennisPricePoint} from './types';
 
-const CATALOG_TTL=30_000;
 const CATALOG_DEADLINE=12_000;
 const BOOK_TTL=1_000;
-const PAGE_SIZE=4;
-const MAX_PAGES=2;
 type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'|'sourceTime'|'restReceipt'>;
 
 async function displayHistory(slug:string,rejectedTimes:number[]=[]):Promise<TennisPricePoint[]>{
@@ -27,44 +25,59 @@ async function displayHistory(slug:string,rejectedTimes:number[]=[]):Promise<Ten
   }).reverse();
 }
 
-/** Four public pages maximum, cached across all clients; no per-market network fanout. */
+/** Resume bounded pages across requests; a partial schedule is never called complete. */
 export async function getTennisCatalog({includeHistory=true,leagues=['ATP','WTA'],rejectedBooks={}}:{includeHistory?:boolean;leagues?:TennisLeague[];rejectedBooks?:Record<string,number[]>}={}):Promise<TennisCatalog>{
-  const catalog=await cached<TennisCatalog>(`paper-sports:catalog:v2:${[...leagues].sort().join(',')}`,CATALOG_TTL,async()=>{
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis discovery deadline','TimeoutError')),CATALOG_DEADLINE);
-    const markets:TennisMarket[]=[],errors:string[]=[];
-    try{
-      await Promise.all(leagues.map(async league=>{
-        try{
-          for(let page=0;page<MAX_PAGES;page++){
-            controller.signal.throwIfAborted();
-            const raw=await publicGet(`/v2/leagues/${league.toLowerCase()}/events?type=sport&limit=${PAGE_SIZE}&offset=${page*PAGE_SIZE}`,controller.signal);
+  const catalog=await cached<TennisCatalog>(`paper-sports:catalog:v3:${[...leagues].sort().join(',')}`,1000,async()=>{
+    const deadlineAt=Date.now()+CATALOG_DEADLINE;
+    const results=await Promise.allSettled(leagues.map(league=>{
+      const key=`paper-sports:discovery:v1:${league}`;
+      return cached<LeagueDiscoveryState<TennisMarket>>(key,1000,async()=>{
+        const previous=await readCached<LeagueDiscoveryState<TennisMarket>>(key);
+        const state=await advanceLeagueDiscovery(previous?.value,league,{
+          now:Date.now,
+          eventKey:event=>{const raw=event as {id?:unknown;slug?:unknown};return typeof raw?.id==='string'||typeof raw?.id==='number'?String(raw.id):typeof raw?.slug==='string'?raw.slug:'';},
+          normalize:(event,sport,observedAt)=>normalizeTennisEvent(event,sport as TennisLeague,observedAt),
+          fetchPage:async(sport,{offset,limit,signal})=>{
+            const raw=await publicGet(`/v2/leagues/${sport.toLowerCase()}/events?type=sport&limit=${limit}&offset=${offset}`,signal);
             if(!Array.isArray(raw.events))throw new Error('League response has no events list.');
-            const observedAt=Date.now();
-            for(const event of raw.events)markets.push(...normalizeTennisEvent(event,league,observedAt));
-            if(raw.events.length<PAGE_SIZE)break;
-          }
-        }catch(error){errors.push(`${league}: ${sourceError(error,'Tennis discovery is temporarily unavailable.')}`);}
-      }));
-    }finally{clearTimeout(timer);}
+            return raw.events;
+          },
+        },{deadlineAt});
+        // Only genuinely new observations can refresh the verified held-market cache.
+        const fresh=visibleLeagueMarkets(state).filter(m=>m.observedAt>(previous?.value.lastPageAt??0));
+        for(let start=0;start<fresh.length;start+=50)await db().batch(fresh.slice(start,start+50).map(m=>db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated WHERE excluded.updated>=cache.updated')
+          .bind(`tennis:verified:${m.slug}`,JSON.stringify(m),m.observedAt)));
+        return state;
+      }).catch(async error=>{
+        const saved=await readCached<LeagueDiscoveryState<TennisMarket>>(key);
+        if(!saved)throw error;
+        return {...saved.value,error:sourceError(error,'Game discovery could not be saved. Showing the last saved list.'),nextAttemptAt:Date.now()+5000};
+      });
+    }));
+    const markets:TennisMarket[]=[],errors:string[]=[],pendingLeagues:TennisLeague[]=[],nextAttempts:number[]=[];
+    results.forEach((result,index)=>{
+      if(result.status==='rejected'){errors.push(`${leagues[index]}: ${sourceError(result.reason,'Game discovery is temporarily unavailable.')}`);pendingLeagues.push(leagues[index]);nextAttempts.push(Date.now()+5000);return;}
+      const state=result.value;markets.push(...visibleLeagueMarkets(state));
+      if(state.error)errors.push(`${leagues[index]}: ${state.error}`);
+      if(state.status!=='complete'||state.error)pendingLeagues.push(leagues[index]);
+      nextAttempts.push(state.nextAttemptAt||Date.now()+1000);
+    });
     const now=Date.now();
     const unique=[...new Map(markets.map(m=>[m.slug,m])).values()].filter(m=>{
       const start=Date.parse(m.startTime);
       return !m.ended&&Number.isFinite(start)&&start<=now+48*60*60_000&&start>=now-30*60*60_000;
     }).sort((a,b)=>Number(b.live)-Number(a.live)||Date.parse(a.startTime)-Date.parse(b.startTime)||a.slug.localeCompare(b.slug));
-    // Retain verified player mapping for a held market that later leaves active discovery.
-    if(unique.length)await db().batch(unique.map(m=>db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated WHERE excluded.updated>=cache.updated')
-      .bind(`tennis:verified:${m.slug}`,JSON.stringify(m),m.observedAt)));
-    return {markets:unique,updatedAt:now,errors};
+    return {markets:unique,updatedAt:now,errors,discovery:{complete:pendingLeagues.length===0,pendingLeagues,nextRefreshAt:Math.min(...nextAttempts)}};
   });
-  if(!includeHistory)return catalog;
+  if(!includeHistory)return {...catalog,markets:catalog.markets.map(m=>({...m,rejectedQuoteTimes:rejectedBooks[m.slug]??[]}))};
   const markets=await Promise.all(catalog.markets.map(async market=>({...market,rejectedQuoteTimes:rejectedBooks[market.slug]??[],history:await displayHistory(market.slug,rejectedBooks[market.slug])})));
   return {...catalog,markets};
 }
 
-export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP','WTA'],rejectedTimes:number[]=[]):Promise<TennisMarket>{
+export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP','WTA'],rejectedTimes:number[]=[],includeHistory=false):Promise<TennisMarket>{
   if(typeof slug!=='string'||slug.length>200||!/^[-a-zA-Z0-9]+$/.test(slug))throw new Error('Choose a verified game market.');
   const current=(await getTennisCatalog({includeHistory:false,leagues})).markets.find(m=>m.slug===slug);
-  if(current)return {...current,rejectedQuoteTimes:rejectedTimes};
+  if(current)return {...current,rejectedQuoteTimes:rejectedTimes,history:includeHistory?await displayHistory(slug,rejectedTimes):[]};
   const previous=await readCached<TennisMarket>(`tennis:verified:${slug}`);
   if(!previous||previous.value.slug!==slug||!['ATP','WTA','NFL','CFB'].includes(previous.value.league))throw new Error('This match is not in the verified tennis/football winner catalog.');
   return {...previous.value,active:false,rejectedQuoteTimes:rejectedTimes,history:await displayHistory(slug,rejectedTimes),unavailableReason:'Match is no longer in the active catalog. New entries are blocked; held positions can still be checked.'};

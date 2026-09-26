@@ -20,7 +20,7 @@ export type TennisMarket={
   quoteSourceTime?:number|null;rejectedQuoteTimes?:number[];
   execution:ExecutionMarket|null;unavailableReason?:string;
 };
-export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string[];leagues?:TennisLeague[]};
+export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string[];leagues?:TennisLeague[];discovery?:{complete:boolean;pendingLeagues:TennisLeague[];nextRefreshAt:number}};
 export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null;restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];

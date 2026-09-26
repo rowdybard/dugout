@@ -26,6 +26,8 @@ export function useTennis() {
   const [busy,setBusy]=useState(false),[visible,setVisible]=useState(true);
   const [streamStatus,setStreamStatus]=useState('connecting');
   const [now,setNow]=useState(()=>Date.now());
+  const [watchedSlug,watchMarket]=useState<string|null>(null);
+  const [catalogAttempt,setCatalogAttempt]=useState(0);
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
   const focusSlug=session?.config.focusSlug;
@@ -41,7 +43,7 @@ export function useTennis() {
     setRuntime(response.runtime);
     setNow(Date.now());
     setConnectionIssue(null);
-    setCatalog(current=>current?{...current,markets:current.markets.map(m=>marketWithSessionQuotes(m,response.session))}:current);
+    setCatalog(current=>current?{...current,markets:[...current.markets,...response.session.positions.filter(p=>p.status==='open'&&!current.markets.some(m=>m.slug===p.slug)).map(p=>({...p.lastContext??p.market,active:false}))].map(m=>marketWithSessionQuotes(m,response.session))}:current);
     if(response.error)setError(response.error);
   },[]);
   const refresh=useCallback(async function refreshCatalog(){
@@ -52,7 +54,8 @@ export function useTennis() {
       if(!mounted.current)return;
       const selected=sessionRef.current?.config.leagues;
       if(selected&&data.leagues&&[...selected].sort().join(',')!==[...data.leagues].sort().join(',')){catalogRerun.current=true;return;}
-      setCatalog(previous=>({...data,markets:data.markets.map(market=>{
+      const held=sessionRef.current?.positions.filter(p=>p.status==='open'&&!data.markets.some(m=>m.slug===p.slug)).map(p=>({...p.lastContext??p.market,active:false}))??[];
+      setCatalog(previous=>({...data,markets:[...data.markets,...held].map(market=>{
         const existing=previous?.markets.find(row=>row.slug===market.slug);
         const rejected=new Set(market.rejectedQuoteTimes??[]);
         const history=mergeTennisHistory(market.history,(existing?.history??[]).filter(point=>!rejected.has(point.time)));
@@ -60,7 +63,7 @@ export function useTennis() {
         return marketWithSessionQuotes(newest,sessionRef.current);
       })}));setFeedError(null);
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
-    finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);if(catalogRerun.current)void refreshCatalog();}}
+    finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);setCatalogAttempt(value=>value+1);if(catalogRerun.current)void refreshCatalog();}}
   },[]);
   const perform=useCallback(async(action:TennisAction,background=false)=>{
     // User commands wait behind the one in-flight check. Never silently discard a click.
@@ -109,9 +112,26 @@ export function useTennis() {
   },[accept,refresh]);
   useEffect(()=>{
     if(!visible)return;
-    const timer=setInterval(()=>void refresh(),20000);
+    const delay=catalog?.discovery?.complete===false?Math.max(1000,Math.min(30000,(catalog.discovery.nextRefreshAt||Date.now()+2000)-Date.now())):30000;
+    const timer=setTimeout(()=>void refresh(),delay);
     return()=>clearInterval(timer);
-  },[visible,refresh]);
+  },[visible,refresh,catalogAttempt,catalog?.discovery?.complete,catalog?.discovery?.nextRefreshAt]);
+  useEffect(()=>{
+    if(!visible||!watchedSlug)return;
+    let cancelled=false;
+    const load=async()=>{
+      try{
+        const data=await readJson<TennisCatalog>(`/api/tennis?slug=${encodeURIComponent(watchedSlug)}`);
+        if(cancelled)return;
+        const detail=data.markets.find(m=>m.slug===watchedSlug);
+        if(!detail)return;
+        const rejected=new Set(detail.rejectedQuoteTimes??[]);
+        setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug!==watchedSlug?m:{...m,history:mergeTennisHistory(detail.history,m.history.filter(p=>!rejected.has(p.time))),rejectedQuoteTimes:detail.rejectedQuoteTimes})}:current);
+      }catch{/* The catalog and stream retain their own connection/error state. */}
+    };
+    void load();const timer=setInterval(()=>void load(),30000);
+    return()=>{cancelled=true;clearInterval(timer);};
+  },[visible,watchedSlug]);
   useEffect(()=>{
     if(!visible||!sessionId)return;
     const tick=()=>{
@@ -136,14 +156,14 @@ export function useTennis() {
       setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>marketWithStreamQuote(market,quote,sessionRef.current,Date.now()))});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
-    return managedMarketStream(()=>new EventSource('/api/tennis/stream'),{
+    return managedMarketStream(()=>new EventSource(`/api/tennis/stream${watchedSlug?`?watch=${encodeURIComponent(watchedSlug)}`:''}`),{
       snapshot:event=>{try{const data=JSON.parse((event as MessageEvent).data) as StreamSnapshot;health(data.health);data.quotes.forEach(merge);}catch{setStreamStatus('rest');}},
       quote:event=>{try{merge(JSON.parse((event as MessageEvent).data) as StreamQuote);}catch{setStreamStatus('rest');}},
       status:event=>{try{health(JSON.parse((event as MessageEvent).data) as StreamHealth);}catch{setStreamStatus('rest');}},
     },setStreamStatus);
-  },[visible,runtime?.streamConfigured,leagueKey,focusSlug]);
+  },[visible,runtime?.streamConfigured,leagueKey,focusSlug,watchedSlug]);
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,clearError:()=>setError(null)};
+  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
 }
