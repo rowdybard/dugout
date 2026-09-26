@@ -15,6 +15,14 @@ test('book cache requires active matching generation and independently recent bo
  assert.equal(usableStreamBook(stored,{...connection,updatedAt:NaN},now),null);
  assert.equal(usableStreamBook({...stored,quote:{...quote(),receivedAt:NaN}},connection,now),null);
 });
+test('tennis stream bridge preserves missing provider time instead of inventing it from receipt',()=>{
+ const connection={id:'a',active:true,updatedAt:now};
+ for(const sourceTime of [now-10000,null]){
+  const input=usableStreamBook({connectionId:'a',quote:{...quote(),sourceTime}},connection,now)!;
+  assert.equal(input.receivedAt,now);assert.equal(input.sourceTime,sourceTime);
+ }
+});
+
 test('malformed, crossed and invalidated books cannot execute',()=>{
  for(const mutate of [(q:StreamQuote)=>q.valid=false,(q:StreamQuote)=>q.book=null,(q:StreamQuote)=>q.book!.asks[0].price='.3',(q:StreamQuote)=>q.book!.asks[0].quantity='NaN',(q:StreamQuote)=>q.book!.bids.push({price:'.5',quantity:'1'})]){
   const q=quote();mutate(q);assert.equal(usableStreamBook({connectionId:'a',quote:q},{id:'a',active:true,updatedAt:now},now),null);

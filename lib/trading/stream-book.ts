@@ -14,5 +14,5 @@ export function usableStreamBook(stored:StoredStreamBook|null,connection:StoredS
   if([...book.bids,...book.asks].some(l=>!Number.isFinite(l.price)||l.price<0||l.price>1||!Number.isFinite(l.quantity)||l.quantity<0))return null;
   if(book.bids.some((l,i)=>i>0&&l.price>book.bids[i-1].price)||book.asks.some((l,i)=>i>0&&l.price<book.asks[i-1].price))return null;
   if(book.bids[0]&&book.asks[0]&&book.bids[0].price>book.asks[0].price)return null;
-  return {book,receivedAt:q.receivedAt,source:'WEBSOCKET' as const};
+  return {book,receivedAt:q.receivedAt,sourceTime:q.sourceTime,source:'WEBSOCKET' as const};
 }

@@ -11,7 +11,7 @@ const CATALOG_DEADLINE=12_000;
 const BOOK_TTL=1_000;
 const PAGE_SIZE=4;
 const MAX_PAGES=2;
-type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'|'restReceipt'>;
+type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'|'sourceTime'|'restReceipt'>;
 
 async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
   // These are captured quotes, never hypothetical fills or a reconstructed sports score.
@@ -129,7 +129,10 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
     }
   }
   const {book,receivedAt,source,restReceipt}=observed;
+  // WS display time can fall back to receipt time; it must never become provider time.
+  const restTime=source==='REST'?Date.parse(book.time):NaN;
+  const sourceTime=source==='REST'?(Number.isFinite(restTime)?restTime:null):observed.sourceTime??null;
   const bid=book.bids[0]?.price??null,ask=book.asks[0]?.price??null;
-  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null,quoteObservedAt:receivedAt,quoteSource:source},book,receivedAt,source,...(restReceipt?{restReceipt}:{}),
+  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null,quoteObservedAt:receivedAt,quoteSource:source},book,receivedAt,source,sourceTime,...(restReceipt?{restReceipt}:{}),
     settlement,...(settlement!==null?{settlementReceivedAt:Date.now()}:{} )};
 }

@@ -12,6 +12,7 @@ import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from '
 import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
 import {currentTennisContext} from './market-context.ts';
+import {bookOrderIssue} from './book-order.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -60,6 +61,8 @@ function policy(session: TennisSession, input: TennisInput, now: number) {
 }
 
 function dataIssue(session: TennisSession, input: TennisInput, now: number): string | null {
+  const orderingIssue=bookOrderIssue(input,session.bookSourceTimes?.[input.market.slug],now);
+  if(orderingIssue)return orderingIssue;
   if (!['ATP','WTA','NFL','CFB'].includes(input.market.league)) return 'Only tennis and American football are supported in this experiment.';
   if (!input.market.execution || input.market.execution.slug !== input.market.slug || input.market.execution.league !== input.market.league) return 'Market mapping or execution rules are unavailable.';
   if (!Array.isArray(input.book.bids) || !Array.isArray(input.book.asks)) return 'Market order book is unavailable.';
@@ -463,7 +466,12 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   const current = [...new Map(sorted.map(input => [input.market.slug, input] as const).reverse()).values()];
   session.coverage ??= {};
   session.quotes ??= {};
-  for (const input of current) if (!dataIssue(session, input, now)) {
+  session.bookSourceTimes ??= {};
+  for (const input of current) {
+    const orderingIssue=bookOrderIssue(input,session.bookSourceTimes[input.market.slug],now);
+    if(orderingIssue){record(session,now,input.market.slug,'YES','SKIP','BOOK_ORDER',orderingIssue,input);continue;}
+    if(dataIssue(session,input,now))continue;
+    if(input.sourceTime!==undefined&&input.sourceTime!==null)session.bookSourceTimes[input.market.slug]=input.sourceTime;
     session.coverage[input.market.slug] = {league: input.market.league, time: input.receivedAt, live: freshLive(input,now)};
     session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source};
   }
@@ -541,9 +549,10 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
         const blocker=[...latest].reverse().find(d=>d.action==='SKIP');
         const progress=[...latest].reverse().find(d=>['DIP','CONFIRMATION','WARMUP'].includes(d.code));
         const cooldown=[...latest].reverse().find(d=>d.code==='COOLDOWN');
-        session.lastReason=blocker?.reason??progress?.reason??cooldown?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
+        // A repeated book is not a new strategy check. Keep its last result and timestamp.
+        if(latest.length)session.lastReason=blocker?.reason??progress?.reason??cooldown?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
       }
-      session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
+      if((session.decisionSequence??0)>beforeSequence)session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
     }
   }
   const value = tennisEquity(session);

@@ -26,6 +26,7 @@ import {TennisAdvisor} from './advisor';
 import {TennisMatchChart} from './match-chart';
 
 import {describeTennisRules} from '@/lib/tennis/rules';
+import {focusedEntryRest} from '@/lib/tennis/entry-rest';
 
 import {TennisPriceChart,TennisSparkline} from './price-chart';
 
@@ -148,12 +149,13 @@ export function TennisDashboard() {
 
   const tickStale=!!session&&['running','paused','stopping'].includes(session.status)&&now-session.lastTickAt>20000;
 
-  const status=!session?'Connecting':session.status==='stopping'?'Exiting position':isStopped?'Stopped':tickStale?'Waiting for a fresh check':isPaused?'Entries paused':session.pending?'Order pending':isRunning?(open.length?'Managing position':'Scanning'):'Ready';
+  const restSeconds=focusedEntryRest(session,now);
+  const status=!session?'Connecting':session.status==='stopping'?'Exiting position':isStopped?'Stopped':tickStale?'Waiting for a fresh check':isPaused?'Entries paused':session.pending?'Order pending':isRunning?(open.length?'Managing position':restSeconds!==null?'Resting before next entry':'Scanning'):'Ready';
 
   const reasonDecision=session?.decisions.findLast(d=>d.reason===session.lastReason);
   const reasonMarket=catalog?.markets.find(m=>m.slug===reasonDecision?.slug)??session?.positions.find(p=>p.slug===reasonDecision?.slug)?.market;
   const namedReason=reasonMarket&&reasonDecision?`${reasonDecision.side==='YES'?reasonMarket.yesName:reasonMarket.noName}: ${session?.lastReason}`:session?.lastReason;
-  const reason=!session?'Loading your saved paper session…':!bot.visible?'Page is hidden. Live checks resume when you return.':tickStale?'The last bot check is older than 20 seconds. No fills are made using stale data.':namedReason;
+  const reason=!session?'Loading your saved paper session…':!bot.visible?'Page is hidden. Live checks resume when you return.':tickStale?'The last bot check is older than 20 seconds. No fills are made using stale data.':restSeconds!==null?`${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}: `:''}Next entry check in ${restSeconds}s. The bot resumes automatically and still needs a qualifying setup.`:namedReason;
 
   const decisions=[...(session?.decisions??[])].reverse().filter(d=>showAll||!['WARMUP','CONFIRMATION','NO_DIP','NO_MOMENTUM'].includes(d.code));
 
@@ -183,7 +185,7 @@ export function TennisDashboard() {
 
         <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.strategy==='auto'?'AUTO DECISION ENGINE':session?.config.strategy==='momentum'?'FOLLOW A RISE':'WAIT FOR A RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
 
-          <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||!session||entryBudget<1||entryBudget>Math.min(100,session.config.startingCash*.2)} onClick={()=>void bot.perform({action:'start',runForMs:watchDuration,commandId:tennisCommandId()})}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||!session||session.status==='stopping'} onClick={()=>void bot.perform({action:isPaused?'resume':'pause',...(isPaused?{runForMs:watchDuration}:{}),commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Resume bot':'Pause bot'}</button>}
+          <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||!session||entryBudget<1||entryBudget>Math.min(100,session.config.startingCash*.2)} onClick={()=>void bot.perform({action:'start',runForMs:watchDuration,commandId:tennisCommandId()})}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||!session||session.status==='stopping'} onClick={()=>void bot.perform({action:isPaused?'resume':'pause',...(isPaused&&(!session.testRun||session.testRun.complete||now>=session.testRun.endsAt)?{runForMs:watchDuration}:{}),commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Resume bot':'Pause bot'}</button>}
 
           {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop bot</button>}
 

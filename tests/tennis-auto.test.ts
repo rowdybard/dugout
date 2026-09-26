@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptiveTennisRules} from '../lib/tennis/auto.ts';
 import {quoteAvailabilityIssue} from '../lib/tennis/quote-status.ts';
+import {focusedEntryRest} from '../lib/tennis/entry-rest.ts';
 import {currentTennisContext,retainedTennisContext} from '../lib/tennis/market-context.ts';
 import {applyTennisAction,createTennisSession,defaultTennisConfig,stepTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
@@ -66,6 +67,54 @@ test('Auto still rejects a widened execution book and cools both strategy tracks
   assert.match(waiting.lastReason,/resumes automatically/);
   assert.equal(waiting.pending,null);assert.equal(waiting.cash,100);
 });
+test('ticks without a new book preserve the last Auto explanation and check time',()=>{
+  const canceled=stepTennisSession(queued('momentum'),[input(NOW,.60,.65)],NOW);
+  const book=input(NOW+2000,.64,.65);
+  const waiting=stepTennisSession(canceled,[book],NOW+2000);
+  for(const inputs of [[book],[]]){
+    const repeated=stepTennisSession(waiting,inputs,NOW+3000);
+    assert.equal(repeated.lastReason,waiting.lastReason);
+    assert.deepEqual(repeated.autoStatus,waiting.autoStatus);
+    assert.deepEqual(repeated.decisions,waiting.decisions);
+    assert.equal(repeated.cash,waiting.cash);assert.equal(repeated.pending,null);
+  }
+  const stale=stepTennisSession(waiting,[book],NOW+8000);
+  assert.notEqual(stale.lastReason,waiting.lastReason);
+  assert.equal(stale.decisions.at(-1)?.code,'DATA');
+});
+
+test('focused entry rest counts down only while every eligible Auto track is resting',()=>{
+  const canceled=stepTennisSession(queued('momentum'),[input(NOW,.60,.65)],NOW);
+  canceled.config.focusSlug='synthetic-auto';
+  assert.equal(focusedEntryRest(canceled,NOW),10);
+  assert.equal(focusedEntryRest(canceled,NOW+2500),8);
+  assert.equal(focusedEntryRest(canceled,NOW+10000),null);
+  const oneReady=structuredClone(canceled);
+  oneReady.autoSignals!['synthetic-auto:NO:momentum'].cooldownUntil=NOW;
+  assert.equal(focusedEntryRest(oneReady,NOW),null);
+  delete oneReady.autoSignals!['synthetic-auto:NO:momentum'];
+  assert.equal(focusedEntryRest(oneReady,NOW),null);
+  const fixed=structuredClone(canceled);fixed.config.strategy='recovery';delete fixed.autoSignals;
+  assert.equal(focusedEntryRest(fixed,NOW),10);
+  fixed.signals['synthetic-auto:YES'].cooldownUntil=NOW+4000;
+  assert.equal(focusedEntryRest(fixed,NOW+1000),3);
+});
+
+test('entry rest cannot hide held, pending, paused, stale or other-game activity',()=>{
+  const canceled=stepTennisSession(queued('momentum'),[input(NOW,.60,.65)],NOW);
+  canceled.config.focusSlug='synthetic-auto';
+  for(const changed of [
+    {...canceled,status:'paused' as const},
+    {...canceled,lastTickAt:NOW-20001},
+    {...canceled,lastTickAt:NOW+1},
+    {...canceled,config:{...canceled.config,focusSlug:null}},
+    {...canceled,pending:queued('momentum').pending},
+    {...canceled,positions:stepTennisSession(queued('momentum'),[input(NOW,.64,.65)],NOW).positions},
+  ])assert.equal(focusedEntryRest(changed,NOW),null);
+  assert.equal(focusedEntryRest(null,NOW),null);
+  assert.equal(focusedEntryRest(canceled,NaN),null);
+});
+
 test('Auto exit retains chosen strategy after a mode change and cooldown clears both candidates',()=>{
   let session=stepTennisSession(queued('recovery'),[input(NOW,.64,.65)],NOW);
   session=applyTennisAction(session,{action:'update-rules',sessionId:session.id,expectedRulesRevision:0,commandId:'synthetic-mode-change',rules:{strategy:'momentum'}},[],NOW+1);
@@ -208,6 +257,62 @@ test('saving focused-game rules cancels buys, retains rest deadlines and preserv
   assert.equal(result.autoSignals!['other:YES:momentum'].cooldownUntil,NOW+300000);
   const reset=applyTennisAction(result,{action:'reset',bankroll:100,commandId:'focus-reset'},[],NOW+1);
   assert.equal(reset.config.focusSlug,'other');
+});
+
+test('persisted provider ordering blocks an older REST MISS from marking or exiting a held position',()=>{
+  const entry={...input(NOW,.64,.65),source:'WEBSOCKET' as const,sourceTime:NOW-100};
+  const held=stepTennisSession(queued('momentum'),[entry],NOW);
+  assert.equal(held.bookSourceTimes?.['synthetic-auto'],NOW-100);
+  const restored=JSON.parse(JSON.stringify(held)) as TennisSession;
+  const stale={...input(NOW+3000,.4,.41),sourceTime:NOW-120000,restReceipt:{requestedAt:NOW+3000,receivedAt:NOW+3032,cacheStatus:'MISS',cacheAgeSeconds:null}};
+  const rejected=stepTennisSession(restored,[stale],NOW+3100);
+  assert.equal(rejected.pending,null);assert.equal(rejected.positions[0].status,'open');
+  assert.equal(rejected.positions[0].netLiquidationValue,null);assert.equal(rejected.positions[0].markedAt,null);
+  assert.equal(rejected.cash,held.cash);assert.deepEqual(rejected.ledger,held.ledger);
+  assert.deepEqual(rejected.quotes,held.quotes);assert.deepEqual(rejected.coverage,held.coverage);
+  assert.deepEqual(rejected.consumedBooks,held.consumedBooks);assert.deepEqual(rejected.bookSourceTimes,held.bookSourceTimes);
+  assert.equal(rejected.testRun?.watchedMs,held.testRun?.watchedMs);
+  assert.equal(rejected.decisions.at(-1)?.code,'BOOK_ORDER');
+  const current=stepTennisSession(rejected,[{...input(NOW+5000,.4,.41),sourceTime:NOW+4900}],NOW+5000);
+  assert.equal(current.pending?.action,'SELL');assert.equal(current.bookSourceTimes?.['synthetic-auto'],NOW+4900);
+  const waiting=stepTennisSession(current,[{...stale,receivedAt:NOW+7000}],NOW+7000);
+  assert.equal(waiting.pending?.id,current.pending?.id);assert.equal(waiting.cash,current.cash);
+  assert.deepEqual(waiting.ledger,current.ledger);
+  const exited=stepTennisSession(waiting,[{...input(NOW+9000,.4,.41),sourceTime:NOW+8900}],NOW+9000);
+  assert.equal(exited.positions[0].status,'closed');assert.equal(exited.ledger.at(-1)?.action,'SELL');
+});
+
+test('provider ordering blocks pending buys and entries without consuming their books or histories',()=>{
+  const prepared=queued('momentum');prepared.bookSourceTimes={'synthetic-auto':NOW-100};
+  const old={...input(NOW,.64,.65),sourceTime:NOW-120000};
+  const pending=stepTennisSession(prepared,[old],NOW);
+  assert.equal(pending.pending?.id,prepared.pending?.id);assert.equal(pending.ledger.length,0);assert.equal(pending.cash,100);
+  assert.deepEqual(pending.histories,prepared.histories);
+  const scanning=structuredClone(prepared);scanning.pending=null;
+  const rejected=stepTennisSession(scanning,[old],NOW);
+  assert.equal(rejected.pending,null);assert.deepEqual(rejected.histories,scanning.histories);
+  assert.deepEqual(rejected.autoSignals,scanning.autoSignals);assert.deepEqual(rejected.consumedBooks,scanning.consumedBooks);
+});
+
+test('equal provider times remain usable while unknown or future times cannot overwrite a known book',()=>{
+  const held=stepTennisSession(queued('momentum'),[{...input(NOW,.64,.65),sourceTime:NOW-100}],NOW);
+  for(const sourceTime of [undefined,null,NaN,Infinity,NOW+9001]){
+    const result=stepTennisSession(held,[{...input(NOW+2000,.64,.65),sourceTime}],NOW+2000);
+    assert.equal(result.positions[0].netLiquidationValue,null);assert.deepEqual(result.bookSourceTimes,held.bookSourceTimes);
+    assert.equal(result.decisions.at(-1)?.code,'BOOK_ORDER');
+  }
+  const equal=stepTennisSession(held,[{...input(NOW+2000,.64,.65),sourceTime:NOW-100}],NOW+2000);
+  assert.notEqual(equal.positions[0].netLiquidationValue,null);assert.equal(equal.positions[0].markedAt,NOW+2000);
+  const staleReceipt=stepTennisSession(held,[{...input(NOW,.64,.65),sourceTime:NOW+5900}],NOW+6000);
+  assert.equal(staleReceipt.positions[0].netLiquidationValue,null);assert.deepEqual(staleReceipt.bookSourceTimes,held.bookSourceTimes);
+});
+
+test('explicit settlement still closes a position when its empty book cannot pass provider ordering',()=>{
+  const held=stepTennisSession(queued('momentum'),[{...input(NOW,.64,.65),sourceTime:NOW-100}],NOW);
+  const final={...input(NOW+2000,.64,.65),sourceTime:null,book:{bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''},settlement:1,settlementReceivedAt:NOW+2000};
+  const settled=stepTennisSession(held,[final],NOW+2000);
+  assert.equal(settled.positions[0].status,'settled');assert.equal(settled.ledger.at(-1)?.action,'SETTLE');
+  assert.equal(stepTennisSession(settled,[final],NOW+3000).cash,settled.cash);
 });
 
 test('a three-hour football observation preserves the entry pause at its actual end',()=>{

@@ -20,7 +20,7 @@ export type TennisMarket={
   execution:ExecutionMarket|null;unavailableReason?:string;
 };
 export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string[];leagues?:TennisLeague[]};
-export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
+export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null;restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
@@ -50,6 +50,7 @@ export type TennisSession={
   rulesRevision?:number;coverage?:Record<string,{league:TennisLeague;time:number;live:boolean}>;
   quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY'}>;
   autoSignals?:Record<string,TennisSignal>;
+  bookSourceTimes?:Record<string,number>;
   autoStatus?:{time:number;checked:number;qualified:number;reason:string;selected?:'recovery'|'momentum'};
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
