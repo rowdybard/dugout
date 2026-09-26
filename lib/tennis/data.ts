@@ -1,10 +1,9 @@
-import type {Point} from '../market/types';
 import {publicGet} from '../server/polymarket';
 import {cached,db,readCached} from '../server/storage';
 import {currentStreamBook} from '../server/stream-books';
 import {sourceError} from '../server/request-budget';
 import {freshTennisBook,normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from './normalize';
-import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket} from './types';
+import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket,TennisPricePoint} from './types';
 
 const CATALOG_TTL=30_000;
 const CATALOG_DEADLINE=12_000;
@@ -13,21 +12,21 @@ const PAGE_SIZE=4;
 const MAX_PAGES=2;
 type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'>;
 
-async function displayHistory(slug:string):Promise<Point[]>{
+async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
   // These are captured quotes, never hypothetical fills or a reconstructed sports score.
-  const rows=await db().prepare('SELECT time,value FROM tennis_observations WHERE slug=? AND time>? ORDER BY time DESC LIMIT 100')
-    .bind(slug,Date.now()-6*60*60_000).all<{time:number;value:string}>().catch(()=>({results:[]}));
+  const rows=await db().prepare("SELECT time,json_extract(value,'$.book.bids[0].price') AS bid,json_extract(value,'$.book.asks[0].price') AS ask,json_extract(value,'$.market.score') AS score,json_extract(value,'$.market.period') AS period,json_extract(value,'$.market.contextUpdatedAt') AS scoreUpdatedAt FROM tennis_observations WHERE slug=? AND time>? ORDER BY time DESC LIMIT 600")
+    .bind(slug,Date.now()-6*60*60_000).all<{time:number;bid:number;ask:number;score:string|null;period:string|null;scoreUpdatedAt:number|null}>().catch(()=>({results:[]}));
   return rows.results.flatMap(row=>{
     try{
-      const input=JSON.parse(row.value) as TennisInput,bid=input.book?.bids?.[0]?.price,ask=input.book?.asks?.[0]?.price;
+      const {bid,ask}=row;
       if(!Number.isFinite(row.time)||!Number.isFinite(bid)||!Number.isFinite(ask)||bid<0||ask>1||bid>ask)return [];
-      return [{time:row.time,price:(bid+ask)/2,spread:ask-bid}];
+      return [{time:row.time,price:(bid+ask)/2,spread:ask-bid,bid,ask,score:row.score,period:row.period,scoreUpdatedAt:row.scoreUpdatedAt}];
     }catch{return [];}
   }).reverse();
 }
 
 /** Four public pages maximum, cached across all clients; no per-market network fanout. */
-export async function getTennisCatalog():Promise<TennisCatalog>{
+export async function getTennisCatalog({includeHistory=true}:{includeHistory?:boolean}={}):Promise<TennisCatalog>{
   const catalog=await cached<TennisCatalog>('tennis:catalog:v1',CATALOG_TTL,async()=>{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis discovery deadline','TimeoutError')),CATALOG_DEADLINE);
     const markets:TennisMarket[]=[],errors:string[]=[];
@@ -55,13 +54,14 @@ export async function getTennisCatalog():Promise<TennisCatalog>{
       .bind(`tennis:verified:${m.slug}`,JSON.stringify(m),m.observedAt)));
     return {markets:unique,updatedAt:now,errors};
   });
+  if(!includeHistory)return catalog;
   const markets=await Promise.all(catalog.markets.map(async market=>({...market,history:await displayHistory(market.slug)})));
   return {...catalog,markets};
 }
 
 export async function getTennisMarket(slug:string):Promise<TennisMarket>{
   if(typeof slug!=='string'||slug.length>200||!/^[-a-zA-Z0-9]+$/.test(slug))throw new Error('Choose a verified tennis match.');
-  const current=(await getTennisCatalog()).markets.find(m=>m.slug===slug);
+  const current=(await getTennisCatalog({includeHistory:false})).markets.find(m=>m.slug===slug);
   if(current)return current;
   const previous=await readCached<TennisMarket>(`tennis:verified:${slug}`);
   if(!previous||previous.value.slug!==slug||!['ATP','WTA'].includes(previous.value.league))throw new Error('This match is not in the verified ATP/WTA singles catalog.');
@@ -121,6 +121,6 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
   }
   const {book,receivedAt,source}=observed;
   const bid=book.bids[0]?.price??null,ask=book.asks[0]?.price??null;
-  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null},book,receivedAt,source,
+  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null,quoteObservedAt:receivedAt,quoteSource:source},book,receivedAt,source,
     settlement,...(settlement!==null?{settlementReceivedAt:Date.now()}:{} )};
 }

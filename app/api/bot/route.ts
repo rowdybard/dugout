@@ -10,7 +10,6 @@ import {collectBotInputs} from '@/lib/bot/collect-inputs';
 const schema=z.discriminatedUnion('action',[
   z.object({action:z.literal('start'),bankroll:z.number().finite().min(5).max(100),leagues:z.array(z.enum(['MLB','NFL'])).min(1).max(2)}).strict(),
   z.object({action:z.enum(['step','pause','resume','stop']),sessionId:z.string().uuid()}).strict(),
-  z.object({action:z.literal('exit'),sessionId:z.string().uuid(),positionId:z.string().uuid()}).strict(),
 ]);
 const runtime={mode:'browser',intervalMs:5000,backgroundConnected:false,description:'Checks run only while this page is visible. No always-on service is connected.'};
 export async function GET(req:Request){
@@ -55,17 +54,9 @@ export async function POST(req:Request){
     }
     if(body.action==='stop'){session.status=session.positions.some(p=>p.status==='open')?'stopping':'stopped';session.lastReason='Entries stopped. Attempting to exit remaining positions at current bids.';session.revision++;await saveProfile(p);return Response.json({profile:p.data,session,runtime});}
     if(session.status==='stopped')return Response.json({profile:p.data,session,runtime});
-    if(body.action==='exit'&&!session.positions.some(p=>p.id===body.positionId&&p.status==='open'))throw new Error('This bot position is no longer open.');
-    if(body.action==='exit'){
-      if(session.status==='running')session.status='paused';
-      session.exitRequests=[...new Set([...(session.exitRequests??[]),body.positionId])];
-      session.lastReason='Manual exit requested. Entries are paused; partial exits will be retried.';session.revision++;
-      // Save the intent before source I/O: a timeout must never lose an exit request.
-      await saveProfile(p);
-    }
     if(body.action==='step'&&Date.now()-session.lastCycleAt<4500)return Response.json({profile:p.data,session,runtime});
     const {inputs,failures,cursor,universeSize}=await collectBotInputs(session,{markets:async()=>(await getCatalog(session.config.leagues)).markets,input:loadBotInput});
-    const next=stepBot(session,inputs,Date.now(),body.action==='exit'?body.positionId:undefined);
+    const next=stepBot(session,inputs,Date.now());
     next.universeSize=universeSize;next.cursor=cursor;
     if(failures.length)next.lastReason=`Waiting for data · ${failures[0].reason}`;
     trading.autopilot=next;

@@ -3,9 +3,12 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {TennisAction,TennisCatalog,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
+import {mergeTennisHistory,marketWithSessionQuotes} from '@/lib/tennis/chart-data';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
-  const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(12000)});
+  const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(20000)}).catch(cause=>{
+    throw new Error(cause?.name==='TimeoutError'?'The connection timed out. Reconnecting to your saved session.':'Connection interrupted. Retrying with fresh data; your saved balance is safe.');
+  });
   let data:T & {error?:string};
   try {data=await response.json();} catch {throw new Error(`The server returned an unreadable response (${response.status}). Try again.`);}
   if(!response.ok) throw new Error(data.error||`Request failed (${response.status}). Try again.`);
@@ -18,6 +21,7 @@ export function useTennis() {
   const [runtime,setRuntime]=useState<TennisRuntime|null>(null);
   const [loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false);
   const [error,setError]=useState<string|null>(null),[feedError,setFeedError]=useState<string|null>(null);
+  const [connectionIssue,setConnectionIssue]=useState<string|null>(null);
   const [busy,setBusy]=useState(false),[visible,setVisible]=useState(true);
   const [streamStatus,setStreamStatus]=useState('connecting');
   const [now,setNow]=useState(()=>Date.now());
@@ -32,6 +36,8 @@ export function useTennis() {
       return response.session;
     });
     setRuntime(response.runtime);
+    setConnectionIssue(null);
+    setCatalog(current=>current?{...current,markets:current.markets.map(m=>marketWithSessionQuotes(m,response.session))}:current);
     if(response.error)setError(response.error);
   },[]);
   const refresh=useCallback(async()=>{
@@ -42,7 +48,9 @@ export function useTennis() {
       if(!mounted.current)return;
       setCatalog(previous=>({...data,markets:data.markets.map(market=>{
         const existing=previous?.markets.find(row=>row.slug===market.slug);
-        return existing&&existing.observedAt>market.observedAt?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,observedAt:existing.observedAt,history:existing.history}:market;
+        const history=mergeTennisHistory(market.history,existing?.history??[]);
+        const newest=existing&&(existing.quoteObservedAt??existing.observedAt)>(market.quoteObservedAt??market.observedAt)?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,quoteObservedAt:existing.quoteObservedAt,quoteSource:existing.quoteSource,history}:{...market,history};
+        return marketWithSessionQuotes(newest,sessionRef.current);
       })}));setFeedError(null);
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
     finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);}}
@@ -61,17 +69,16 @@ export function useTennis() {
         const response=await readJson<TennisSessionResponse>('/api/tennis/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});
         accept(response);
         const result=response.session;
-        const rejected=action.action==='buy'?result.pending?.id!==action.commandId&&!result.ledger.some(entry=>entry.id===action.commandId)
-          :action.action==='start'?result.status!=='running'
+        const rejected=action.action==='start'?result.status!=='running'
           :action.action==='reset'?result.config.startingCash!==action.bankroll||result.status!=='idle'
-          :action.action==='close'?result.pending?.action!=='SELL'&&result.positions.some(position=>position.id===action.positionId&&position.status==='open')
+          :action.action==='update-rules'?(result.rulesRevision??0)!==action.expectedRulesRevision+1
           :action.action==='resume'?result.status!=='running':false;
         if(response.error||rejected){setError(response.error||result.lastReason);return false;}
         setError(null);return true;
       }catch(cause){
         const message=cause instanceof Error?cause.message:'The paper account could not be updated.';
-        if(mounted.current)setError(message);
-        if(/session changed|another request|conflict|updated by/i.test(message)){
+        if(mounted.current){if(background)setConnectionIssue(message);else setError(message);}
+        if(/session changed|another request|conflict|updated by|connection/i.test(message)){
           try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));}catch{/* Keep the actionable original error. */}
         }
         return false;
@@ -103,7 +110,7 @@ export function useTennis() {
     const tick=()=>{
       const current=sessionRef.current;
       if(!current||inflight.current)return;
-      // Pausing entries does not pause exit checks; manual trades also need monitoring.
+      // Pausing entries does not pause exit checks; existing positions still need monitoring.
       if(['running','paused','stopping'].includes(current.status)||current.pending||current.positions.some(position=>position.status==='open')){
         void perform({action:'tick',sessionId:current.id},true);
       }
@@ -119,10 +126,10 @@ export function useTennis() {
       if(!quote.valid)return;
       setStreamStatus('live');
       setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>{
-        if(market.slug!==quote.slug||quote.receivedAt<market.observedAt)return market;
+        if(market.slug!==quote.slug||quote.receivedAt<(market.quoteObservedAt??market.observedAt))return market;
         const points=[...market.history];
-        if(quote.price!==null&&(!points.length||quote.receivedAt-points[points.length-1].time>=1000))points.push({time:quote.receivedAt,price:quote.price});
-        return {...market,bid:quote.bid,ask:quote.ask,price:quote.price,observedAt:quote.receivedAt,history:points.slice(-120)};
+        if(quote.price!==null&&(!points.length||quote.receivedAt-points[points.length-1].time>=1000))points.push({time:quote.receivedAt,price:quote.price,bid:quote.bid??undefined,ask:quote.ask??undefined,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt});
+        return {...market,bid:quote.bid,ask:quote.ask,price:quote.price,quoteObservedAt:quote.receivedAt,quoteSource:'WEBSOCKET' as const,history:points.slice(-1200)};
       })});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
@@ -135,5 +142,5 @@ export function useTennis() {
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,clearError:()=>setError(null)};
+  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,clearError:()=>setError(null)};
 }

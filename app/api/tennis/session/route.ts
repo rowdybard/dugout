@@ -3,22 +3,14 @@ import {sameOrigin,db} from '@/lib/server/storage';
 import {readTennisSession,updateTennisSession,tennisRuntime} from '@/lib/tennis/server';
 import type {TennisAction} from '@/lib/tennis/types';
 
-const config=z.object({
-  startingCash:z.number().finite().min(5).max(1000).optional(),entryBudget:z.number().finite().min(1).max(1000).optional(),
-  leagues:z.array(z.enum(['ATP','WTA'])).min(1).max(2).optional(),
-  declinePoints:z.number().finite().min(1).max(30).optional(),recoveryPoints:z.number().finite().min(.5).max(15).optional(),
-  targetReturn:z.number().finite().min(.005).max(1).optional(),stopReturn:z.number().finite().min(.01).max(.5).optional(),
-  maxHoldMs:z.number().finite().int().min(10000).max(3600000).optional(),
-  maxSpreadPoints:z.number().finite().min(.1).max(10).optional(),
-}).strict();
+import {tennisRulesPatchSchema} from '@/lib/tennis/rules';
 const internalId=z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/);
-const control=z.object({action:z.enum(['tick','pause','resume','stop']),commandId:z.string().uuid().optional(),sessionId:internalId.optional()}).strict();
+const runForMs=z.number().int().min(60_000).max(3_600_000).optional();
 const schema=z.union([
-  z.object({action:z.literal('start'),config:config.optional(),commandId:z.string().uuid()}).strict(),
-  control,
+  z.object({action:z.literal('start'),config:tennisRulesPatchSchema.optional(),runForMs,commandId:z.string().uuid()}).strict(),
+  z.object({action:z.enum(['tick','pause','resume','stop']),runForMs,commandId:z.string().uuid().optional(),sessionId:internalId.optional()}).strict(),
   z.object({action:z.literal('reset'),bankroll:z.number().finite().min(5).max(1000),commandId:z.string().uuid()}).strict(),
-  z.object({action:z.literal('buy'),slug:z.string().regex(/^[a-zA-Z0-9_.-]+$/).max(250),side:z.enum(['YES','NO']),amount:z.number().finite().min(1).max(1000),commandId:z.string().uuid()}).strict(),
-  z.object({action:z.literal('close'),positionId:internalId,commandId:z.string().uuid()}).strict(),
+  z.object({action:z.literal('update-rules'),rules:tennisRulesPatchSchema,expectedRulesRevision:z.number().int().min(0),sessionId:internalId,commandId:z.string().uuid()}).strict(),
 ]);
 export async function GET(req:Request){
   try{

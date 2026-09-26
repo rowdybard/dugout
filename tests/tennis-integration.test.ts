@@ -64,178 +64,138 @@ const tennisInput=(time:number,bid=0.39,ask=0.40,league:'ATP'|'WTA'='ATP',quanti
     contextUpdatedAt:null,history:[],execution,
   }};
 };
-const freshSession=():TennisSession=>{
-  const config={...defaultTennisConfig(100),entryBudget:10};
-  const session=createTennisSession(config,NOW);
-  return applyTennisAction(session,{action:'start',commandId:'qa-start'},[],NOW);
-};
-const bought=(side:'YES'|'NO'='YES'):TennisSession=>{
-  const input=tennisInput(NOW),session=applyTennisAction(freshSession(),{
-    action:'buy',slug:input.market.slug,side,amount:10,commandId:`qa-buy-${side}`,
-  },[input],NOW);
-  assert.ok(session.pending,'manual buy must record an intent first');
-  const time=session.pending.executeAfter;
-  const filled=stepTennisSession(session,[tennisInput(time)],time);
-  assert.equal(filled.positions.filter(p=>p.status==='open').length,1);
-  return filled;
-};
+const forSide=(time:number,bid:number,ask:number,side:'YES'|'NO'='YES',league:'ATP'|'WTA'='ATP',quantity=100)=>
+  tennisInput(time,side==='YES'?bid:1-ask,side==='YES'?ask:1-bid,league,quantity);
+function queued(side:'YES'|'NO'='YES',league:'ATP'|'WTA'='ATP',strategy:'recovery'|'momentum'='recovery') {
+  let session=applyTennisAction(createTennisSession({...defaultTennisConfig(),strategy,entryBudget:10},NOW-60000),{action:'start',commandId:'start'},[],NOW-60000);
+  for(let i=0;i<12;i++){
+    const t=NOW-60000+i*4000;
+    session=stepTennisSession(session,[forSide(t,strategy==='recovery'?.71:.59,strategy==='recovery'?.72:.60,side,league)],t);
+  }
+  const path=strategy==='recovery'?[[.61,.62],[.63,.64],[.64,.65]]:[[.61,.62],[.64,.65],[.64,.65]];
+  path.forEach(([bid,ask],i)=>{const t=NOW-12000+i*5000;session=stepTennisSession(session,[forSide(t,bid,ask,side,league)],t);});
+  assert.equal(session.pending?.action,'BUY');assert.equal(session.pending?.side,side);
+  return session;
+}
+function bought(side:'YES'|'NO'='YES') {
+  const session=queued(side),filled=stepTennisSession(session,[forSide(NOW,.64,.65,side)],NOW);
+  assert.equal(filled.positions.length,1);return filled;
+}
 
-test('website paper buy waits for both latency and a later authoritative book',()=>{
-  const input=tennisInput(NOW),initial=freshSession();
-  const queued=applyTennisAction(initial,{action:'buy',slug:input.market.slug,side:'YES',amount:10,commandId:'qa-delay'},[input],NOW);
-  close(queued.cash,100);assert.equal(queued.positions.length,0);assert.ok(queued.pending);
-  const before=stepTennisSession(queued,[tennisInput(NOW+500)],NOW+500);
-  close(before.cash,100);assert.equal(before.positions.length,0);
-  const delayed=stepTennisSession(before,[input],queued.pending.executeAfter+2000);
-  close(delayed.cash,100);assert.equal(delayed.positions.length,0,'the original quote cannot become a delayed fill');
-  const time=queued.pending.executeAfter+2001;
-  const moved=stepTennisSession(delayed,[tennisInput(time,0.44,0.46)],time);
-  close(moved.cash,100);assert.equal(moved.positions.length,0,'new execution price exceeded the recorded limit');
+for(const strategy of ['recovery','momentum'] as const)for(const side of ['YES','NO'] as const)for(const league of ['ATP','WTA'] as const){
+  test(`${strategy}: genuine ${league} ${side} signal waits for a fresh delayed fill`,()=>{
+    const session=queued(side,league,strategy),at=session.pending!.executeAfter;
+    assert.equal(session.cash,100);assert.equal(session.positions.length,0);
+    const old=stepTennisSession(session,[forSide(at-1,.64,.65,side,league)],at);
+    assert.equal(old.cash,100);assert.equal(old.positions.length,0);
+    const filled=stepTennisSession(old,[forSide(at+1000,.64,.65,side,league)],at+1000);
+    assert.equal(filled.positions.length,1);assert.equal(filled.ledger[0].source,'AUTOMATIC');
+    close(filled.cash+filled.positions[0].entryCost,100);
+    const replay=stepTennisSession(filled,[forSide(at+1000,.64,.65,side,league)],at+1001);
+    close(replay.cash,filled.cash);assert.equal(replay.ledger.length,1);
+  });
+}
+
+for(const defect of ['pregame','ended','suspended','catalog stale','book stale','future','replay','spread','buyers fell','price fell'] as const){
+  test(`a delayed entry cancels or waits safely when ${defect}`,()=>{
+    const session=queued(),input=tennisInput(NOW,.64,.65);
+    if(defect==='pregame')input.market.live=false;
+    if(defect==='ended')input.market.ended=true;
+    if(defect==='suspended')input.market.active=false;
+    if(defect==='catalog stale')input.market.observedAt=NOW-60000;
+    if(defect==='book stale')input.receivedAt=NOW-60000;
+    if(defect==='future')input.receivedAt=NOW+10000;
+    if(defect==='replay')input.source='REPLAY';
+    if(defect==='spread')input.book.asks[0].price=.68;
+    if(defect==='buyers fell'){input.book.bids[0].price=.63;input.book.asks[0].price=.65;}
+    if(defect==='price fell'){input.book.bids[0].price=.63;input.book.asks[0].price=.64;}
+    const next=stepTennisSession(session,[input],NOW);
+    assert.equal(next.cash,100);assert.equal(next.positions.length,0);
+  });
+}
+test('pause cancels an entry and a duplicate command does not resume it',()=>{
+  const session=queued(),action={action:'pause' as const,commandId:'pause'};
+  const paused=applyTennisAction(session,action,[],NOW);
+  assert.equal(paused.pending,null);assert.equal(paused.status,'paused');
+  const repeated=applyTennisAction(paused,action,[],NOW+1000);assert.equal(repeated.revision,paused.revision);
 });
-
-test('manual tennis buys and repeated command submission preserve one cash debit',()=>{
+test('partial bot exits cannot spend the same observed depth twice',()=>{
+  const filled=bought(),time=NOW+3000;
+  const requested=applyTennisAction(filled,{action:'stop',commandId:'stop'},[tennisInput(time,.72,.73,'ATP',3)],time);
+  assert.ok(requested.pending);const at=requested.pending.executeAfter,book=tennisInput(at,.72,.73,'ATP',3);
+  const partial=stepTennisSession(requested,[book],at);
+  close(partial.positions[0].quantity,filled.positions[0].quantity-3);
+  const again=stepTennisSession(partial,[book],at+1000);close(again.cash,partial.cash);
+  close(again.positions[0].quantity,partial.positions[0].quantity);
+});
+test('settlement uses explicit provider value once even after a book disappears',()=>{
   for(const side of ['YES','NO'] as const){
-    const filled=bought(side),position=filled.positions.find(p=>p.status==='open')!;
-    assert.equal(position.side,side);close(position.entryPrice,side==='YES'?0.40:0.61);
-    close(filled.cash+position.entryCost,100);assert.ok(position.entryCost<=10);
-    const replay=applyTennisAction(filled,{action:'buy',slug:position.slug,side,amount:10,commandId:`qa-buy-${side}`},[tennisInput(NOW+2000)],NOW+2000);
-    close(replay.cash,filled.cash);assert.equal(replay.positions.length,filled.positions.length);assert.equal(replay.ledger.length,filled.ledger.length);
+    const filled=bought(side),input=tennisInput(NOW+5000);input.market.ended=true;input.market.active=false;
+    input.book={bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''};input.settlement=.5;input.settlementReceivedAt=NOW+5000;
+    const settled=stepTennisSession(filled,[input],NOW+5000);assert.equal(settled.positions[0].status,'settled');
+    close(settled.cash,filled.cash+filled.positions[0].quantity*.5);close(tennisEquity(settled),settled.cash);
+    close(stepTennisSession(settled,[input],NOW+6000).cash,settled.cash);
   }
 });
-
-test('a partial manual exit cannot spend the same observed depth twice',()=>{
-  const filled=bought(),position=filled.positions.find(p=>p.status==='open')!;
-  const time=NOW+3000,input=tennisInput(time,0.48,0.49,'ATP',3);
-  const requested=applyTennisAction(filled,{action:'close',positionId:position.id,commandId:'qa-close'},[input],time);
-  assert.ok(requested.pending);const afterDelay=requested.pending.executeAfter;
-  const partialBook=tennisInput(afterDelay,0.48,0.49,'ATP',3);
-  const partial=stepTennisSession(requested,[partialBook],afterDelay);
-  const held=partial.positions.find(p=>p.id===position.id)!;
-  assert.equal(held.status,'open');close(held.quantity,position.quantity-3);
-  assert.ok(held.costBasis>0);assert.ok(held.proceeds>0);assert.ok(held.exitFees>0);
-  const repeated=stepTennisSession(partial,[partialBook],afterDelay+2000);
-  close(repeated.cash,partial.cash);close(repeated.positions.find(p=>p.id===position.id)!.quantity,held.quantity);
-  close(partial.cash,100-position.entryCost+held.proceeds);
+test('rising display prices are not profit until executable fees are covered',()=>{
+  const filled=bought(),higher=stepTennisSession(filled,[tennisInput(NOW+4000,.67,.68)],NOW+4000);
+  assert.ok(higher.positions[0].netLiquidationValue!<higher.positions[0].entryCost);
+  assert.equal(higher.pending,null);
 });
-
-test('stale and future inputs cannot create a paper fill or a profitable liquidation mark',()=>{
-  for(const receivedAt of [NOW-60_000,NOW+60_000]){
-    const initial=freshSession(),input=tennisInput(receivedAt);
-    let next=initial;
-    try{next=applyTennisAction(initial,{action:'buy',slug:input.market.slug,side:'YES',amount:10,commandId:`qa-bad-time-${receivedAt}`},[input],NOW);}catch{}
-    close(next.cash,100);assert.equal(next.positions.length,0);
-    const stepped=stepTennisSession(next,[input],NOW+1000);
-    close(stepped.cash,100);assert.equal(stepped.positions.length,0);
-  }
+test('a vanished profit quote cannot become a successful exit',()=>{
+  const filled=bought(),target=stepTennisSession(filled,[tennisInput(NOW+4000,.73,.74)],NOW+4000);
+  assert.equal(target.pending?.action,'SELL');const at=target.pending!.executeAfter;
+  const vanished=stepTennisSession(target,[tennisInput(at,.64,.65)],at);
+  close(vanished.cash,filled.cash);assert.equal(vanished.positions[0].realizedPnl,0);
 });
-
-test('settlement uses only fresh confirmed provider results and applies once',()=>{
-  const filled=bought('NO'),position=filled.positions.find(p=>p.status==='open')!,time=NOW+5000;
-  const input=tennisInput(time);input.market.ended=true;input.market.active=false;
-  input.settlement=0;input.settlementReceivedAt=time;
-  const settled=stepTennisSession(filled,[input],time);
-  assert.equal(settled.positions.find(p=>p.id===position.id)!.status,'settled');
-  close(settled.cash,filled.cash+position.quantity);
-  close(tennisEquity(settled),settled.cash);
-  const repeated=stepTennisSession(settled,[input],time+1000);
-  close(repeated.cash,settled.cash);assert.equal(repeated.ledger.length,settled.ledger.length);
+test('editing every rule preserves balance/history and cancels only a pending entry',()=>{
+  const session=queued(),oldCash=session.cash;
+  const next=applyTennisAction(session,{action:'update-rules',sessionId:session.id,commandId:'rules',expectedRulesRevision:0,
+    rules:{strategy:'momentum',entryBudget:8,minSamples:8,baselineWindowMs:90000,minimumHistoryMs:40000,
+      momentumPoints:4,momentumConfirmations:3,targetReturn:.04,stopReturn:.09,maxHoldMs:180000,cooldownMs:45000,
+      executionDelayMs:2000,maxBookAgeMs:4000,maxSessionLossFraction:.15,leagues:['WTA']}},[],NOW);
+  assert.equal(next.pending,null);assert.equal(next.cash,oldCash);assert.equal(next.id,session.id);assert.deepEqual(next.ledger,session.ledger);
+  assert.equal(next.rulesRevision,1);assert.equal(next.config.strategy,'momentum');assert.deepEqual(next.histories,{});
+  assert.ok(next.decisions.some(d=>d.code==='RULES_CANCELLED'));assert.equal(next.decisions.at(-1)?.rulesRevision,1);
+  const stale=applyTennisAction(next,{action:'update-rules',sessionId:next.id,commandId:'stale',expectedRulesRevision:0,rules:{entryBudget:3}},[],NOW+1);
+  assert.equal(stale.config.entryBudget,8);assert.match(stale.lastReason,/another tab/);
+  const serialized=JSON.parse(JSON.stringify(next));assert.equal(serialized.config.momentumPoints,4);
 });
-
-test('an explicit final fair-price settlement reconciles a removed tennis book',()=>{
+test('rule changes preserve pending exits and held positions',()=>{
+  const held=bought(),exiting=applyTennisAction(held,{action:'stop',commandId:'stop'},[tennisInput(NOW+1000,.72,.73)],NOW+1000);
+  const changed=applyTennisAction(exiting,{action:'update-rules',sessionId:exiting.id,commandId:'rules-exit',expectedRulesRevision:0,rules:{targetReturn:.05}},[],NOW+1001);
+  assert.deepEqual(changed.pending,exiting.pending);assert.deepEqual(changed.positions,exiting.positions);assert.equal(changed.cash,exiting.cash);
+});
+test('legacy pending user entries are canceled while historical fills stay untouched',()=>{
+  const session=queued();session.pending!.source='MANUAL';
+  const next=stepTennisSession(session,[tennisInput(NOW,.64,.65)],NOW);
+  assert.equal(next.cash,100);assert.equal(next.positions.length,0);assert.ok(next.decisions.some(d=>d.code==='RETIRED_ENTRY'));
+});
+test('unsupported direct entry actions cannot change cash or create an intent',()=>{
+  const session=applyTennisAction(createTennisSession(defaultTennisConfig(),NOW),{action:'start',commandId:'start'},[],NOW);
+  const result=applyTennisAction(session,{action:'buy',slug:'x',amount:5,side:'YES',commandId:'retired'} as unknown as Parameters<typeof applyTennisAction>[1],[tennisInput(NOW)],NOW);
+  assert.equal(result.cash,session.cash);assert.equal(result.pending,null);assert.match(result.lastReason,/Only bot/);
+});
+test('live observation time excludes outages and stale match status',()=>{
+  let session=applyTennisAction(createTennisSession(defaultTennisConfig(),NOW),{action:'start',runForMs:60000,commandId:'start'},[],NOW);
+  for(let i=1;i<12;i++)session=stepTennisSession(session,[],NOW+i*5000);
+  const stale=tennisInput(NOW+60000,.64,.65);stale.market.observedAt=NOW-60000;
+  session=stepTennisSession(session,[stale],NOW+60000);
+  assert.equal(session.testRun?.watchedMs,0);assert.deepEqual(session.testRun?.liveSlugs,[]);assert.equal(session.testRun?.complete,true);
+  assert.equal(session.status,'paused');assert.equal(session.coverage?.[stale.market.slug].live,false);
+});
+test('momentum cannot reuse a rise older than its baseline window',()=>{
+  let s=applyTennisAction(createTennisSession({...defaultTennisConfig(),strategy:'momentum'},NOW),{action:'start',commandId:'start'},[],NOW);
+  for(let i=0;i<12;i++)s=stepTennisSession(s,[tennisInput(NOW+i*4000,.59,.60)],NOW+i*4000);
+  for(let i=0;i<34;i++){const at=NOW+48000+i*4000;s=stepTennisSession(s,[tennisInput(at,.64,.68)],at);}
+  const at=NOW+184000;s=stepTennisSession(s,[tennisInput(at,.65,.67)],at);
+  assert.equal(s.pending,null);assert.equal(s.positions.length,0);
+});
+test('fee-inclusive entry costs cannot start a position beyond its configured loss limit',()=>{
   for(const side of ['YES','NO'] as const){
-    const filled=bought(side),position=filled.positions.find(p=>p.status==='open')!,time=NOW+5000;
-    const input=tennisInput(time);input.market.ended=true;input.market.active=false;
-    input.market.execution!.active=false;input.book={bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''};
-    input.settlement=0.5;input.settlementReceivedAt=time;
-    const settled=stepTennisSession(filled,[input],time);
-    assert.equal(settled.positions.find(p=>p.id===position.id)!.status,'settled');
-    close(settled.cash,filled.cash+position.quantity*0.5);
-    close(settled.positions.find(p=>p.id===position.id)!.realizedPnl,position.quantity*0.5-position.entryCost);
+    let s=applyTennisAction(createTennisSession(defaultTennisConfig(),NOW),{action:'start',commandId:'start'},[],NOW);
+    for(let i=0;i<12;i++){const at=NOW+i*4000;s=stepTennisSession(s,[forSide(at,.59,.60,side)],at);}
+    [[.07,.09],[.09,.11],[.10,.12]].forEach(([bid,ask],i)=>{const at=NOW+48000+i*4000;s=stepTennisSession(s,[forSide(at,bid,ask,side)],at);});
+    assert.equal(s.pending,null);assert.equal(s.cash,100);assert.ok(s.rejectionCounts.ENTRY_COST>0);
   }
-});
-
-const warmed=()=>{
-  let session=freshSession(),time=NOW;
-  for(let i=0;i<16;i++){
-    time=NOW+i*5000;
-    session=stepTennisSession(session,[tennisInput(time,0.59,0.60)],time);
-  }
-  assert.equal(session.positions.length,0,'a steady market must not manufacture a recovery');
-  assert.equal(session.pending,null);
-  return {session,time};
-};
-
-test('automatic recovery requires a decline, a later executable bounce, then delayed execution',()=>{
-  let {session,time}=warmed();
-  for(const [bid,ask] of [[0.50,0.51],[0.49,0.50]]){
-    time+=5000;session=stepTennisSession(session,[tennisInput(time,bid,ask)],time);
-    assert.equal(session.pending,null,'a continuing decline must not trigger buy-the-dip by itself');
-    assert.equal(session.positions.length,0);
-  }
-  for(const [bid,ask] of [[0.51,0.52],[0.52,0.53]]){
-    time+=5000;session=stepTennisSession(session,[tennisInput(time,bid,ask)],time);
-  }
-  assert.equal(session.pending?.action,'BUY');assert.equal(session.pending?.side,'YES');
-  close(session.cash,100);assert.equal(session.positions.length,0,'a signal is not a paper fill');
-  const delayed=session.pending!.executeAfter;
-  const filled=stepTennisSession(session,[tennisInput(delayed,0.52,0.53)],delayed);
-  assert.equal(filled.positions.filter(p=>p.status==='open').length,1);
-  assert.ok(filled.cash<100);assert.ok(filled.ledger.some(e=>e.source==='AUTOMATIC'&&e.action==='BUY'));
-});
-
-test('an ask-only rise cannot manufacture a confirmed recovery',()=>{
-  let {session,time}=warmed();
-  session.config.maxSpreadPoints=4;
-  time+=5000;session=stepTennisSession(session,[tennisInput(time,0.49,0.50)],time);
-  for(let i=0;i<3;i++){
-    time+=5000;session=stepTennisSession(session,[tennisInput(time,0.49,0.52)],time);
-  }
-  assert.equal(session.pending,null);assert.equal(session.positions.length,0);
-  close(session.cash,100);
-});
-
-test('pause cancels an automatic entry before its fill and cannot silently resume it',()=>{
-  let {session,time}=warmed();
-  for(const [bid,ask] of [[0.49,0.50],[0.51,0.52],[0.52,0.53]]){
-    time+=5000;session=stepTennisSession(session,[tennisInput(time,bid,ask)],time);
-  }
-  assert.equal(session.pending?.action,'BUY');
-  const paused=applyTennisAction(session,{action:'pause',commandId:'qa-pause'},[],time+1);
-  assert.equal(paused.status,'paused');
-  const stepped=stepTennisSession(paused,[tennisInput(time+5000,0.52,0.53)],time+5000);
-  assert.equal(stepped.positions.length,0);assert.equal(stepped.pending,null);close(stepped.cash,100);
-});
-
-test('a higher tennis chart price cannot trigger the net profit target before fees are covered',()=>{
-  const filled=bought(),time=NOW+4000;
-  const higher=stepTennisSession(filled,[tennisInput(time,0.43,0.44)],time);
-  const position=higher.positions.find(p=>p.status==='open')!;
-  assert.ok(position.netLiquidationValue!==null&&position.netLiquidationValue<position.entryCost,
-    'at this fee rate the displayed three-cent rise still has a negative executable result');
-  assert.equal(higher.pending,null,'the bot must not confuse a green chart with realized profit');
-});
-
-test('a vanished profit quote cannot become a successful paper exit',()=>{
-  const filled=bought(),time=NOW+4000;
-  const target=stepTennisSession(filled,[tennisInput(time,0.48,0.49)],time);
-  assert.equal(target.pending?.action,'SELL');
-  const delay=target.pending!.executeAfter;
-  const vanished=stepTennisSession(target,[tennisInput(delay,0.39,0.40)],delay);
-  close(vanished.cash,filled.cash);
-  assert.equal(vanished.positions.find(p=>p.status==='open')!.quantity,filled.positions[0].quantity);
-  assert.equal(vanished.positions[0].realizedPnl,0);
-});
-
-test('pause and resume cannot erase a requested exit or resurrect a stopped experiment',()=>{
-  const stopped=applyTennisAction(freshSession(),{action:'stop',commandId:'qa-stop-empty'},[],NOW+1000);
-  assert.equal(stopped.status,'stopped');
-  const paused=applyTennisAction(stopped,{action:'pause',commandId:'qa-pause-stopped'},[],NOW+2000);
-  const resumed=applyTennisAction(paused,{action:'resume',commandId:'qa-resume-stopped'},[],NOW+3000);
-  assert.equal(resumed.status,'stopped');
-
-  const filled=bought(),position=filled.positions.find(p=>p.status==='open')!;
-  const closing=applyTennisAction(filled,{action:'close',positionId:position.id,commandId:'qa-close-without-feed'},[],NOW+3000);
-  assert.equal(closing.status,'stopping');
-  const pausing=applyTennisAction(closing,{action:'pause',commandId:'qa-pause-exit'},[],NOW+4000);
-  assert.equal(pausing.status,'stopping','an exit request must survive unavailable prices and unrelated controls');
 });

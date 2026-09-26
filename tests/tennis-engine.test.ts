@@ -20,10 +20,13 @@ function input(time: number, bid = 0.49, ask = 0.50, bidSize = 1000, askSize = 1
 function started(): TennisSession {
   return applyTennisAction(createTennisSession(defaultTennisConfig(), epoch), { action: 'start', commandId: 'start' }, [], epoch);
 }
-function entered(): TennisSession {
-  let session = started();
-  session = applyTennisAction(session, { action: 'buy', commandId: 'entry', slug: 'synthetic-tennis', side: 'YES', amount: 5 }, [input(epoch)], epoch);
-  return stepTennisSession(session, [input(epoch + 1000)], epoch + 1000);
+function entered(config=defaultTennisConfig()): TennisSession {
+  let session=applyTennisAction(createTennisSession(config,epoch-48000),{action:'start',commandId:'start'},[],epoch-48000);
+  for(let i=0;i<11;i++){const t=epoch-48000+i*4000;session=stepTennisSession(session,[input(t,.59,.60)],t);}
+  for(const [offset,bid,ask] of [[-6000,.45,.46],[-4000,.48,.49],[-2000,.49,.50]]){
+    session=stepTennisSession(session,[input(epoch+offset,bid,ask)],epoch+offset);
+  }
+  return stepTennisSession(session,[input(epoch+1000)],epoch+1000);
 }
 function conserved(session: TennisSession) {
   assert.equal(round(session.config.startingCash + session.ledger.reduce((sum, entry) => sum + entry.cashDelta, 0)), session.cash);
@@ -32,7 +35,7 @@ function conserved(session: TennisSession) {
   if (closed.length === session.positions.length) assert.equal(round(session.cash - session.config.startingCash), round(closed.reduce((sum, position) => sum + position.realizedPnl, 0)));
 }
 
-test('default rules are editable before starting, then frozen until an empty reset', () => {
+test('start cannot be reused to overwrite a running balance or rules', () => {
   assert.equal(validateTennisConfig(defaultTennisConfig()), null);
   assert.ok(validateTennisConfig({ ...defaultTennisConfig(), executionDelayMs: 0 }));
   assert.match(validateTennisConfig({ ...defaultTennisConfig(), startingCash: 1001 })!, /balance/);
@@ -41,7 +44,7 @@ test('default rules are editable before starting, then frozen until an empty res
   assert.equal(session.config.entryBudget, 10);
   session = applyTennisAction(session, { action: 'start', commandId: 'change', config: { targetReturn: 0.5 } }, [], epoch + 1);
   assert.equal(session.config.targetReturn, 0.03);
-  assert.match(session.lastReason, /frozen/);
+  assert.match(session.lastReason, /already exists/);
 });
 
 test('net target closes a profitable round trip with both fees and actual delayed-book evidence', () => {
@@ -152,9 +155,9 @@ test('time exit does not fabricate a sale when buyers disappear, and recovers wh
   conserved(session);
 });
 
-test('manual paper close remains requested when its source feed is unavailable', () => {
+test('bot stop remains requested when its source feed is unavailable', () => {
   let session = entered();
-  session = applyTennisAction(session, { action: 'close', positionId: 'entry', commandId: 'close' }, [], epoch + 2000);
+  session = applyTennisAction(session, { action: 'stop', commandId: 'stop' }, [], epoch + 2000);
   assert.equal(session.status, 'stopping');
   assert.equal(session.positions[0].status, 'open');
   session = stepTennisSession(session, [input(epoch + 3000)], epoch + 3000);
@@ -170,7 +173,7 @@ test('an ended or replay market never opens a new paper position', () => {
     const book = input(epoch);
     if (mode === 'ended') book.market.ended = true;
     else book.source = 'REPLAY';
-    const session = applyTennisAction(started(), { action: 'buy', slug: book.market.slug, side: 'YES', amount: 5, commandId: mode }, [book], epoch);
+    const session = stepTennisSession(started(), [book], epoch);
     assert.equal(session.pending, null);
     assert.equal(session.positions.length, 0);
     assert.equal(session.cash, 100);
@@ -178,14 +181,12 @@ test('an ended or replay market never opens a new paper position', () => {
 });
 
 test('confirmed settlement loss stops the session and the loss limit cannot be resumed', () => {
-  let session = started();
-  session = applyTennisAction(session, { action: 'buy', commandId: 'entry', slug: 'synthetic-tennis', side: 'YES', amount: 25 }, [input(epoch)], epoch);
-  session = stepTennisSession(session, [input(epoch + 1000)], epoch + 1000);
+  let session = entered({...defaultTennisConfig(),entryBudget:20,maxSessionLossFraction:.1});
   const final = input(epoch + 2000);
   final.market.ended = true; final.market.active = false; final.settlement = 0; final.settlementReceivedAt = epoch + 2000;
   session = stepTennisSession(session, [final], epoch + 2000);
   assert.equal(session.status, 'stopped');
-  assert.ok(session.cash < 80);
+  assert.ok(session.cash < 90);
   session = applyTennisAction(session, { action: 'pause', commandId: 'pause' }, [], epoch + 3000);
   session = applyTennisAction(session, { action: 'resume', commandId: 'resume' }, [], epoch + 4000);
   assert.equal(session.status, 'stopped');

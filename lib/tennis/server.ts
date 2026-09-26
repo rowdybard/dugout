@@ -2,6 +2,7 @@ import {env} from 'cloudflare:workers';
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
 import {defaultTennisConfig,createTennisSession,stepTennisSession,applyTennisAction} from './engine';
+import {normalizeTennisConfig} from './rules';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
 
@@ -19,13 +20,14 @@ export async function readTennisSession(req:Request):Promise<{ownerId:string;ses
     row=await db().prepare('SELECT value,revision FROM tennis_sessions WHERE owner_id=?').bind(ownerId).first<{value:string;revision:number}>();
   }
   if(!row)throw new Error('The tennis paper account could not be loaded.');
-  return {ownerId,session:{...JSON.parse(row.value),revision:row.revision},stored:true};
+  const saved=JSON.parse(row.value) as TennisSession;
+  return {ownerId,session:{...saved,config:normalizeTennisConfig(saved.config),revision:row.revision},stored:true};
 }
 type Loaded=Awaited<ReturnType<typeof readTennisSession>>;
 const reason=(e:unknown)=>e instanceof Error?e.message:'A tennis source is unavailable.';
-async function withDeadline<T>(promise:Promise<T>,ms:number):Promise<T>{
+async function withDeadline<T>(promise:Promise<T>,ms:number,message='Tennis discovery is taking too long. Known positions remain available for exit checks.'):Promise<T>{
   let timer:ReturnType<typeof setTimeout>|undefined;
-  try{return await Promise.race([promise,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Tennis discovery is taking too long. Known positions remain available for exit checks.')),ms);})]);}
+  try{return await Promise.race([promise,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})]);}
   finally{if(timer)clearTimeout(timer);}
 }
 
@@ -35,23 +37,37 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
   let cursor=session.scanCursor??0;
   try{
     for(const p of session.positions.filter(p=>p.status==='open'))chosen.set(p.slug,{market:p.market,allowRest:true});
-    if(session.pending?.market)chosen.set(session.pending.slug,{market:session.pending.market,allowRest:true});
+    if(session.pending?.market){
+      const pending=session.pending;
+      // Entry permission must use a current catalog status, not the saved signal.
+      const market=pending.action==='BUY'
+        ?await withDeadline(getTennisMarket(pending.slug),7000).catch(e=>{failures.push(reason(e));return {...pending.market,active:false,live:false};})
+        :pending.market;
+      chosen.set(pending.slug,{market,allowRest:true});
+    }
     // Existing positions and pending orders get the entire data budget. A slow
     // discovery request must never delay a possible exit on a known market.
-    if(action.action==='buy'&&!chosen.size){
-      const market=await withDeadline(getTennisMarket(action.slug),7000);
-      chosen.set(market.slug,{market,allowRest:true});
-    }else if(action.action==='tick'&&!chosen.size&&session.status==='running'){
-      const catalog=await withDeadline(getTennisCatalog(),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
-      const candidates=catalog.markets.filter(m=>m.active&&session.config.leagues.includes(m.league)).sort((a,b)=>Number(b.live)-Number(a.live)||Date.parse(a.startTime)-Date.parse(b.startTime)).slice(0,12);
-      // Stream all candidates; reserve REST for a stable four-match fallback pool.
-      // Rotating two every tick gives each a usable 5s baseline when WS is down.
-      const fallback=candidates.slice(0,4),restSlugs=new Set<string>();
+    if(action.action==='tick'&&!chosen.size&&session.status==='running'){
+      const catalog=await withDeadline(getTennisCatalog({includeHistory:false}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
+      const candidates=catalog.markets.filter(m=>m.active&&m.live&&!m.ended&&session.config.leagues.includes(m.league)).sort((a,b)=>a.slug.localeCompare(b.slug));
+      // Rotate over every live candidate. Both tours receive books when available.
+      const tourPools=session.config.leagues.map(league=>candidates.filter(m=>m.league===league));
+      const interleaved:TennisMarket[]=[];
+      for(let i=0;i<Math.max(0,...tourPools.map(p=>p.length));i++)for(const pool of tourPools)if(pool[i])interleaved.push(pool[i]);
+      // Keep two matches long enough to build a baseline, then move to the next cohort.
+      const cohort=Math.floor(Date.now()/Math.max(180_000,session.config.baselineWindowMs*3));
+      const start=interleaved.length?(cohort*2)%interleaved.length:0;
+      const fallback=Array.from({length:Math.min(2,interleaved.length)},(_,i)=>interleaved[(start+i)%interleaved.length]),restSlugs=new Set<string>();
       for(let i=0;i<Math.min(2,fallback.length);i++)restSlugs.add(fallback[(cursor+i)%fallback.length].slug);
       for(const market of candidates)chosen.set(market.slug,{market,allowRest:restSlugs.has(market.slug)});
+      if(!candidates.length)failures.push('No live ATP or WTA match is available. Waiting for play to begin.');
       cursor=fallback.length?(cursor+2)%fallback.length:0;
     }
-    const responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest})=>loadTennisInput(market,controller.signal,{allowRest})));
+    // A slow second book must not age a usable first book past the five-second gate.
+    const bookTimer=setTimeout(()=>controller.abort(new DOMException('Book collection deadline','TimeoutError')),4500);
+    let responses:PromiseSettledResult<TennisInput>[];
+    try{responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest})=>withDeadline(loadTennisInput(market,controller.signal,{allowRest}),4500,'A book check took too long. Waiting for a fresh quote.')));}
+    finally{clearTimeout(bookTimer);}
     const inputs:TennisInput[]=[];
     responses.forEach((r,i)=>{if(r.status==='fulfilled')inputs.push(r.value);else if([...chosen.values()][i].allowRest)failures.push(reason(r.reason));});
     return {inputs,failures,cursor};
@@ -69,6 +85,7 @@ async function persist(loaded:Loaded,next:TennisSession,action:TennisAction,inpu
   for(const e of next.ledger)if(!knownLedger.has(e.id))addJournal(`${next.id}:${e.id}`,'execution',{...e,configVersion:next.config.version},e.time);
   if(action.commandId)addJournal(`command:${action.commandId}`,'control',{fingerprint:JSON.stringify(action),action,sessionId:next.id},Date.now());
   if(next.id!==old.id){addJournal(`archive:${old.id}`,'archive',old,Date.now());addJournal(`config:${next.id}`,'config',next.config,Date.now());}
+  if(JSON.stringify(next.config)!==JSON.stringify(old.config))addJournal(`rules:${next.id}:${next.rulesRevision??0}:${revision}`,'config',{before:old.config,after:next.config,rulesRevision:next.rulesRevision??0,source:'USER'},Date.now());
   // Capture each decision's exact input once. Shared market rows contain no account data.
   const usedBooks=new Set(next.decisions.filter(d=>!knownDecisions.has(d.id)).map(d=>`${d.slug}:${d.bookTime}`));
   for(const input of inputs){
@@ -90,9 +107,9 @@ export async function updateTennisSession(req:Request,action:TennisAction){
   }
   if('sessionId' in action&&action.sessionId&&action.sessionId!==s.id)throw new Error('The paper session changed. Refresh before sending that action.');
   if(action.action==='tick'&&now-s.lastTickAt<2000)return s;
-  const needsInputs=['tick','buy','close'].includes(action.action);
+  const needsInputs=action.action==='tick';
   const {inputs,failures,cursor}=needsInputs?await gatherTennisInputs(s,action):{inputs:[] as TennisInput[],failures:[] as string[],cursor:s.scanCursor??0};
-  let next=action.action==='tick'?stepTennisSession(s,inputs,Date.now()):applyTennisAction(s,action,inputs,Date.now());
+  const next=action.action==='tick'?stepTennisSession(s,inputs,Date.now()):applyTennisAction(s,action,inputs,Date.now());
   next.scanCursor=cursor;
   if(failures.length){
     const time=Date.now(),message=failures[0];

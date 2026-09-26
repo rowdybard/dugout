@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     if (session.pending?.market) protectedMarkets.push(session.pending.market);
     let markets: TennisMarket[];
     try {
-      markets = (await getTennisCatalog()).markets;
+      markets = (await getTennisCatalog({includeHistory:false})).markets;
     } catch {
       // Existing positions must remain observable when discovery is unavailable.
       markets = [];

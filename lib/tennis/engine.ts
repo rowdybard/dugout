@@ -5,41 +5,18 @@ import type { TennisAction, TennisConfig, TennisDecision, TennisInput, TennisInt
 
 const exact = (value: number) => Math.round(value * 1_000_000) / 1_000_000;
 const EPSILON = 0.0000001;
+const freshLive = (input:TennisInput,now:number) => input.market.live && input.market.active && !input.market.ended && Number.isFinite(input.market.observedAt) && input.market.observedAt<=now && now-input.market.observedAt<=45_000;
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
-/** Experimental, frozen-on-start rules; these values have not been shown profitable. */
-export function defaultTennisConfig(startingCash = 100): TennisConfig {
-  return {
-    version: 'tennis-recovery-v1', startingCash, entryBudget: Math.min(5, exact(startingCash * 0.2)), leagues: ['ATP', 'WTA'],
-    baselineWindowMs: 60_000, minimumHistoryMs: 30_000, minSamples: 10,
-    declinePoints: 3, recoveryPoints: 1, recoveryConfirmations: 2, maxSpreadPoints: 2,
-    targetReturn: 0.03, stopReturn: 0.08, maxHoldMs: 120_000, cooldownMs: 60_000,
-    executionDelayMs: 1_000, maxBookAgeMs: 5_000, maxSessionLossFraction: 0.2,
-  };
-}
-
-export function validateTennisConfig(config: TennisConfig): string | null {
-  const positives = [config.startingCash, config.entryBudget, config.baselineWindowMs, config.minimumHistoryMs,
-    config.minSamples, config.declinePoints, config.recoveryPoints, config.recoveryConfirmations,
-    config.maxSpreadPoints, config.targetReturn, config.stopReturn, config.maxHoldMs,
-    config.executionDelayMs, config.maxBookAgeMs, config.maxSessionLossFraction];
-  if (config.version !== 'tennis-recovery-v1' || positives.some(value => !Number.isFinite(value) || value <= 0)) return 'Invalid tennis strategy configuration.';
-  if (config.startingCash < 5 || config.startingCash > 1000 || exact(config.startingCash) !== config.startingCash) return 'Starting fake balance must be $5–$1,000 with at most six decimal places.';
-  if (config.entryBudget > Math.min(100, config.startingCash * 0.2) + EPSILON || exact(config.entryBudget) !== config.entryBudget) return 'Each paper entry is capped at 20% of the starting balance and $100.';
-  if (config.minimumHistoryMs > config.baselineWindowMs || config.baselineWindowMs > 3_600_000 || !Number.isInteger(config.minSamples) || config.minSamples < 3 || config.minSamples > 200) return 'Invalid rolling-history requirements.';
-  if (config.declinePoints > 40 || config.recoveryPoints >= config.declinePoints || config.maxSpreadPoints > 10 || !Number.isInteger(config.recoveryConfirmations) || config.recoveryConfirmations < 2 || config.recoveryConfirmations > 20) return 'Invalid dip, recovery, or spread rules.';
-  if (config.targetReturn > 1 || config.stopReturn > 0.5 || config.maxSessionLossFraction > 0.5 || config.maxHoldMs > 3_600_000) return 'Invalid profit, loss, or hold limits.';
-  if (config.executionDelayMs < 1000 || config.executionDelayMs > 30_000 || config.maxBookAgeMs > 30_000 || !Number.isFinite(config.cooldownMs) || config.cooldownMs < 0 || config.cooldownMs > 3_600_000) return 'Invalid execution timing or cooldown.';
-  if (!Array.isArray(config.leagues) || !config.leagues.length || config.leagues.some(league => league !== 'ATP' && league !== 'WTA')) return 'Choose ATP and/or WTA.';
-  return null;
-}
+import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
   const issue = validateTennisConfig(config);
   if (issue) throw new RangeError(issue);
   if (!Number.isFinite(now) || now < 0) throw new RangeError('Invalid session time.');
   return {
-    id: `tennis-${now}-${Math.random().toString(36).slice(2, 10)}`, revision: 0, mode: 'paper', status: 'idle',
+    id: `tennis-${now}-${Math.random().toString(36).slice(2, 10)}`, revision: 0, rulesRevision: 0, coverage: {}, mode: 'paper', status: 'idle',
     config: structuredClone(config), cash: config.startingCash, startedAt: now, lastTickAt: now,
     lastReason: 'Ready to test price recovery with fake money. No outcome forecast is used.',
     positions: [], pending: null, histories: {}, signals: {}, consumedBooks: {}, decisions: [], ledger: [],
@@ -56,7 +33,7 @@ export function tennisEquity(session: TennisSession): number {
 function record(session: TennisSession, now: number, slug: string, side: TradeSide, action: TennisDecision['action'], code: string, reason: string, input?: TennisInput, more: Partial<TennisDecision> = {}) {
   session.lastReason = reason;
   session.decisionSequence = (session.decisionSequence ?? session.decisions.length) + 1;
-  session.decisions.push({ id: `${session.id}:d:${session.decisionSequence}`, time: now, slug, side, action, code, reason, bookTime: input?.receivedAt, ...more });
+  session.decisions.push({ id: `${session.id}:d:${session.decisionSequence}`, time: now, slug, side, action, code, reason, bookTime: input?.receivedAt, rulesRevision: session.rulesRevision ?? 0, ...more });
   session.decisions = session.decisions.slice(-300);
   if (action === 'SKIP') session.rejectionCounts[code] = (session.rejectionCounts[code] ?? 0) + 1;
 }
@@ -105,6 +82,8 @@ function freshCommand(session: TennisSession, input: TennisInput, side: TradeSid
 function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number) {
   const issue = dataIssue(session, input, now);
   if (issue) return { code: 'DATA', reason: issue };
+  if (!input.market.live) return { code: 'NOT_LIVE', reason: 'Waiting for the match to start. The bot only enters live matches.' };
+  if (!Number.isFinite(input.market.observedAt) || input.market.observedAt > now || now - input.market.observedAt > 45_000) return { code: 'MATCH_STALE', reason: 'Live match status needs a fresh update.' };
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This tour is not selected for the experiment.' };
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
   const quote = quotes(input, side);
@@ -118,6 +97,7 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
     { cash: exact(session.cash + buy.cashDelta), marketExposure: -buy.cashDelta, totalExposure: -buy.cashDelta, availableQuantity: buy.filledQty },
     input.market.execution!, input.book, policy(session, input, now));
   if (sell.status !== 'filled') return { code: 'EXIT_DEPTH', reason: 'Not enough buyers currently exist to sell the full proposed position at the quoted selling price.' };
+  if (1 - sell.cashDelta / -buy.cashDelta >= session.config.stopReturn - EPSILON) return { code: 'ENTRY_COST', reason: 'Buying and selling immediately would already reach the loss limit after spread and fees.' };
   return null;
 }
 
@@ -189,7 +169,7 @@ function settle(session: TennisSession, position: TennisPosition, input: TennisI
   position.exitPrice = price; position.netLiquidationValue = 0; position.liquidationQuantity = 0; position.markedAt = input.settlementReceivedAt!;
   session.pending = null; session.exitRequested = undefined;
   session.ledger.push({ id: `${position.id}:settlement`, time: now, slug: position.slug, side: position.side, action: 'SETTLE', source: 'AUTOMATIC', positionId: position.id,
-    reason: 'Resolved using an explicit final market settlement value.', cashDelta: proceeds, realizedPnl: pnl });
+    reason: 'Resolved using an explicit final market settlement value.', cashDelta: proceeds, realizedPnl: pnl, rulesRevision:session.rulesRevision??0,strategy:session.config.strategy });
   record(session, now, position.slug, position.side, 'SETTLE', 'SETTLED', 'Final market settlement applied to remaining paper quantity.', input);
   setCooldown(session, position.slug, now);
   return true;
@@ -229,7 +209,7 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
     }
   }
   session.ledger.push({ id: intent.id, time: now, slug: intent.slug, side: intent.side, action: intent.action,
-    source: intent.source, positionId, reason: intent.reason, execution: result,
+    source: intent.source, positionId, reason: intent.reason, execution: result, rulesRevision:session.rulesRevision??0,strategy:session.config.strategy,
     cashDelta: result.cashDelta, realizedPnl: pnl, quotedPrice: intent.limitPrice, actualPrice: result.averagePrice || undefined,
     executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt });
   record(session, now, intent.slug, intent.side, result.apply ? intent.action : 'SKIP', result.apply ? result.status.toUpperCase() : 'FILL_FAILED',
@@ -244,6 +224,11 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
 function processPending(session: TennisSession, inputs: TennisInput[], now: number): boolean {
   const intent = session.pending;
   if (!intent) return false;
+  if (intent.action === 'BUY' && intent.source !== 'AUTOMATIC') {
+    session.pending = null;
+    record(session, now, intent.slug, intent.side, 'SKIP', 'RETIRED_ENTRY', 'An earlier user-placed entry was canceled. Only the bot can open a position.');
+    return false;
+  }
   if (intent.action === 'BUY' && (session.status === 'stopped' || session.status === 'stopping' || (intent.source === 'AUTOMATIC' && session.status !== 'running'))) {
     session.pending = null;
     record(session, now, intent.slug, intent.side, 'SKIP', 'CANCELLED', 'Pending entry canceled because the experiment is paused or stopped.');
@@ -262,9 +247,9 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   }
   if (session.ledger.some(entry => entry.id === intent.id)) { session.pending = null; return false; }
   if (intent.action === 'BUY') {
-    const issue = entryIssue(session, input, intent.side, intent.budget ?? 0, now);
-    // Depth is checked at signal time; delayed execution is allowed to produce truthful partial fills.
-    if (issue && issue.code !== 'ENTRY_DEPTH' && issue.code !== 'EXIT_DEPTH') {
+    const issue = entryIssue(session, input, intent.side, intent.budget ?? 0, now) ?? pendingSignalIssue(session, input, intent, now);
+    // Recheck the complete entry and its exit costs on the later book.
+    if (issue) {
       session.pending = null;
       session.consumedBooks[intent.slug] = input.receivedAt;
       record(session, now, intent.slug, intent.side, 'SKIP', issue.code, `Pending entry canceled: ${issue.reason}`, input);
@@ -286,6 +271,61 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   return true;
 }
 
+function beginObservation(session:TennisSession,duration:number|undefined,now:number) {
+  if(duration===undefined)return;
+  if(!Number.isFinite(duration)||duration<60_000||duration>3_600_000)return;
+  session.testRun={startedAt:now,endsAt:now+duration,watchedMs:0,lastCheckAt:now,startingCash:session.cash,
+    startingLedgerCount:session.ledger.length,liveSlugs:[],complete:false};
+}
+
+function pendingSignalIssue(session:TennisSession,input:TennisInput,intent:TennisIntent,now:number) {
+  const signal=session.signals[keyFor(intent.slug,intent.side)],quote=quotes(input,intent.side);
+  const price=quote.bid!==undefined&&quote.ask!==undefined?(quote.bid+quote.ask)/2:NaN;
+  if(!signal||signal.lastPrice===undefined||signal.lastBid===undefined||signal.baseline===undefined||
+    price<signal.lastPrice-EPSILON||quote.bid!<signal.lastBid-EPSILON)
+    return {code:'SIGNAL_CHANGED',reason:'The confirmed price or buyers weakened during the execution delay.'};
+  if(session.config.strategy==='recovery') {
+    if(signal.dipAt===undefined||now-signal.dipAt>session.config.baselineWindowMs||price>=signal.baseline||
+      signal.trough===undefined||signal.troughBid===undefined||price-signal.trough<session.config.recoveryPoints/100-EPSILON||
+      quote.bid!-signal.troughBid<session.config.recoveryPoints/100-EPSILON)
+      return {code:'SIGNAL_CHANGED',reason:'The recovery expired or no longer meets your entry rules.'};
+    const issue=recoveryHeadroomIssue(session,input,intent.side,signal.baseline,now);
+    if(issue)return {code:'COST_HEADROOM',reason:issue};
+  } else if(signal.dipAt===undefined||now-signal.dipAt>session.config.baselineWindowMs||price-signal.baseline<session.config.momentumPoints/100-EPSILON||signal.baselineBid===undefined||
+    quote.bid!-signal.baselineBid<session.config.momentumPoints/100-EPSILON) {
+    return {code:'SIGNAL_CHANGED',reason:'The rise is no longer confirmed by current buyers.'};
+  }
+  return null;
+}
+
+function updateMomentum(session:TennisSession,input:TennisInput,side:TradeSide,state:TennisSignal,
+  history:TennisSession['histories'][string],oldPrice:number|undefined,oldBid:number|undefined,now:number,
+  wait:(code:string,reason:string,skip?:boolean)=>void) {
+  const quote=quotes(input,side),price=state.lastPrice!;
+  const median=(values:number[])=>{const sorted=values.sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;};
+  if(state.phase==='RISING' && (state.dipAt===undefined || input.receivedAt-state.dipAt>session.config.baselineWindowMs)) {state.phase='WATCHING';state.confirmations=0;}
+  if(state.phase!=='RISING') {
+    state.dipAt=input.receivedAt;
+    state.baseline=median(history.slice(0,-1).map(p=>p.price));
+    const bids=history.slice(0,-1).map(p=>p.bid).filter((b):b is number=>b!==undefined);
+    if(bids.length<session.config.minSamples-1)return wait('WARMUP','Collecting buyer history for the rise strategy.');
+    state.baselineBid=median(bids);
+  }
+  if(price-state.baseline!<session.config.momentumPoints/100-EPSILON||quote.bid!-state.baselineBid!<session.config.momentumPoints/100-EPSILON||
+    oldPrice!==undefined&&price<oldPrice-EPSILON||oldBid!==undefined&&quote.bid!<oldBid-EPSILON) {
+    state.phase='WATCHING';state.confirmations=0;
+    return wait('NO_MOMENTUM','Waiting for both the price and buyers to show a sustained rise.');
+  }
+  state.phase='RISING';state.confirmations++;
+  if(state.confirmations<session.config.momentumConfirmations)return wait('CONFIRMATION','A rise appeared. Waiting for another independent buyer confirmation.');
+  if(session.pending||holding(session))return wait('POSITION','The bot is already managing a position or pending entry.',true);
+  const issue=entryIssue(session,input,side,session.config.entryBudget,now);
+  if(issue)return wait(issue.code,issue.reason,true);
+  const buy=simulate(session,input,{...freshCommand(session,input,side,'BUY',now,quote.ask!),budget:session.config.entryBudget},now);
+  if(buy.filledQty/-buy.cashDelta-1<session.config.targetReturn-EPSILON)return wait('COST_HEADROOM','Even the maximum contract payout cannot reach this profit target after entry costs.',true);
+  stage(session,input,side,'BUY',now,'AUTOMATIC','Price and executable buyers rose above their recent baselines; experimental momentum signal.',session.config.entryBudget);
+}
+
 function updateSignal(session: TennisSession, input: TennisInput, side: TradeSide, now: number) {
   const key = keyFor(input.market.slug, side);
   const quote = quotes(input, side);
@@ -300,13 +340,14 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
   const state: TennisSignal = { ...previous, lastObservedAt: input.receivedAt, lastPrice: price, lastBid: quote.bid };
   session.signals[key] = state;
   const history = (session.histories[key] ?? []).filter(point => point.time >= input.receivedAt - session.config.baselineWindowMs && point.time < input.receivedAt);
-  history.push({ time: input.receivedAt, price });
+  history.push({ time: input.receivedAt, price, bid: quote.bid, ask:quote.ask, score:input.market.score, period:input.market.period, scoreUpdatedAt:input.market.contextUpdatedAt });
   session.histories[key] = history.slice(-600);
   session.evaluated++;
   const wait = (code: string, reason: string, skip = false) => { state.reason = reason; record(session, now, input.market.slug, side, skip ? 'SKIP' : 'WAIT', code, reason, input, { baseline: state.baseline, price }); };
   if (state.cooldownUntil && now < state.cooldownUntil) { state.phase = 'COOLDOWN'; return wait('COOLDOWN', 'Waiting for this match’s post-trade cooldown.'); }
   if (state.phase === 'COOLDOWN') { state.phase = 'WARMING'; state.confirmations = 0; state.trough = undefined; state.dipAt = undefined; }
   if (history.length < session.config.minSamples || input.receivedAt - history[0].time < session.config.minimumHistoryMs) { state.phase = 'WARMING'; return wait('WARMUP', `Collecting fresh quotes (${history.length}/${session.config.minSamples}; need ${Math.round(session.config.minimumHistoryMs / 1000)}s of history).`); }
+  if (session.config.strategy === 'momentum') return updateMomentum(session, input, side, state, history, oldPrice, oldBid, now, wait);
   if (state.phase === 'WARMING' || state.phase === 'WATCHING') {
     const values = history.slice(0, -1).map(point => point.price).sort((a, b) => a - b);
     const middle = Math.floor(values.length / 2);
@@ -346,12 +387,31 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
 export function stepTennisSession(previous: TennisSession, inputs: TennisInput[], now: number): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
   const session = structuredClone(previous);
+  session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;
   const configIssue = validateTennisConfig(session.config);
   if (configIssue) { session.status = 'paused'; session.pending = null; session.lastReason = configIssue; return session; }
   const sorted = inputs.filter(input => input && input.market && input.book).sort((a, b) => b.receivedAt - a.receivedAt);
   const current = [...new Map(sorted.map(input => [input.market.slug, input] as const).reverse()).values()];
+  session.coverage ??= {};
+  session.quotes ??= {};
+  for (const input of current) if (!dataIssue(session, input, now)) {
+    session.coverage[input.market.slug] = {league: input.market.league, time: input.receivedAt, live: freshLive(input,now)};
+    session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source};
+  }
+  if (session.testRun && !session.testRun.complete) {
+    const run = session.testRun;
+    if (session.status === 'running' && current.some(i=>freshLive(i,now)&&!dataIssue(session,i,now))) run.watchedMs += Math.min(10_000, Math.max(0, Math.min(now, run.endsAt) - run.lastCheckAt));
+    run.lastCheckAt = now;
+    run.liveSlugs = [...new Set([...run.liveSlugs, ...current.filter(i => freshLive(i,now) && !dataIssue(session, i, now)).map(i => i.market.slug)])];
+    if (now >= run.endsAt) {
+      run.complete = true;
+      if (session.status === 'running') session.status = 'paused';
+      if (session.pending?.action === 'BUY') session.pending = null;
+      record(session, now, '', 'YES', 'WAIT', 'RUN_COMPLETE', 'The observation window finished. New entries paused; existing exits remain managed.');
+    }
+  }
   const open = holding(session);
   if (open) settle(session, open, current.find(input => input.market.slug === open.slug), now);
   const processed = processPending(session, current, now);
@@ -387,6 +447,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       if (!session.config.leagues.includes(input.market.league) || input.market.ended || !input.market.active || input.book.state !== 'MARKET_STATE_OPEN') {
         record(session, now, input.market.slug, 'YES', 'SKIP', 'CLOSED', 'Tour not selected or match market is not open.', input); continue;
       }
+      if (!input.market.live || now - input.market.observedAt > 45_000 || input.market.observedAt > now) {
+        record(session, now, input.market.slug, 'YES', 'SKIP', input.market.live ? 'MATCH_STALE' : 'NOT_LIVE', input.market.live ? 'Waiting for fresh live match status.' : 'Waiting for the match to start. Live matches only.', input); continue;
+      }
       if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) continue;
       for (const side of ['YES', 'NO'] as const) {
         updateSignal(session, input, side, now);
@@ -407,10 +470,27 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if (action.commandId && previous.commandIds.includes(action.commandId)) return previous;
   if (action.action === 'tick') return stepTennisSession(previous, inputs, now);
   let session = structuredClone(previous);
+  session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;
   if (action.commandId) session.commandIds.push(action.commandId);
   const reject = (reason: string) => { session.lastReason = reason; return session; };
+  if (action.action === 'update-rules') {
+    if (action.expectedRulesRevision !== (session.rulesRevision ?? 0)) return reject('Bot rules changed in another tab. Reopen Bot rules and try again.');
+    const config = {...session.config, ...action.rules};
+    const issue = validateTennisConfig(config);
+    if (issue) return reject(issue);
+    if (config.startingCash !== session.config.startingCash || config.version !== session.config.version) return reject('Balance and internal version cannot be changed through bot rules.');
+    if (session.pending?.action === 'BUY') {
+      record(session, now, session.pending.slug, session.pending.side, 'SKIP', 'RULES_CANCELLED', 'Pending entry canceled because the bot rules changed.');
+      session.pending = null;
+    }
+    session.config = structuredClone(config);
+    session.rulesRevision = (session.rulesRevision ?? 0) + 1;
+    session.histories = {}; session.signals = {};
+    record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}). Gathering a new baseline; balance and history preserved.`);
+    return session;
+  }
   if (action.action === 'reset') {
     if (holding(session) || session.pending) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
@@ -419,13 +499,14 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     return session;
   }
   if (action.action === 'start') {
-    if (holding(session) || session.pending || session.status !== 'idle') return reject('This session already exists. Resume it, or reset an empty session to change its frozen rules.');
+    if (holding(session) || session.pending || session.status !== 'idle') return reject('This session already exists. Resume it, or reset an empty session to begin a new balance.');
     const config = { ...session.config, ...action.config, version: 'tennis-recovery-v1' as const };
     const issue = validateTennisConfig(config);
     if (issue) return reject(issue);
     session.config = structuredClone(config); session.cash = config.startingCash; session.startedAt = now;
     session.equity = [{ time: now, price: config.startingCash }];
-    session.status = 'running'; session.lastReason = 'Paper recovery experiment started. Gathering fresh quotes; no outcome model is used.';
+    session.status = 'running'; session.lastReason = 'Paper bot started. Gathering fresh live-match quotes.';
+    beginObservation(session, action.runForMs, now);
     return stepTennisSession(session, inputs, now);
   }
   if (action.action === 'pause') {
@@ -438,7 +519,8 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if (action.action === 'resume') {
     const realized = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
     if (session.status === 'stopped' || session.status === 'stopping' || realized <= -session.config.startingCash * session.config.maxSessionLossFraction) return reject('This session is stopped. Close remaining positions and reset to start another experiment.');
-    session.status = 'running'; session.lastReason = 'Paper entries resumed with the original frozen settings.';
+    session.status = 'running'; session.lastReason = 'Paper bot resumed with your saved rules.';
+    beginObservation(session, action.runForMs, now);
     return stepTennisSession(session, inputs, now);
   }
   if (action.action === 'stop') {
@@ -447,29 +529,5 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     session.lastReason = holding(session) ? 'Stopped new entries. Attempting to close the existing paper position on fresh buyer quotes.' : 'Paper experiment stopped.';
     return stepTennisSession(session, inputs, now);
   }
-  if (action.action === 'buy') {
-    if (session.status !== 'running' && session.status !== 'paused') return reject('Start the paper session before buying.');
-    if (action.side !== 'YES' && action.side !== 'NO') return reject('Choose a valid outcome.');
-    if (session.pending || holding(session)) return reject('One position or pending order is already active.');
-    const input = inputs.find(item => item.market.slug === action.slug);
-    if (!input) return reject('Refresh this match’s order book before buying.');
-    const issue = entryIssue(session, input, action.side, action.amount, now);
-    if (issue) { record(session, now, action.slug, action.side, 'SKIP', issue.code, issue.reason, input); return session; }
-    stage(session, input, action.side, 'BUY', now, 'MANUAL', 'Manual paper entry; the user selected this outcome and amount.', action.amount, action.commandId);
-    return session;
-  }
-  if (action.action !== 'close') return reject('Unknown paper session command.');
-  const position = holding(session);
-  if (!position || position.id !== action.positionId) return reject('That paper position is no longer open.');
-  session.status = 'stopping';
-  const input = inputs.find(item => item.market.slug === position.slug);
-  if (!input) return reject('Close requested. Waiting for a current order book before attempting the exit.');
-  const issue = dataIssue(session, input, now);
-  if (issue) return reject(issue);
-  if (session.pending?.action === 'SELL') return reject('An exit is already waiting for its execution delay and a fresh book.');
-  session.pending = null;
-  // Manual close pauses re-entry; automation continues checking any remaining exit quantity.
-  session.status = 'stopping';
-  stage(session, input, position.side, 'SELL', now, 'MANUAL', 'Manual close requested.', undefined, action.commandId);
-  return session;
+  return reject('Only bot controls are supported.');
 }

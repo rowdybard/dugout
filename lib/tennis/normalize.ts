@@ -50,7 +50,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     const startTime=string(event.startTime)||string(market.gameStartTime),start=timestamp(startTime);
     const live=event.live===true,ended=event.ended===true||state.ended===true||event.closed===true;
     const period=string(event.period)||string(state.period)||null;
-    const interrupted=/sus|postpon|cancel|retir|walkover|abandon|interrupt/i.test(period??'');
+    const interrupted=/sus|delay|postpon|cancel|retir|walkover|abandon|interrupt/i.test(period??'');
     const execution=normalizeTennisExecution(market,league);
     const validPhase=!ended&&!interrupted&&(live||(event.live===false&&start!==null&&start>observedAt));
     const active=event.active===true&&execution?.active===true&&validPhase;
@@ -63,7 +63,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
       yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
-      observedAt,contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});
+      observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});
   }
   return result;
 }
