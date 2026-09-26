@@ -3,6 +3,7 @@ import {cached,db,readCached} from '../server/storage';
 import {currentStreamBook} from '../server/stream-books';
 import {sourceError} from '../server/request-budget';
 import {freshTennisBook,normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from './normalize';
+import {currentTennisContext} from './market-context';
 import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket,TennisPricePoint} from './types';
 
 const CATALOG_TTL=30_000;
@@ -98,7 +99,13 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
   // Stored mapping is trusted only because the server obtained it from the strict catalog.
   if(!['ATP','WTA','NFL','CFB'].includes(market.league)||!market.slug)throw new Error('Unsupported paper market.');
   const allowRest=options.allowRest!==false;
-  const verified=allowRest?await refreshedRules(market,signal):market;
+  // The visible catalog already refreshes this verified cache. Reading it keeps
+  // held-match context current without a slow discovery call on the exit path.
+  const now=Date.now();
+  const latest=allowRest&&now-market.observedAt>30_000?await readCached<TennisMarket>(`tennis:verified:${market.slug}`).catch(()=>null):null;
+  // Retain the original mapping's age for independent exchange metadata checks.
+  const rules=allowRest?await refreshedRules(market,signal):market;
+  const verified=currentTennisContext(rules,latest?.value,now);
   const streamed=await currentStreamBook(market.slug);
   let observed:ObservedBook|null=streamed&&freshTennisBook(streamed.receivedAt,Date.now())?streamed:null;
   if(!observed&&!allowRest){

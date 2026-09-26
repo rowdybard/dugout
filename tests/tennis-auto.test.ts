@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptiveTennisRules} from '../lib/tennis/auto.ts';
 import {quoteAvailabilityIssue} from '../lib/tennis/quote-status.ts';
+import {currentTennisContext} from '../lib/tennis/market-context.ts';
 import {applyTennisAction,createTennisSession,defaultTennisConfig,stepTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
 const NOW=Date.parse('2026-09-25T21:00:00Z');
@@ -90,6 +91,36 @@ test('unfilled entries retry soon while completed trades retain the full configu
   filled=stepTennisSession(filled,[input(NOW+4000,.75,.76)],NOW+4000);
   assert.equal(filled.positions[0].status,'closed');
   assert.equal(filled.signals['synthetic-auto:YES'].cooldownUntil,NOW+304000);
+});
+
+test('verified held-match context keeps live observation counting without changing the position',()=>{
+  const held=stepTennisSession(queued('momentum'),[input(NOW,.64,.65)],NOW);
+  held.config.maxHoldMs=1200000;
+  held.testRun={startedAt:NOW,endsAt:NOW+10800000,watchedMs:0,lastCheckAt:NOW+89000,startingCash:100,startingLedgerCount:0,liveSlugs:[],complete:false};
+  const later=NOW+90000,book=input(later,.64,.65),stored=held.positions[0].market;
+  const stale=stepTennisSession(held,[{...book,market:stored}],later);
+  assert.equal(stale.testRun?.watchedMs,0);
+  const context=currentTennisContext(stored,{...book.market,score:'0-7',contextUpdatedAt:later-3000},later);
+  const fresh=stepTennisSession(held,[{...book,market:context}],later);
+  assert.equal(fresh.testRun?.watchedMs,1000);assert.equal(fresh.cash,held.cash);
+  assert.equal(fresh.positions[0].status,'open');assert.equal(fresh.positions[0].entryPrice,held.positions[0].entryPrice);
+  assert.equal(context.contextUpdatedAt,later-3000);assert.equal(context.observedAt,later);
+  assert.equal(stored.observedAt,NOW);
+});
+
+test('held-match context never invents freshness or accepts a changed outcome mapping',()=>{
+  const stored=input(NOW,.64,.65).market,now=NOW+90000;
+  for(const latest of [undefined,{...stored,observedAt:NOW+1},{...stored,observedAt:now+1},{...stored,observedAt:NaN},
+    {...stored,observedAt:now,slug:'different'}, {...stored,observedAt:now,league:'CFB' as const},
+    {...stored,observedAt:now,eventId:'different'}, {...stored,observedAt:now,yesName:stored.noName,noName:stored.yesName}]){
+    assert.equal(currentTennisContext(stored,latest,now),stored);
+  }
+  const ended=currentTennisContext(stored,{...stored,observedAt:now,ended:true,live:false,active:false},now);
+  assert.equal(ended.ended,true);assert.equal(ended.active,false);
+  const closedRules={...stored,active:false,execution:{...stored.execution!,active:false}};
+  const updated=currentTennisContext(closedRules,{...stored,observedAt:now,score:'0-7'},now);
+  assert.equal(updated.active,false);assert.equal(updated.execution,closedRules.execution);
+  assert.equal(updated.observedAt,now);assert.equal(updated.score,'0-7');
 });
 test('expired Auto entry cannot immediately create a replacement intent',()=>{
   const session=queued('momentum'),later=NOW+40000;
