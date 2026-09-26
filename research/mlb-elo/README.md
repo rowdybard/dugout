@@ -1,6 +1,6 @@
 # MLB team-strength forecast baseline — experimental paper use
 
-Built September 23, 2026 from actual MLB Stats API regular-season schedule results. This adds a small interpretable outcome estimate; it does not model players or establish profitable Polymarket trading.
+This is a frozen historical research artifact built September 23, 2026 from actual MLB Stats API regular-season schedule results through September 22. It adds an interpretable outcome estimate for the older MLB research engine; it does not model players or establish profitable Polymarket trading. The active ATP/WTA/NFL/CFB dashboard and Cloudflare runner use `lib/tennis` and do not use this MLB model. Keep the research and its original provenance when packaging the project.
 
 ## Data and provenance
 
@@ -58,7 +58,7 @@ These intervals are descriptive resampling results with 1,000 replicates and a f
 
 `request` requires `now`, a explicitly mapped **MLB team ID** for the YES outcome, and `marketFamily: 'FULL_GAME_WINNER'`. Use the official MLB IDs from the matched `SportsContext.game.home.id` / `.away.id`; Polymarket IDs are a separate namespace. Map the YES team explicitly and fail closed on ambiguity. Do not infer a team from prices, ordering, aliases or a market slug.
 
-It refuses other leagues, in-play games, unknown teams, mismapped YES outcomes, non-MLB source namespaces, future or replay context, current-day training data, and stale team ratings. Default maximum ratings age is three days; context receipt age is 90 seconds. Both are configurable freshness gates, not source latency promises. The build is current through September 22 and needs later data refreshes to remain available.
+It refuses other leagues, in-play games, unknown teams, mismapped YES outcomes, non-MLB source namespaces, future or replay context, current-day training data, and stale team ratings. Default maximum ratings age is three days; context receipt age is 90 seconds. Both are configurable freshness gates, not source latency promises. Ratings end on September 22, 2026; they are not a current feed and expire under the configured age gate. This package has no scheduled ratings refresh.
 
 An available output explicitly includes `playerImpactModeled: false`, `marketValueEstablished: false`, and the missing feature list. Existing injury/pitcher/QB-change gates remain separate. Comparing a selected-side forecast payout with fee-inclusive entry cost can filter a paper experiment. It does not validate the chance of hitting a short-horizon take-profit price; this model's horizon is game outcome/settlement.
 
@@ -74,17 +74,20 @@ These are arithmetic examples for observed matchup identities, not claims of fre
 
 ## Reproduction and tests
 
+Run the offline reproduction from the repository's `research/mlb-elo` directory:
+
 ```sh
-python fetch_sources.py
 python train.py
 python test_training.py
 node --experimental-strip-types --test ../../tests/mlb-forecast.test.ts
 ```
 
-Training can rerun offline from the captured gzip files. Four Python tests verify same-date predictions, future-result exclusion, selection/holdout date separation and the current-day cutoff. Four TypeScript tests verify strict mapping, opposite-team probabilities, freshness/phase blocks and parity with an actual Python holdout prediction. A focused strict TypeScript check also passed.
+Training reruns offline from the captured gzip files and verifies manifest hashes. It writes local research artifacts; `test_training.py` imports the training module and also regenerates them. Run in a copy if preserving the original artifact bytes matters. Python tests verify same-date predictions, future-result exclusion, selection/holdout date separation and the current-day cutoff. TypeScript tests verify strict mapping, opposite-team probabilities, freshness/phase blocks and parity with an actual Python holdout prediction. These check reproducibility and program behavior, not fresh performance.
+
+`python fetch_sources.py` optionally fetches and overwrites the fixed-date captures and manifest. It is not required offline and is not an automatic update to the present date. Review provenance and training date boundaries before changing this historical experiment. Distribute `sources/*.json.gz`, `sources/manifest.json`, the Python scripts, design, normalized games, predictions, examples and model together.
 
 There is no NFL model, player model, market-price backtest, execution-alpha claim or real-money permission in this proposal.
 
 ## Shipped integration
 
-The production artifact is `data/models/mlb-elo-2026-09-23.json`. The retraining script emits `research/mlb-elo/model.json` for review; it does not silently replace a running session’s frozen model. Copy a reviewed artifact and update the new-session configuration explicitly. This release has no scheduled ratings refresh. Ratings age beyond three days blocks new entries.
+The older MLB engine's packaged artifact is `data/models/mlb-elo-2026-09-23.json`, imported by `lib/bot/server-input.ts`. Retraining emits `research/mlb-elo/model.json` for review; it does not silently replace that imported artifact or a running session's frozen model. Copy a reviewed artifact and update the relevant configuration explicitly if continuing the MLB experiment. There is no scheduled refresh; ratings beyond three days block this model's use in new entries. This does not change the current football report freshness policy or tennis strategy.

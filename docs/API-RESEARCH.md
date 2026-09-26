@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Polymarket US integration — verified September 23, 2026
 
 This application targets **Polymarket US**, not Gamma, Polygon tokens, or the global CLOB.

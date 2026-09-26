@@ -3,7 +3,7 @@ import type {RunnerState} from './contracts';
 import type {TennisAction,TennisSession} from '../tennis/types';
 import {polymarketSecrets} from '../trading/credentials.ts';
 
-export type RunnerBindings={DUGOUT_RUNNER_URL?:string;DUGOUT_RUNNER_SECRET?:string;POLYMARKET_KEY_ID?:string;POLYNARKET_KEY_ID?:string;POLYMARKET_SECRET_KEY?:string};
+export type RunnerBindings={DUGOUT_OWNER_ID?:string;DUGOUT_RUNNER_URL?:string;DUGOUT_RUNNER_SECRET?:string;POLYMARKET_KEY_ID?:string;POLYNARKET_KEY_ID?:string;POLYMARKET_SECRET_KEY?:string};
 export type OwnerFence={owner_id:string;mode:'frozen'|'active';epoch:string;migration_id:string;snapshot:string;revision:number};
 export type RunnerDatabase=Pick<D1Database,'prepare'|'batch'>;
 

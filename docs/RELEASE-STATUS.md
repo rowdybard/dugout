@@ -1,0 +1,49 @@
+# Release evidence and known gaps
+
+Evidence date: September 26, 2026. This records observations and test results; it is not a live account-status feed.
+
+## Background cutover
+
+The Cloudflare Worker `dugout-paper-runner` was deployed with its SQLite Durable Object namespace and migration tag `v1`. Account migration completed through the authenticated UI while paused and flat; it did not start the bot.
+
+Authenticated before/after exports were reconciled locally. The post-cutover export contained cash 93.93805, 19 historical fills, 4.11 execution fees, 13,130 journal records and 4,373 observations. All 13,103 records in the earlier export and all 4,373 observations retained matching canonical SHA256 payloads. Later rows were 25 decisions, one pause control and one migration checkpoint. Ledger and positions matched, missing observation IDs were empty, and the export was not truncated. Local evidence: `outputs/pre-runner-export-20260926.json`, `outputs/post-runner-export-20260926.json`, and `outputs/reconcile-migrated-export.mjs`. These private account exports are not in the source ZIP.
+
+Old Sites records remain an archive behind the writer fence. Exact prospective replay begins at the migration checkpoint; older records are not automatically exact replay evidence.
+
+## Report-refresh verification
+
+Source `5ac6e98f89755381d9164980ab8556b18efd7ede` was privately published at 23:30:51 UTC; the native Worker was updated at 23:26:24 UTC on September 26.
+
+- A full event response measured 1,115,907 bytes, exceeding the former runner 1 MB cap. A 20-event discovery page measured 7,647,234 bytes. Endpoint-specific bounded caps now accommodate these responses.
+- A fixed-event/winner-filter request reduced the selected football report to about 16 KB. Scoped uncached reads removed an observed 30-second CDN delay; original play timestamps remained authoritative.
+- A read-only adapter check completed in 191 ms with one matched game, no failures, an 18.161-second-old report, an 80 ms-old REST receipt and a 0.5-cent spread. Its in-memory test account did not trade or change production state.
+- The hosted Wisconsin–Penn State field advanced from Wisconsin 36 / 1st & 10 to Wisconsin 40 / 3rd & 6. Report age and Last checked advanced independently; the book refreshed within seconds after selecting the game.
+- An uncached response could still contain an 82-second-old kickoff report. Upstream play-report latency remains a limitation.
+- A 495-test full suite passed. Three later concurrent-429 regressions passed within 23 targeted tests. Main/runner TypeScript, relevant lint and both production builds passed.
+
+Relevant lint excluded two existing `no-explicit-any` declarations only for `lib/server/polymarket.ts`. This does not mean the repository-wide lint command passes.
+
+## Clean-interface/source-package release
+
+The package removes the active Beginner mode toggle/preference, collapses technical details, and replaces stale current documentation. It also restricts background setup/migration and paid adviser access to the server-configured owner, while retaining separate browser-mode paper accounts for invited visitors. No engine parameters, balances or migration state are changed by this release.
+
+- Full suite: **503 tests passed**, zero failed/skipped.
+- Main and runner TypeScript checks passed.
+- ESLint passed on all changed TypeScript/TSX files and new/updated tests. This is scoped validation, not a repository-wide lint result.
+- Frontend/Sites production build and native runner dry-run production bundle passed.
+- New integration tests use actual session, runner and adviser routes with real SQLite. They verify separate customer cash/history, Start/Pause, denied migration without writes, denied adviser calls without database/provider access, missing-pin behavior and retained owner capabilities.
+- Tests use synthetic identities. A hosted customer invitation, customer login and complete customer paper run have not been verified. Customer accounts require the page to remain open and visible; this release does not provision customer background runners.
+
+The new `DUGOUT_OWNER_ID` Sites setting must match the existing native `RUNNER_OWNER_ID` before owner setup/adviser controls are available. An absent pin does not remove a writer fence or stop existing runner exit management. Hosted layout/deployment verification is separate from the local checks above.
+
+## Not established
+
+- 60 continuous minutes of new-runner live background operation including closed dashboards.
+- A new-runner automatic live entry and exit, with full journal reconciliation afterward.
+- Profitability or an edge; historical paper fills and tests do not establish either.
+- The proposed later-game fixed-candidate versus baseline comparison.
+- Uninterrupted free operation. The local 75,000-write entry guard is an estimate; account-wide quotas and other usage can stop service.
+- Current Claude model availability, provider pricing or the owner's provider balance. No paid verification call was made.
+- Fresh dependency installation and account restoration from the ZIP on a different machine.
+
+The old Clemson monitor remains paused. A new experiment needs explicit dashboard Start and available operating budget. Do not reset history or counters to manufacture acceptance evidence.

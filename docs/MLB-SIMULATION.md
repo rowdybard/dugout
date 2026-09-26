@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # September 23, 2026 — a separate $10 MLB paper test
 
 This experiment uses **$10 total**, separate from the owner’s $100 personal paper portfolio. It calls only public Polymarket US read endpoints. It never submits an order and never changes a personal position, watchlist, balance, or scanner setting.

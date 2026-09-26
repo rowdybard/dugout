@@ -1,13 +1,16 @@
-# Dugout streaming service
+# Dugout optional Node streaming bridge
 
-A persistent, **read-only** Polymarket US connection service. This process cannot create, cancel, modify, or close a real-money order. The web application remains a separate deployable. It must proxy this service through its existing owner authentication; never put the service token or exchange credentials in a browser bundle.
+A persistent, **read-only** Polymarket US connection service retained for the optional stream proxy and older research surfaces. It cannot create, cancel, modify, or close a real-money order. The current [Cloudflare paper runner](../runner/README.md) has its own native market transport and does not require this process. Starting this bridge does not start the paper bot or take ownership of its journal.
+
+The web application remains separately deployable and must proxy this service through owner authentication. Never put its token or exchange credentials in a browser bundle. Keep this directory with the repository's shared `lib/trading` sources and lockfile; it is not a standalone package.
 
 ## Run
 
-Install the repository's dependencies with its existing package manager. From the repository root, using Node 22.13+ (Node 24 tested):
+Use the pnpm version pinned in `package.json`. From the repository root, using Node 22.13+ (Node 24 tested):
 
 ```sh
-node --experimental-strip-types services/trading/server.ts
+pnpm install --frozen-lockfile
+pnpm trading:stream
 ```
 
 It starts without secrets and reports `not_configured` at `http://127.0.0.1:4179/health`. It does not generate placeholder prices or attempt an unauthenticated WebSocket connection. Supply secrets through the deployment's server-side secret manager, not source control:
@@ -36,7 +39,7 @@ Except `/health`, every route requires `Authorization: Bearer <TRADING_SERVICE_T
 | `POST /v1/reconcile` | Schedules read-only account reconciliation, returns 202 and health |
 | `GET /v1/events?markets=slug-a,slug-b&ownerId=owner` | SSE `snapshot` on connect; `status`, `quote`, `trade`, `account` events thereafter; keeps the owner's selections leased |
 
-`StreamSnapshot`, events, decimal strings, display-number prices, and `streamBookForDisplay()` are defined in `lib/trading/stream-types.ts`. Empty selections remove that owner's subscriptions. Owners' lists are merged, with full book taking precedence over lite; maximum 32 owners and 500 unique markets. Owner IDs may use letters, numbers, `_`, `.`, `:`, `-`, up to 400 characters. An owner expires 60 seconds after its last POST or SSE disconnect. Supply `ownerId` in SSE to retain the selection while viewing it; multiple tabs may share an owner. The server proxy must verify actual MLB/NFL membership from its catalogue before calling; a client-provided league label is not evidence. Internal selection changes are idempotent and have no trading side effect.
+`StreamSnapshot`, events, decimal strings, display-number prices, and `streamBookForDisplay()` are defined in `lib/trading/stream-types.ts`. Empty selections remove that owner's subscriptions. Owners' lists are merged, with full book taking precedence over lite; maximum 32 owners and 500 unique markets. Owner IDs may use letters, numbers, `_`, `.`, `:`, `-`, up to 400 characters. An owner expires 60 seconds after its last POST or SSE disconnect. Supply `ownerId` in SSE to retain the selection while viewing it; multiple tabs may share an owner. The shared selection contract supports MLB, NFL, ATP, WTA and CFB. The server proxy must verify the actual market in its catalogue or persisted positions before subscribing; a client-provided league label is not evidence. Internal selection changes are idempotent and have no trading side effect.
 
 The SSE body uses standard named events and JSON in `data:`. Browser reconnect must replace state with the fresh `snapshot`, not append it as trade history. SSE has no replay guarantee or resume cursor. The service terminates slow consumers rather than accumulating unbounded queued financial state. UI transport keep-alive comments are not evidence of a provider update. Shared quote values always identify their source as `polymarket_us_websocket`; development replay is never inserted into this service.
 
@@ -58,7 +61,9 @@ Private updates are forwarded as provisional observations and always make reconc
 
 Deploy on a runtime supporting a continuously running Node process and outbound authenticated WebSockets. The current request-driven UI deployment does not start this process. Health monitoring should examine provider/reconciliation state as well as HTTP liveness. Stop the process through SIGTERM/SIGINT for clean socket/SSE shutdown.
 
-Current state is in memory and is rebuilt after restart. Durable tick archival, an execution journal, strategy orchestration, authenticated-session contract capture, source latency measurement, production credentials, and persistent service deployment are separate work. This foundation does not imply that historical tick replay or live execution is ready. It never substitutes minute history for live ticks.
+This bridge's state is in memory and is rebuilt after restart. It does not persist an authoritative paper session, archive all ticks or orchestrate strategy. Those paper-session responsibilities are implemented separately by `services/runner`; its journal is not populated by simply launching this bridge. The bridge's health flags do not establish authenticated production contract verification or actual live execution. It never substitutes minute history for live ticks.
+
+Run its regressions from the repository root with `node --experimental-strip-types --test services/trading/*.test.ts`, or all shared tests with `pnpm test`. Deployment secrets and process state are excluded from the source ZIP. Supply them through the server environment only when explicitly enabling this optional component.
 
 ## Official sources checked September 23, 2026
 

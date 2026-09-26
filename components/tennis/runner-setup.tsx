@@ -3,7 +3,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {TennisRuntime} from '@/lib/tennis/types';
 
-type Status={configured:boolean;mode:'browser'|'migrating'|'service';phase:string|null;canPrepare:boolean;revision:number;
+type Status={eligible:boolean;configured:boolean;mode:'browser'|'migrating'|'service';phase:string|null;canPrepare:boolean;revision:number;
   progress:{journalDone:number;journalTotal:number;observationDone:number;observationTotal:number;chunksBuilt:number;chunksUploaded:number}|null;error?:string|null};
 
 export function RunnerSetup({runtime,flat,onComplete}:{runtime:TennisRuntime|null;flat:boolean;onComplete:()=>Promise<void>}) {
@@ -26,6 +26,7 @@ export function RunnerSetup({runtime,flat,onComplete}:{runtime:TennisRuntime|nul
     const timer=setTimeout(()=>void request('advance'),500);return()=>clearTimeout(timer);
   },[status,error,busy,request]);
   if(runtime?.mode==='service'||status?.mode==='service')return null;
+  if(status?.eligible===false||!status&&!error)return null;
   const migrating=status?.mode==='migrating';
   return <section className="tennis-rule-summary" aria-label="Background bot setup">
     <b>{migrating?'Moving your saved paper account':'Background bot'}</b>

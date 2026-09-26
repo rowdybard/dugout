@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Automatic selection and analysis — September 23, 2026
 
 The main workspace now starts with a separate $10 paper bankroll. The bot selects eligible pregame full-game winner markets and evaluates both outcomes. It does not make real-money orders. Its balance and proceeds are independent of the original $100 manual paper profile.

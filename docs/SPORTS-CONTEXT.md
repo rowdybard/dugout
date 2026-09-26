@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Free game and player context
 
 Dugout can attach MLB and NFL source observations to a Polymarket US market. This is a separate data boundary from quotes, strategy evaluation, paper accounting, and order execution. A player change does not place an order or imply a price adjustment.

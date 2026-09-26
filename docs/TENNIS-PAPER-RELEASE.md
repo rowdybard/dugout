@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Tennis Paper Research Preview
 
 September 25, 2026 · strategy `tennis-recovery-v1`

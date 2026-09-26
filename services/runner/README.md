@@ -1,12 +1,27 @@
 # Dugout paper runner
 
-This Worker owns one account's authoritative paper session in a SQLite Durable Object. The Sites application stays the authenticated UI. Only the Sites server can sign runner requests. It has no real-order route or paid model client.
+This Worker owns one account's authoritative paper session in a SQLite Durable Object. The Sites application stays the authenticated UI and signs server-to-server runner requests. The Worker has no real-order route or paid model client. It is independent of the optional Node stream bridge in `services/trading`.
+
+This directory is part of the full repository, not a standalone install. Its imports depend on shared `lib` sources. Keep the repository lockfile and shared sources when distributing it. See [the architecture](../../docs/ARCHITECTURE.md) for application boundaries.
 
 ## Configuration
 
 Worker name: `dugout-paper-runner`. Namespace binding: `PAPER_RUNNERS`, class `OwnerPaperRunner`, SQLite migration tag `v1`.
 
-Set `RUNNER_OWNER_ID` to the unchanged Sites owner ID and `RUNNER_ENGINE_VERSION` to the exact published shared-engine commit/build identifier. Set one random server secret of at least 32 bytes, `RUNNER_HMAC_SECRET`, identically on Sites and this Worker. Empty settings fail closed. Never put the secret or provider credentials in a public/browser environment variable.
+The deployed design authorizes exactly one `RUNNER_OWNER_ID`. It is not a multi-customer background service. An invited Sites identity has its own D1 paper session and remains browser-owned unless an explicitly supported runner configuration and migration is provided for that identity. Do not reuse the original owner's identity or promise background operation to other accounts.
+
+| Location | Setting | Required value |
+| --- | --- | --- |
+| Worker variable | `RUNNER_OWNER_ID` | Unchanged, trusted Sites owner ID; not an email address |
+| Worker variable | `RUNNER_ENGINE_VERSION` | Exact shared-engine commit/build identifier for replay provenance |
+| Worker secret | `RUNNER_HMAC_SECRET` | Random signing secret; generate at least 32 random bytes |
+| Sites server secret | `DUGOUT_RUNNER_SECRET` | Same value as the Worker's `RUNNER_HMAC_SECRET` |
+| Sites server setting | `DUGOUT_RUNNER_URL` | HTTPS runner origin, without a path or query |
+| Sites server setting | `DUGOUT_OWNER_ID` | Same trusted ID as `RUNNER_OWNER_ID`; gates migration/setup and paid adviser access |
+
+The checked-in Wrangler file leaves the owner blank and build ID as `pending-build`. Configure both for deployment. The protocol rejects secrets shorter than 32 characters, and absent owner authorization fails closed. The build ID is provenance and must be set accurately by the release process. Never put secrets or provider credentials in browser variables. Cloudflare deployer credentials belong in deployment tooling, not the Sites application or ZIP.
+
+Sites checks `DUGOUT_OWNER_ID` before migration commands can pause or fence an account. Other authenticated visitors receive a disabled setup capability and keep their independent browser-mode session; they must keep the page open and visible. Missing owner configuration disables setup and adviser access. It does not change an existing writer fence or silently return a migrated account to browser trading.
 
 Provider stream credentials are transferred by the authenticated Sites server to `POST /v1/feed-credentials` after migration start. The body is `{keyId,secretKey}`. They are encrypted using AES-256-GCM with a random nonce; HKDF derives the encryption key from the signing secret using a distinct purpose and owner/epoch binding. Only ciphertext reaches SQL. Exports, responses and logs exclude credentials. Rotating the signing secret requires retransferring feed credentials. Missing credentials leaves the strict REST fallback available.
 
@@ -53,7 +68,11 @@ Chunks are at most 250,000 UTF-8 bytes and 2,000 rows each. The manifest allows 
 
 Alarms target a 2.5-second interval after each completed check. A recovery alarm is persisted before external requests; platform scheduling/network delay is possible. Pause leaves exit checks active for held positions; stopped/paused flat sessions close the provider stream and delete the alarm. A fresh confirmed end of the focused game pauses new entries. Revision, session ID and epoch compare-and-swap prevents stale network work from overwriting controls or a reset account.
 
-The provider transport uses the official read-only market WebSocket and existing strict parser. REST books retain request/receipt timestamps, provider timestamps and cache provenance. Old or cached books cannot become fresh from a heartbeat. Football context uses the shared priority report helper: verified direct event lookup, a 3-second cache, and a 2-second maximum wait. Reports and connection setup run alongside books using platform `waitUntil`. Held exits wait only for their book; pending/new entries wait for the bounded report check. Tennis keeps its verified 15-second event context cache. Initial discovery uses the shared resumable 20-event pagination, so the focus can be beyond the first page. Fee/tick/size metadata has its own 60-second refresh clock, independent of context receipt age. HTTP 429 backoff survives reconstruction.
+The provider transport uses the official read-only market WebSocket and existing strict parser. REST books retain request/receipt timestamps, provider timestamps and cache provenance. A heartbeat never renews a book receipt. A newly fetched, verified uncached REST snapshot can contain an older last-transaction timestamp when the book has not changed; that source timestamp is retained rather than rewritten.
+
+Football uses `lib/tennis/priority-context.ts` and `lib/trading/fresh-event.ts`: a verified numeric event ID selects a compact `/v1/events?id=...&sportsMarketTypes=football_team_full_game_winner` response. A per-read `dugout_read` nonce and `cache: no-store` request a new source check; only `MISS`, `BYPASS`, or `DYNAMIC` with zero/absent cache age is accepted. The provider's report timestamp remains authoritative: a fresh HTTP receipt cannot make an old play fresh. The helper has a 3-second cache and 2-second request limit. The context policy still rejects reports older than 45 seconds and incomplete down/distance identity. It does not estimate win probability.
+
+Reports and connection setup run alongside books using platform `waitUntil`. Held exits wait only for their book; pending/new entries wait for the bounded report check. Tennis keeps its verified 15-second event context cache. Initial discovery uses shared resumable 20-event pagination, so a focus can be beyond the first page. Fee/tick/size metadata has its own 60-second refresh clock, independent of context receipt age. HTTP 429 backoff survives reconstruction. Bounded response sizes and deadlines reject failed feeds rather than substituting recorded data.
 
 Confirmed final context is returned separately when a final book is unavailable, so a completed game still records an automatic pause. That lifecycle cause and verified context are preserved in the control/replay journal. Existing exits continue. Starting/resuming without an explicit duration clears the old browser observation window, with that transition recorded in the replay frame; the service then runs until the focused game ends, a user pauses/stops it, or a safety limit pauses entries.
 
@@ -65,12 +84,19 @@ An export ID fixes the account snapshot and journal boundary for 24 hours. `comp
 
 ## Local verification
 
-From the repository root, with existing dependencies installed and Node 24:
+From the repository root, with Node 24 and the pnpm version pinned in `package.json`:
 
-```
+```sh
+pnpm install --frozen-lockfile
 node --experimental-strip-types --test services/runner/tests/*.test.ts
-node node_modules/typescript/bin/tsc -p services/runner/tsconfig.json
-node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config services/runner/wrangler.jsonc --outdir services/runner/build
+pnpm runner:check
+pnpm runner:build
 ```
 
-Tests use synthetic fixtures and mocked transport/runtime, including SQLite rollback, signature tampering, nonce replay, encrypted credentials, handoff integrity, command races, delayed paper buy/sell replay and fees, reset replay, export boundaries, native source freshness, focus persistence, alarm recovery and concurrent pause. They do not establish a live automatic strategy entry/exit. Complete the private hosted cutover and browser-closed observation separately before calling the service live-tested.
+`runner:build` is a Wrangler dry run and writes to `outputs/runner-build`; it does not publish or start a session. Use `pnpm test` for the complete shared-engine, Sites migration, and service test suite. Deployment separately requires Cloudflare authorization, the SQLite Durable Object binding/migration, configured server secrets and matching Sites proxy release. The runner has no D1 binding; Sites' archive and migration do.
+
+Tests use synthetic fixtures and mocked transport/runtime, including SQLite rollback, signature tampering, nonce replay, encrypted credentials, handoff integrity, command races, delayed paper buy/sell replay and fees, reset replay, export boundaries, native source freshness, focus persistence, alarm recovery and concurrent pause. They do not establish a live automatic strategy entry/exit. The source package does not certify a deployment's configuration or health. Confirm actual health and journal evidence separately; a genuine automatic entry and exit on a live game is required to claim that milestone.
+
+## Source package versus account backup
+
+The ZIP includes implementation, fixtures and migrations, not the owner's remote Durable Object/D1 databases or private provider keys. Preserve a saved-history export separately when backing up an account. Exclude `.wrangler` state, `.dev.vars`, `.env` secrets, build output, `node_modules`, and credentials. A new deployment from source does not recover a previous balance/journal and must not silently start trading.

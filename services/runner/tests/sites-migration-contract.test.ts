@@ -39,7 +39,7 @@ test('Sites chunks activate in the real runner with execution and shadow evidenc
     source.prepare('INSERT INTO tennis_sessions VALUES(?,?,?)').run(OWNER,JSON.stringify(session),session.revision);
     const originalSource=source.prepare('SELECT value FROM tennis_sessions').get()?.value;
     const originalRows=source.prepare('SELECT COUNT(*) AS n FROM tennis_journal').get()?.n;
-    const env:RunnerBindings={DUGOUT_RUNNER_URL:'https://synthetic.example.workers.dev',DUGOUT_RUNNER_SECRET:'synthetic-secret-at-least-thirty-two-characters'};
+    const env:RunnerBindings={DUGOUT_OWNER_ID:OWNER,DUGOUT_RUNNER_URL:'https://synthetic.example.workers.dev',DUGOUT_RUNNER_SECRET:'synthetic-secret-at-least-thirty-two-characters'};
     let activationResponseLost=false;
     const request:typeof runnerRequest=async<T>(_env:RunnerBindings,_owner:string,epoch:string,path:string,_method?:'GET'|'POST',value?:unknown)=>{
       assert.equal(_owner,OWNER);assert.notEqual(epoch,EPOCH);

@@ -10,7 +10,7 @@ import type {RunnerDatabase,RunnerBindings} from '../lib/runner/sites-proxy';
 import type {MigrationManifest} from '../lib/runner/contracts';
 import type {TennisSession} from '../lib/tennis/types';
 
-const owner='synthetic-owner-123',env:RunnerBindings={DUGOUT_RUNNER_URL:'https://paper.example.workers.dev',DUGOUT_RUNNER_SECRET:'synthetic-secret-at-least-thirty-two-characters'};
+const owner='synthetic-owner-123',env:RunnerBindings={DUGOUT_OWNER_ID:owner,DUGOUT_RUNNER_URL:'https://paper.example.workers.dev',DUGOUT_RUNNER_SECRET:'synthetic-secret-at-least-thirty-two-characters'};
 test('runner transport uses the edge-supported manual redirect mode and never forwards signed requests',async()=>{
   let calls=0;
   const request=(async(_url:RequestInfo|URL,init?:RequestInit)=>{calls++;assert.equal(init?.redirect,'manual');return new Response(null,{status:307,headers:{Location:'https://other.invalid/collect'}});}) as typeof fetch;

@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Trading workspace implementation
 
 September 23, 2026. This release implements the compact Advanced workspace and a price-protected paper execution loop. It does not enable real-money orders or claim a profitable strategy.

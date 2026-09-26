@@ -1,137 +1,82 @@
 # Dugout
 
-MLB/NFL market intelligence and a price-protected paper trading workspace using Polymarket US.
+Dugout is a private sports **paper-trading** dashboard for listed Polymarket US ATP, WTA, NFL, and college-football winner markets. Choose a game to view, focus the bot on one game, and explicitly press Start. The shared engine evaluates both outcomes and allows at most one open position. It does not place real orders.
 
-- Beginner mode teaches the market flow; Advanced mode prioritizes charts, editable presets and Ape In / Ape Out controls.
-- `npm test` runs execution, strategy, protocol and transaction regressions.
-- `npm run trading:stream` starts the separate read-only streaming service; it reports `not_configured` without server credentials.
-- See [implementation status](docs/TRADING-IMPLEMENTATION.md), [QA evidence](docs/TRADING-QA.md), and [streaming setup](services/trading/README.md).
+This project contains the React frontend, Sites-hosted HTTP backend and D1 schema/migrations, shared strategy and simulated execution code, and a separate Cloudflare Worker with a SQLite Durable Object for background operation. The word `tennis` remains in shared paths and types used by football too.
 
-Real-money execution is disabled. The live adapter is a tested integration foundation, not a connected trading account. The default paper dip/recovery experiment is a configurable candidate, not a validated edge.
+## Start here
 
-## Framework operations
+- [Full bot and developer manual](docs/BOT-MANUAL.md): operation, actual rules, editing, troubleshooting, configuration and limitations.
+- [Chad's getting-started guide](chad.md): plain-English customer instructions and access status.
+- [Maintainer handoff](docs/MAINTAINER-HANDOFF.md): where things stand and what remains unverified.
+- [Architecture](docs/ARCHITECTURE.md), [runner setup](services/runner/README.md), and [release evidence](docs/RELEASE-STATUS.md).
+- [ZIP contents and restore notes](docs/DISTRIBUTION.md).
+- [Documentation index](docs/README.md): current guides versus historical research/release notes.
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+## Current interface
 
-## Prerequisites
+Beginner mode is disabled in the active dashboard. A saved browser preference cannot re-enable it. The main view keeps bot controls, current decision, game selection/focus, live field/chart, quotes, balance and active-order/position information visible. Technical details and detailed history are expandable. This presentation change does not change strategy, position limits, fees or execution protections.
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+Selecting a game changes the chart. **Focus bot on this game** changes future entry eligibility. **Pause** prevents entries and continues exits; **Stop** requests an exit and waits for executable conditions. A simulated order is not guaranteed to fill. The full manual describes these distinctions.
 
-## Sites Lifecycle
+Football field reports and executable books have separate timestamps. A successful check can return an old play report. New football entries under the context policy need verified context within 45 seconds. Runner entries enforce a spread no wider than 2 cents and book age no older than 5 seconds. These are eligibility checks, not a profit guarantee.
 
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
+## Local development
 
-Run `node <plugin-root>/scripts/configure-execution-profile.mjs` only when the profile is unknown for the current checkout and environment. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
+The package declares Node `>=22.13.0`; this release was checked with Node **24.20.0** on Windows. The pinned package manager is **pnpm 11.25.0**, with `pnpm-lock.yaml` and installation policy in `pnpm-workspace.yaml`.
 
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
-
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+With that pnpm version installed, from the project directory:
 
 ```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+pnpm install --frozen-lockfile
+pnpm build
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+An empty local D1 database needs the SQL files in `drizzle/` applied once, in filename order, before the data-backed app can work. Build first to generate `dist/server/wrangler.json`. For each not-yet-applied file:
 
-## Diagnostic Commands
+```sh
+pnpm exec wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_black_the_santerians.sql
+```
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+Replace the filename with each subsequent migration; do not replay an already applied migration against a populated database. Local migrations do not change the hosted database.
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+```sh
+pnpm dev
+```
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+Portable development starts at port 5173 unless overridden. Use the address printed by the server. Its loopback-only mock sign-in route is `/signin-with-chatgpt?return_to=/`; it creates a local development identity, not the hosted owner's account. Mock auth is not included in production. Hosted routes rely on the hosting platform's authenticated identity headers.
 
-## Learn More
+No checkout-local execution profile is included in a source ZIP. `scripts/execution-profile.mjs` defaults such a checkout to `portable`. The existing `install:ci` script is a **managed Linux Bash installer**, with `flock` and GNU `timeout` requirements; it is not the Windows installation command. A fresh dependency installation from the distributed ZIP has not been separately validated; release checks used the installed checkout dependencies.
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+## Commands
+
+| Command | Actual purpose |
+| --- | --- |
+| `pnpm dev` | Portable Vinext development server; managed profile uses Vite |
+| `pnpm build` | Production frontend and Sites backend build |
+| `pnpm start` | Local preview of the built Worker using local D1; does not deploy |
+| `pnpm test` | Root, stream-service and runner tests |
+| `pnpm exec tsc --noEmit` | Main TypeScript check |
+| `pnpm runner:check` | Runner TypeScript check |
+| `pnpm runner:build` | Dry-run runner bundle; does not deploy |
+| `pnpm lint` | Repository-wide lint; see limitations in release evidence |
+| `pnpm trading:stream` | Optional separate read-only Node streaming service |
+| `pnpm db:generate` | Generate Drizzle migrations after schema changes |
+
+## Hosting and credentials
+
+The current dashboard is [owner-private on Sites](https://dugout-signals.rowdybard.chatgpt.site/). `.openai/hosting.json` records that existing project's binding names and project ID; it does not grant access. The background runner has its own `services/runner/wrangler.jsonc`.
+
+The Sites backend signs commands to the runner. The browser receives neither the signing secret nor a choice of runner owner. Migrated accounts are fenced against the old database writer; a runner outage does not turn browser trading back on. Preserve the existing Durable Object namespace and journal when updating a deployment.
+
+Private invited visitors use their own hosting identity and separate paper balance/history. Their browser bot requires the tab to remain open and visible. Background setup and the paid Claude adviser are restricted to the server-configured `DUGOUT_OWNER_ID`, which must match the Worker's `RUNNER_OWNER_ID`. A missing pin disables new setup and adviser access; existing runner fences and exit management remain intact. A customer invitation and complete customer run still need end-to-end verification.
+
+`.env.example` lists configuration names with blank secret values. Configure actual secrets in the appropriate runtime/secret manager. Copying the source does not copy Cloudflare databases, grant login access, or restore an account. See the manual before setting up a different owner/deployment.
+
+Claude is an optional chat adviser. Model requests occur only through an explicit chat Send; Claude does not make automatic bot decisions, change rules or place orders. Model availability and provider billing must not be inferred from the hardcoded model string or the application's cost estimate.
+
+## Verified limits
+
+The Cloudflare runner was deployed and the existing account migrated while paused. Recorded journal reconciliation retained cash **93.93805**, 19 historical fills and 4.11 in execution fees on September 26, 2026. Those are dated evidence, not a promise of the current account balance.
+
+Report-refresh changes were checked against live read-only data. **A 60-minute run of the new Cloudflare runner with the dashboard closed, and a genuine automatic entry/exit under that runner, remain unverified.** Older paper fills and synthetic tests do not establish that milestone or a profitable strategy. No paid plan was enabled for the runner. Its quota estimates are not exact Cloudflare billing counters.

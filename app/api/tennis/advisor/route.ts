@@ -1,6 +1,9 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
-import {db,profile,sameOrigin} from '@/lib/server/storage';
+import {db,sameOrigin} from '@/lib/server/storage';
+import {requireSiteOwner,siteOwnerEnabled,type SiteOwnerBindings} from '@/lib/server/owner-access';
+import {requireSitesOwner} from '@/lib/runner/sites-proxy';
+import {RunnerError} from '@/lib/runner/protocol';
 import {readTennisSession} from '@/lib/tennis/server';
 import {ADVISOR_ALLOWANCE,ADVISOR_RESERVATION,advisorPayload,estimatedAdvisorMicrodollars,type AdvisorMessage} from '@/lib/tennis/advisor';
 import {reserveMessageSql,reserveAllowanceSql} from '@/lib/tennis/advisor-storage';
@@ -17,13 +20,17 @@ async function state(owner:string){
     db().prepare('SELECT value,updated FROM cache WHERE key>=? AND key<? ORDER BY updated DESC LIMIT 30').bind(prefix,prefix+'\uffff').all<{value:string;updated:number}>(),
   ]);
   const entries=rows.results.reverse().map(row=>({...JSON.parse(row.value) as Entry,time:row.updated}));
-  return {configured:!!apiKey(),reservedMicrodollars:Number(allowance?.value??0),allowanceMicrodollars:ADVISOR_ALLOWANCE,
+  return {enabled:true,configured:!!apiKey(),reservedMicrodollars:Number(allowance?.value??0),allowanceMicrodollars:ADVISOR_ALLOWANCE,
     messagesRemaining:Math.max(0,Math.floor((ADVISOR_ALLOWANCE-Number(allowance?.value??0))/ADVISOR_RESERVATION)),
-    memory:notes?.value??'Beginner mode. Explain simply. Paper trading only. Keep API costs small.',
+    memory:notes?.value??'Explain clearly and concisely. Paper trading only. Keep API costs small.',
     messages:entries.flatMap(e=>[{role:'user' as const,content:e.question},...(e.answer?[{role:'assistant' as const,content:e.answer}]:e.error?[{role:'assistant' as const,content:e.error}]:[])]),
     recentEstimatedMicrodollars:entries.reduce((n,e)=>n+(e.estimatedMicrodollars??0),0)};
 }
-export async function GET(req:Request){try{const {id}=await profile(req);return Response.json(await state(id),{headers});}catch{return Response.json({error:'The saved adviser chat is unavailable.'},{status:503,headers});}}
+export async function GET(req:Request){try{
+  const id=requireSitesOwner(req);
+  if(!siteOwnerEnabled(id,env as SiteOwnerBindings))return Response.json({enabled:false,configured:false},{headers});
+  return Response.json(await state(id),{headers});
+}catch(error){return Response.json({error:error instanceof RunnerError?error.message:'The saved adviser chat is unavailable.'},{status:error instanceof RunnerError?error.status:503,headers});}}
 const requestSchema=z.discriminatedUnion('action',[
   z.object({action:z.literal('send'),requestId:z.string().uuid(),message:z.string().trim().min(1).max(1200)}).strict(),
   z.object({action:z.literal('memory'),memory:z.string().max(1200)}).strict(),
@@ -32,8 +39,9 @@ export async function POST(req:Request){
   let recordKey:string|undefined,entry:Entry|undefined;
   try{
     sameOrigin(req);
+    const id=requireSitesOwner(req);requireSiteOwner(id,env as SiteOwnerBindings);
     const raw=await req.text();if(raw.length>8000)throw new Error('Keep the message under 1,200 characters.');
-    const body=requestSchema.parse(JSON.parse(raw)),{id}=await profile(req),now=Date.now();
+    const body=requestSchema.parse(JSON.parse(raw)),now=Date.now();
     if(body.action==='memory'){
       await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated').bind(`advisor:memory:${id}`,body.memory,now).run();
       return Response.json(await state(id),{headers});
@@ -75,6 +83,6 @@ export async function POST(req:Request){
     const message=error instanceof Error&&!(error instanceof z.ZodError)?error.message:'Check your message and try again.';
     // Keep the allowance after uncertain outcomes; never assume a timeout was free.
     if(recordKey&&entry)await db().prepare('UPDATE cache SET value=? WHERE key=? AND value LIKE ?').bind(JSON.stringify({...entry,status:'failed',error:message}),recordKey,`%${entry.nonce}%`).run().catch(()=>{});
-    return Response.json({error:message},{status:400,headers});
+    return Response.json({error:message},{status:error instanceof RunnerError?error.status:400,headers});
   }
 }

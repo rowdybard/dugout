@@ -1,3 +1,5 @@
+> Historical record: this document describes an earlier release or research result. It is not the current operating guide. See [the bot manual](BOT-MANUAL.md) and [release status](RELEASE-STATUS.md). Earlier evidence is preserved below and has not all been rerun for the current release.
+
 # Paper bot timeout repair — September 23, 2026
 
 Production logs showed `/api/feed` requests cancelled near the browser's 45-second timeout. The feed awaited up to 12 discovery requests plus two source reads for every card, behind a serialized public API queue. Starting the bot unnecessarily loaded that same feed.

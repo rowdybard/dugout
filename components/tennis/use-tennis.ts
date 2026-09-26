@@ -25,6 +25,7 @@ export function useTennis() {
   const [error,setError]=useState<string|null>(null),[feedError,setFeedError]=useState<string|null>(null);
   const [connectionIssue,setConnectionIssue]=useState<string|null>(null);
   const [busy,setBusy]=useState(false),[visible,setVisible]=useState(true);
+  const [advisorEnabled,setAdvisorEnabled]=useState(false);
   const [streamStatus,setStreamStatus]=useState('connecting');
   const [now,setNow]=useState(()=>Date.now());
   const [watchedSlug,watchMarket]=useState<string|null>(null);
@@ -116,6 +117,13 @@ export function useTennis() {
     const clock=setInterval(()=>setNow(Date.now()),1000);
     return()=>{mounted.current=false;document.removeEventListener('visibilitychange',onVisibility);clearInterval(clock);};
   },[accept,refresh]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void readJson<{enabled?:boolean}>('/api/tennis/advisor',{signal:controller.signal}).then(data=>{
+      if(!controller.signal.aborted)setAdvisorEnabled(data.enabled===true);
+    }).catch(()=>{if(!controller.signal.aborted)setAdvisorEnabled(false);});
+    return()=>controller.abort();
+  },[]);
   useEffect(()=>{
     if(!visible)return;
     const delay=catalog?.discovery?.complete===false?Math.max(1000,Math.min(30000,(catalog.discovery.nextRefreshAt||Date.now()+2000)-Date.now())):30000;
@@ -217,5 +225,5 @@ export function useTennis() {
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,contextChecks,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
+  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,contextChecks,advisorEnabled,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
 }
