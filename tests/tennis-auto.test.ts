@@ -36,6 +36,8 @@ for(const strategy of ['recovery','momentum'] as const)for(const league of ['ATP
   const session=queued(strategy,['synthetic-auto'],league),original=structuredClone(session);
   assert.equal(session.pending?.signalConfig?.strategy,strategy);assert.equal(session.pending?.decisionMode,'auto');
   assert.equal(session.pending?.action,'BUY');assert.equal(session.cash,100);assert.equal(session.ledger.length,0);assert.equal(session.positions.length,0);
+  assert.match(session.autoSignals![`synthetic-auto:YES:${strategy}`].reason,/Waiting at least/);
+  assert.doesNotMatch(session.autoSignals![`synthetic-auto:YES:${strategy}`].reason,/Rise: Rise:|Recovery: Recovery:/);
   assert.equal(session.config.strategy,'auto');assert.equal(session.config.maxSpreadPoints,2);
   for(const history of Object.values(session.histories))assert.equal(new Set(history.map(p=>p.time)).size,history.length);
   assert.equal(new Set(session.decisions.map(d=>d.id)).size,session.decisions.length);

@@ -422,9 +422,9 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
       histories:{...session.histories,[key]:history},pending:null,decisions:[],rejectionCounts:{},decisionSequence:0,evaluated:0};
     updateSignal(sandbox,input,side,now);
     const signal=sandbox.signals[key];signal.autoRules=rules;
-    signal.reason=`${strategy==='recovery'?'Recovery':'Rise'}: ${signal.reason}`;
-    session.autoSignals[track]=signal;
     const last=sandbox.decisions.at(-1);
+    signal.reason=`${strategy==='recovery'?'Recovery':'Rise'}: ${last?.reason??signal.reason}`;
+    session.autoSignals[track]=signal;
     if(last)record(session,now,input.market.slug,side,last.action==='SIGNAL'?'WAIT':last.action,last.action==='SIGNAL'?'AUTO_READY':last.code,
       `${strategy==='recovery'?'Recovery':'Rise'}: ${last.reason}`,input,{baseline:last.baseline,price:last.price,strategy,autoRules:rules});
     if(sandbox.pending){
