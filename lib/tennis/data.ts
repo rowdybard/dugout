@@ -1,4 +1,4 @@
-import {publicGet} from '../server/polymarket';
+import {publicGet,publicMarketBook} from '../server/polymarket';
 import {cached,db,readCached} from '../server/storage';
 import {currentStreamBook} from '../server/stream-books';
 import {sourceError} from '../server/request-budget';
@@ -11,7 +11,7 @@ const CATALOG_DEADLINE=12_000;
 const BOOK_TTL=1_000;
 const PAGE_SIZE=4;
 const MAX_PAGES=2;
-type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'>;
+type ObservedBook=Pick<TennisInput,'book'|'receivedAt'|'source'|'restReceipt'>;
 
 async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
   // These are captured quotes, never hypothetical fills or a reconstructed sports score.
@@ -110,16 +110,17 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
   const streamed=await currentStreamBook(market.slug);
   let observed:ObservedBook|null=streamed&&freshTennisBook(streamed.receivedAt,Date.now())?streamed:null;
   if(!observed&&!allowRest){
-    const stored=await readCached<ObservedBook>(`tennis:book:${market.slug}`),now=Date.now();
+    const stored=await readCached<ObservedBook>(`tennis:book:v2:${market.slug}`),now=Date.now();
     if(stored&&stored.value.source==='REST'&&freshTennisBook(stored.value.receivedAt,now))observed=stored.value;
     if(!observed)throw new Error('Waiting for a fresh game book; REST checks rotate through live games.');
   }
   const settlement=allowRest?await confirmedSettlement(verified,signal):null;
   if(!observed){
     try{
-      observed=await cached<ObservedBook>(`tennis:book:${market.slug}`,BOOK_TTL,async()=>{
-        const raw=await publicGet(`/v1/markets/${encodeURIComponent(market.slug)}/book`,signal);
-        return {book:normalizeTennisBook(raw,market.slug),receivedAt:Date.now(),source:'REST'};
+      observed=await cached<ObservedBook>(`tennis:book:v2:${market.slug}`,BOOK_TTL,async()=>{
+        const {data,receipt}=await publicMarketBook(market.slug,signal);
+        // Request start is conservative; response latency cannot rejuvenate a quote.
+        return {book:normalizeTennisBook(data,market.slug),receivedAt:receipt.requestedAt,source:'REST',restReceipt:receipt};
       });
     }catch(error){
       if(settlement===null)throw error;
@@ -127,8 +128,8 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
       observed={book:{bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''},receivedAt:Date.now(),source:'REST'};
     }
   }
-  const {book,receivedAt,source}=observed;
+  const {book,receivedAt,source,restReceipt}=observed;
   const bid=book.bids[0]?.price??null,ask=book.asks[0]?.price??null;
-  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null,quoteObservedAt:receivedAt,quoteSource:source},book,receivedAt,source,
+  return {market:{...verified,bid,ask,price:bid!==null&&ask!==null?(bid+ask)/2:null,quoteObservedAt:receivedAt,quoteSource:source},book,receivedAt,source,...(restReceipt?{restReceipt}:{}),
     settlement,...(settlement!==null?{settlementReceivedAt:Date.now()}:{} )};
 }

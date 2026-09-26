@@ -5,6 +5,8 @@ import type {ExecutionMarket, ExecutionPolicy, PaperAccount, PaperCommand} from 
 import type {Book} from '../lib/market/types.ts';
 import {applyTennisAction,createTennisSession,defaultTennisConfig,stepTennisSession,tennisEquity} from '../lib/tennis/engine.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
+import {fetchFreshMarketBook} from '../lib/trading/fresh-book.ts';
+import {normalizeTennisBook} from '../lib/tennis/normalize.ts';
 
 // Synthetic engineering scenarios only. These are not historical tennis games,
 // real trades, strategy returns, or evidence of expected profitability.
@@ -81,6 +83,19 @@ function bought(side:'YES'|'NO'='YES') {
   const session=queued(side),filled=stepTennisSession(session,[forSide(NOW,.64,.65,side)],NOW);
   assert.equal(filled.positions.length,1);return filled;
 }
+
+test('a cached low REST quote between streaming books cannot mark or stop a held position',async()=>{
+  const held=bought(),time=NOW+3000,slug=held.positions[0].slug;
+  const cached={marketData:{marketSlug:slug,state:'MARKET_STATE_OPEN',transactTime:new Date(NOW-720000).toISOString(),
+    bids:[{px:{value:'.20'},qty:'100'}],offers:[{px:{value:'.21'},qty:'100'}]}};
+  const snapshot=await fetchFreshMarketBook(slug,undefined,{fetcher:async()=>Response.json(cached,{headers:{'CF-Cache-Status':'HIT',Age:'17'}})}).catch(()=>null);
+  const inputs=snapshot?[{...tennisInput(time),book:normalizeTennisBook(snapshot.data,slug),receivedAt:snapshot.receipt.requestedAt}]:[];
+  const next=stepTennisSession(held,inputs,time);
+  assert.equal(snapshot,null);assert.equal(next.pending,null);assert.equal(next.positions[0].status,'open');
+  assert.equal(next.positions[0].netLiquidationValue,null);assert.equal(next.cash,held.cash);assert.deepEqual(next.ledger,held.ledger);
+  const restored=stepTennisSession(next,[{...tennisInput(time+2000,.64,.65),source:'WEBSOCKET'}],time+2000);
+  assert.notEqual(restored.positions[0].netLiquidationValue,null);assert.equal(restored.positions[0].status,'open');
+});
 
 for(const strategy of ['recovery','momentum'] as const)for(const side of ['YES','NO'] as const)for(const league of ['ATP','WTA'] as const){
   test(`${strategy}: genuine ${league} ${side} signal waits for a fresh delayed fill`,()=>{

@@ -1,5 +1,6 @@
 import type {Book,Point} from '../market/types';
 import type {ExecutionMarket,PaperExecution,TradeSide} from '../trading/types';
+import type {RestBookReceipt} from '../trading/fresh-book';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
@@ -19,7 +20,7 @@ export type TennisMarket={
   execution:ExecutionMarket|null;unavailableReason?:string;
 };
 export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string[];leagues?:TennisLeague[]};
-export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';settlement?:number|null;settlementReceivedAt?:number};
+export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;

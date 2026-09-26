@@ -4,6 +4,7 @@ import { cached, db } from "./storage";
 import type { Book, Point } from "@/lib/market/types";
 import {createPublicSourceBudget,publicRetryAfterMs} from '../bot/public-source-budget';
 import {abortable} from './request-budget';
+import {fetchFreshMarketBook} from '../trading/fresh-book';
 export const sdk = new PolymarketUS({ timeout: 12000 });
 const requestBudget=createPublicSourceBudget();
 /** A provider-requested pause survives Worker restarts and other UI requests. */
@@ -27,6 +28,7 @@ export function numeric(x: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 export const amount = (x: any) => numeric(x?.value);
+export const publicMarketBook=(slug:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshMarketBook(slug,signal),signal);
 export async function publicGet(path: string, signal?:AbortSignal): Promise<Raw> {
   signal?.throwIfAborted();
   const replay = await replayData();
