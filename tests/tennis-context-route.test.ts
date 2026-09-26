@@ -7,7 +7,7 @@ import {resolve,dirname} from 'node:path';
 import {OWNER,reset,state,held} from './helpers/tennis-context-route-fixture.ts';
 import type {FootballAssessment,TennisMarket} from '../lib/tennis/types';
 
-type ContextResponse={market:TennisMarket;assessment:FootballAssessment;error:string|null;cacheHit:boolean;checkedAt:number;reportMarket?:never};
+type ContextResponse={market:TennisMarket;assessment:FootballAssessment;error:string|null;cacheHit:boolean;successfulCheckAt:number|null;checkedAt:number;reportMarket?:never};
 const body=(response:Response)=>response.json() as Promise<ContextResponse>;
 
 const root=fileURLToPath(new URL('../',import.meta.url));
@@ -28,13 +28,13 @@ test('context route requires explicit owner and matching origin before loading a
 });
 test('verified selected report uses one direct event request, caches for 3s, and never changes paper accounting',async()=>{
   const market=reset(),before=structuredClone(state.session);const response=await request(market.slug);assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'no-store');
-  const first=await body(response);assert.equal(first.assessment.status,'fresh');assert.equal(first.market.contextUpdatedAt,market.contextUpdatedAt);assert.equal(first.market.football?.possessionTeamId,'1245');assert.equal(first.reportMarket,undefined);
-  const again=await body(await request(market.slug));assert.equal(again.cacheHit,true);assert.equal(again.market.observedAt,first.market.observedAt);assert.deepEqual(state.paths,['/v1/events/slug/cfb-navy-uab-2026-09-26']);assert.ok(state.writes.every(key=>key.startsWith('tennis:priority-context:v1:')));assert.deepEqual(state.session,before);
+  const first=await body(response);assert.equal(first.assessment.status,'fresh');assert.equal(first.market.contextUpdatedAt,market.contextUpdatedAt);assert.equal(first.market.football?.possessionTeamId,'1245');assert.equal(first.reportMarket,undefined);assert.equal(typeof first.successfulCheckAt,"number");
+  const again=await body(await request(market.slug));assert.equal(again.cacheHit,true);assert.equal(again.successfulCheckAt,first.successfulCheckAt);assert.equal(again.market.observedAt,first.market.observedAt);assert.deepEqual(state.paths,['/v1/events?id=112943&sportsMarketTypes=football_team_full_game_winner']);assert.ok(state.writes.every(key=>key.startsWith('tennis:priority-context:v1:')));assert.deepEqual(state.session,before);
 });
 test('unknown or unselected markets cannot trigger arbitrary provider lookups; held games survive catalog loss',async()=>{
   const market=reset();assert.equal((await request('unknown')).status,404);assert.equal((await request('../escape')).status,400);state.session.config.leagues=['ATP'];assert.equal((await request(market.slug)).status,404);assert.equal(state.paths.length,0);
   held(market);state.cache.delete(`tennis:verified:${market.slug}`);const response=await request(market.slug);assert.equal(response.status,200);assert.equal((await body(response)).market.slug,market.slug);assert.equal(state.paths.length,1);
 });
 test('source errors retain original display clocks and mark the report unknown without updating quotes or ledger',async()=>{
-  const market=reset(),before=structuredClone(state.session);state.error=new Error('Provider backoff');const response=await request(market.slug);assert.equal(response.status,200);const value=await body(response);assert.equal(value.error,'Provider backoff');assert.equal(value.assessment.status,'unknown');assert.equal(value.market.observedAt,market.observedAt);assert.equal(value.market.contextUpdatedAt,market.contextUpdatedAt);assert.equal(value.market.quoteObservedAt,market.quoteObservedAt);assert.deepEqual(state.session,before);
+  const market=reset(),before=structuredClone(state.session);state.error=new Error('Provider backoff');const response=await request(market.slug);assert.equal(response.status,200);const value=await body(response);assert.equal(value.error,'Provider backoff');assert.equal(value.successfulCheckAt,null);assert.equal(value.assessment.status,'unknown');assert.equal(value.market.observedAt,market.observedAt);assert.equal(value.market.contextUpdatedAt,market.contextUpdatedAt);assert.equal(value.market.quoteObservedAt,market.quoteObservedAt);assert.deepEqual(state.session,before);
 });

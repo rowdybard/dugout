@@ -5,6 +5,7 @@ import type {FootballAssessment,TennisAction,TennisCatalog,TennisInput,TennisMar
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
 import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote,marketWithWatchedBook,marketWithWatchedContext} from '@/lib/tennis/chart-data';
 import {managedMarketStream} from '@/lib/trading/managed-market-stream';
+import {recordContextCheck,type ContextCheckState} from '@/lib/tennis/context-check';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   const response=await fetch(url,{cache:'no-store',...init,signal:init?.signal?AbortSignal.any([init.signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)}).catch(cause=>{
@@ -30,6 +31,7 @@ export function useTennis() {
   const [watchedBookError,setWatchedBookError]=useState<string|null>(null);
   const [watchedContextError,setWatchedContextError]=useState<string|null>(null);
   const [contextAssessments,setContextAssessments]=useState<Record<string,FootballAssessment>>({});
+  const [contextChecks,setContextChecks]=useState<Record<string,ContextCheckState>>({});
   const [catalogAttempt,setCatalogAttempt]=useState(0);
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
@@ -127,15 +129,20 @@ export function useTennis() {
       // Held/pending games are first. Their reports never wait behind discovery or chart history.
       await Promise.all(contextSlugs.split(',').map(async slug=>{
         try{
-          const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null}>(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,{signal:controller.signal});
+          const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null;successfulCheckAt?:number|null}>(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,{signal:controller.signal});
           if(controller.signal.aborted)return;
           // Render new receipt timestamps against this response's clock, rather
           // than the previous one-second UI tick (which can look like future data).
           setNow(Date.now());
+          setContextChecks(current=>({...current,[slug]:recordContextCheck(current[slug],data)}));
           setContextAssessments(current=>({...current,[slug]:data.assessment}));
           setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===slug?marketWithWatchedContext(m,data.market,Date.now()):m)}:current);
           if(slug===watchedSlug)setWatchedContextError(data.error??(data.assessment.status==='conflicting'?data.assessment.reason:null));
-        }catch(cause){if(!controller.signal.aborted&&slug===watchedSlug)setWatchedContextError(cause instanceof Error?cause.message:'Waiting for the latest game report.');}
+        }catch(cause){if(!controller.signal.aborted){
+          const message=cause instanceof Error?cause.message:'Waiting for the latest game report.';
+          setContextChecks(current=>({...current,[slug]:recordContextCheck(current[slug],{error:message})}));
+          if(slug===watchedSlug)setWatchedContextError(message);
+        }}
       }));
       if(!controller.signal.aborted)timer=setTimeout(()=>void load(),3000);
     };
@@ -210,5 +217,5 @@ export function useTennis() {
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
+  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,contextChecks,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
 }

@@ -85,7 +85,7 @@ test('actual publicGet retains late 429 persistence and a fresh isolate honors t
       if(id==='../bot/public-source-budget')return {publicRetryAfterMs};
       if(id==='./public-source-budget')return {createServerPublicSourceBudget};
       if(id==='cloudflare:workers')return {waitUntil:(task:Promise<unknown>)=>{retained.push(task);}};
-      if(id==='../trading/fresh-book')return {};
+      if(id==='../trading/fresh-book'||id==='../trading/fresh-event')return {};
       throw new Error('Unexpected provider dependency: '+id);
     },moduleObject,moduleObject.exports);
     return moduleObject.exports as {publicGet:(path:string,signal?:AbortSignal)=>Promise<unknown>};

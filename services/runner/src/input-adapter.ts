@@ -2,6 +2,7 @@ import {StreamState} from '../../trading/state.ts';
 import {streamBookForDisplay} from '../../../lib/trading/stream-types.ts';
 import {marketSocketHeaders} from '../../../lib/trading/us-signature.ts';
 import {fetchFreshMarketBook} from '../../../lib/trading/fresh-book.ts';
+import {fetchFreshFootballEvent} from '../../../lib/trading/fresh-event.ts';
 import {publicRetryAfterMs} from '../../../lib/bot/public-source-budget.ts';
 import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from '../../../lib/tennis/normalize.ts';
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
@@ -15,11 +16,19 @@ import type {FeedCredentials} from './feed-credentials';
 export interface InputAdapter {gather(session:TennisSession):Promise<{inputs:TennisInput[];failures:string[];endedMarket?:TennisMarket}>;close():void;health():SourceHealth;}
 const now=()=>Date.now();
 const errorText=(e:unknown)=>e instanceof Error?e.message:'The market source is unavailable.';
-async function readJson(response:Response,signal:AbortSignal){
+/** Large public event documents include every prop market; books and metadata keep their smaller cap. */
+function providerResponseLimit(path:string):number{
+  if(/^\/v1\/events\/(?:slug\/[a-zA-Z0-9_-]{1,250}|[1-9]\d{0,19})$/.test(path))return 4_000_000;
+  const url=new URL(path,'https://gateway.polymarket.us');
+  const limit=Number(url.searchParams.get('limit'));
+  if(/^\/v2\/leagues\/(?:atp|wta|nfl|cfb)\/events$/.test(url.pathname)&&Number.isInteger(limit)&&limit>0&&limit<=20)return 16_000_000;
+  return 1_000_000;
+}
+async function readJson(response:Response,signal:AbortSignal,maxBytes=1_000_000){
   if(!response.ok){await response.body?.cancel();throw Object.assign(new Error('Market source returned HTTP '+response.status+'.'),{status:response.status,retryAfterMs:publicRetryAfterMs(response.headers.get('Retry-After'))});}
   const reader=response.body?.getReader();if(!reader)throw new Error('Empty provider response.');
   const decoder=new TextDecoder();let count=0,text='';
-  try{while(true){signal.throwIfAborted();const part=await reader.read();if(part.done)break;count+=part.value.byteLength;if(count>1_000_000)throw new Error('Provider response exceeded size limit.');text+=decoder.decode(part.value,{stream:true});}return JSON.parse(text+decoder.decode()) as Record<string,unknown>;}
+  try{while(true){signal.throwIfAborted();const part=await reader.read();if(part.done)break;count+=part.value.byteLength;if(count>maxBytes)throw new Error('Provider response exceeded size limit ('+maxBytes+' bytes).');text+=decoder.decode(part.value,{stream:true});}return JSON.parse(text+decoder.decode()) as Record<string,unknown>;}
   catch(error){await reader.cancel().catch(()=>{});throw error;}finally{reader.releaseLock();}
 }
 /** Read-only native provider transport. No private stream or order submission method exists. */
@@ -39,8 +48,13 @@ export class PolymarketInputAdapter implements InputAdapter {
   close(){this.generation++;const socket=this.socket;this.socket=null;this.state=null;this.selection='';try{socket?.close(1000,'Runner paused');}catch{}this.setHealth('stopped','Runner is not scanning.');}
   private async publicGet(path:string,signal:AbortSignal){
     const blocked=this.store.get<number>('provider-backoff')??0;if(blocked>now())throw new Error('Market source backoff until '+new Date(blocked).toISOString()+'.');
-    try{return await readJson(await fetch('https://gateway.polymarket.us'+path,{signal,cache:'no-store'}),signal);}
-    catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000));throw error;}
+    try{return await readJson(await fetch('https://gateway.polymarket.us'+path,{signal,cache:'no-store'}),signal,providerResponseLimit(path));}
+    catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000)));throw error;}
+  }
+  private async footballEvent(eventId:string,signal:AbortSignal){
+    const blocked=this.store.get<number>('provider-backoff')??0;if(blocked>now())throw new Error('Market source backoff until '+new Date(blocked).toISOString()+'.');
+    try{return (await fetchFreshFootballEvent(eventId,signal)).data;}
+    catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000)));throw error;}
   }
   private async catalog(session:TennisSession,signal:AbortSignal){
     const markets:TennisMarket[]=[];
@@ -116,7 +130,7 @@ export class PolymarketInputAdapter implements InputAdapter {
       this.setHealth('rest','Using a freshly verified REST book.');
       return {market:verified,book,receivedAt:receipt.requestedAt,source:'REST',sourceTime:Number.isFinite(providerTime)?providerTime:null,restReceipt:receipt,settlement,...(settlement!==null?{settlementReceivedAt:now()}: {})};
     }catch(error){
-      if((error as {status?:number}).status===429)this.store.set('provider-backoff',now()+Math.max(10000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60000));
+      if((error as {status?:number}).status===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60000)));
       if(settlement!==null)return {market:verified,book:{bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''},receivedAt:now(),source:'REST',settlement,settlementReceivedAt:now()};
       throw error;
     }
@@ -152,7 +166,7 @@ export class PolymarketInputAdapter implements InputAdapter {
     const latest=new Map<string,TennisMarket>();
     const results=await Promise.allSettled(markets.map(m=>{
       if(m.league==='NFL'||m.league==='CFB'){
-        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);this.store.saveUsage();},fetchEvent:(path,signal)=>this.publicGet(path,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
+        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
         reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
       }
       let context:TennisMarket|undefined;

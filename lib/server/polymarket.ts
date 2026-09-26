@@ -6,6 +6,7 @@ import {publicRetryAfterMs} from '../bot/public-source-budget';
 import {createServerPublicSourceBudget} from './public-source-budget';
 import {waitUntil} from 'cloudflare:workers';
 import {fetchFreshMarketBook} from '../trading/fresh-book';
+import {fetchFreshFootballEvent} from '../trading/fresh-event';
 export const sdk = new PolymarketUS({ timeout: 12000 });
 const requestBudget=createServerPublicSourceBudget();
 /** A provider-requested pause survives Worker restarts and other UI requests. */
@@ -28,6 +29,7 @@ export function numeric(x: unknown): number | null {
 }
 export const amount = (x: any) => numeric(x?.value);
 export const publicMarketBook=(slug:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshMarketBook(slug,signal),signal);
+export const publicFootballEvent=(eventId:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshFootballEvent(eventId,signal),signal);
 export async function publicGet(path: string, signal?:AbortSignal): Promise<Raw> {
   signal?.throwIfAborted();
   const replay = await replayData();

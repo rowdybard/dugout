@@ -1,6 +1,6 @@
 import {db,readCached,sameOrigin} from '@/lib/server/storage';
 import {abortable,sourceError} from '@/lib/server/request-budget';
-import {publicGet} from '@/lib/server/polymarket';
+import {publicFootballEvent} from '@/lib/server/polymarket';
 import {readTennisSession} from '@/lib/tennis/server';
 import {loadPriorityContext,type PriorityContextRecord} from '@/lib/tennis/priority-context';
 import type {TennisMarket} from '@/lib/tennis/types';
@@ -42,10 +42,10 @@ async function load(req:Request,signal:AbortSignal){
           .bind(key,JSON.stringify(record),record.fetchedAt).run();
       },
       // The shared source client retains provider backoff and the normal request budget.
-      fetchEvent:publicGet,
+      fetchEvent:async(_path,signal)=>(await publicFootballEvent(market.eventId,signal)).data,
     },AbortSignal.any([signal,AbortSignal.timeout(4500)]));
     signal.throwIfAborted();
     // Never expose reportMarket as the display value: a conflicting candidate is engine evidence only.
-    return reply({market:{...result.market,history:[]},assessment:result.assessment,error:result.error,cacheHit:result.cacheHit,checkedAt:Date.now()});
+    return reply({market:{...result.market,history:[]},assessment:result.assessment,error:result.error,cacheHit:result.cacheHit,successfulCheckAt:result.successfulCheckAt,checkedAt:Date.now()});
   }catch(error){return reply({error:sourceError(error,'The selected game report is unavailable. Checking again shortly.')},503);}
 }

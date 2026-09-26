@@ -2,12 +2,14 @@
 
 import {footballFieldView,type FootballFieldMarket} from '../../lib/tennis/football-field';
 import type {FootballAssessment} from '@/lib/tennis/types';
+import {contextCheckView,type ContextCheckState} from '@/lib/tennis/context-check';
 
 const yardX=(yard:number)=>30+yard*6;
 const muted='#b7c8bb';
 
-export function FootballField({market,now,assessment}:{market:FootballFieldMarket;now:number;assessment?:FootballAssessment}){
+export function FootballField({market,now,assessment,contextCheck}:{market:FootballFieldMarket;now:number;assessment?:FootballAssessment;contextCheck?:ContextCheckState}){
   const field=footballFieldView(market,now,assessment);
+  const check=contextCheckView(contextCheck,now,{freshness:field.freshness,live:market.live,ended:market.ended});
   if(!field.supported)return null;
   const fresh=field.freshness==='fresh';
   const reportLabel=fresh?'Fresh report':field.freshness==='conflicting'?'Conflicting reports':field.freshness==='stale'?'Stale report':'Report unverified';
@@ -16,8 +18,13 @@ export function FootballField({market,now,assessment}:{market:FootballFieldMarke
   return <section aria-label="Reported football field" style={{margin:'14px 0',padding:'14px',border:'1px solid #344d3d',borderRadius:14,background:'#12281e',color:'#edf6ee'}}>
     <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:'8px 16px',marginBottom:8}}>
       <strong style={{fontSize:14}}>Reported field</strong>
-      <span style={{fontSize:12,fontWeight:700,color:fresh?'#c2f477':'#f2ba75'}}>{market.ended?'Game ended · ':!market.live?'Not in play · ':''}{reportLabel} · {field.ageLabel}</span>
+      <span style={{fontSize:12,fontWeight:700,color:fresh?'#c2f477':'#f2ba75'}}>{market.ended?'Game ended · ':!market.live?'Not in play · ':''}{reportLabel}</span>
     </div>
+    <div style={{display:'flex',flexWrap:'wrap',gap:'4px 18px',fontSize:12,lineHeight:1.6,marginBottom:8,color:muted}}>
+      <span>Report age: {field.reportAgeMs===null?'Unverified':field.ageLabel.replace(/^Reported /,'')}</span>
+      <span title="Last successful read from the game-data provider. A new check does not make an unchanged play report fresh.">Last checked: {check.checkedLabel}</span>
+    </div>
+    <p role={check.failed?'status':undefined} style={{fontSize:12,color:check.failed?'#f2ba75':muted,lineHeight:1.5,margin:'0 0 10px'}}>{check.message}</p>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,fontSize:12,color:muted}}>
       <span style={{overflowWrap:'anywhere'}}>{market.yesName}<small style={{display:'block'}}>Own goal line</small></span>
       <span style={{textAlign:'right',overflowWrap:'anywhere'}}>{market.noName}<small style={{display:'block'}}>Own goal line</small></span>

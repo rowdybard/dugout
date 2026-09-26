@@ -4,8 +4,8 @@ import type {FootballAssessment,FootballReportState,TennisMarket} from './types'
 
 export const PRIORITY_CONTEXT_TTL_MS=3000;
 export const PRIORITY_CONTEXT_TIMEOUT_MS=2000;
-export type PriorityContextRecord={fetchedAt:number;market:TennisMarket;reportMarket:TennisMarket;state:FootballReportState;error:string|null};
-export type PriorityContextResult=PriorityContextRecord&{assessment:FootballAssessment;cacheHit:boolean};
+export type PriorityContextRecord={fetchedAt:number;successfulCheckAt?:number|null;market:TennisMarket;reportMarket:TennisMarket;state:FootballReportState;error:string|null};
+export type PriorityContextResult=PriorityContextRecord&{successfulCheckAt:number|null;assessment:FootballAssessment;cacheHit:boolean};
 export type PriorityContextDependencies={
   now:()=>number;
   read:(key:string)=>Promise<PriorityContextRecord|null>;
@@ -17,24 +17,29 @@ export type PriorityContextDependencies={
 const message=(e:unknown)=>e instanceof Error?e.message:'The current game report is unavailable.';
 const sameGame=(a:TennisMarket,b:TennisMarket)=>a.slug===b.slug&&a.eventId===b.eventId&&a.eventSlug===b.eventSlug&&a.league===b.league&&a.yesName===b.yesName&&a.noName===b.noName&&
   (!a.footballIdentity||!!b.footballIdentity&&a.footballIdentity.yesTeamId===b.footballIdentity.yesTeamId&&a.footballIdentity.noTeamId===b.footballIdentity.noTeamId);
+const lastSuccessfulCheck=(record:PriorityContextRecord|null,now:number):number|null=>{
+  // Legacy records have no proof of an uncached provider check; wait for the next one.
+  const value=record?.successfulCheckAt??null;
+  return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=now?value:null;
+};
 const result=(record:PriorityContextRecord,now:number,cacheHit:boolean):PriorityContextResult=>{
   const state=assessFootballContext(record.reportMarket,now,record.state);
-  return {...record,state,assessment:state.assessment,cacheHit};
+  return {...record,state,successfulCheckAt:lastSuccessfulCheck(record,now),assessment:state.assessment,cacheHit};
 };
 const unavailable=(market:TennisMarket,previous:PriorityContextRecord|null,now:number,error:string):PriorityContextRecord=>{
   const accepted=previous?.market??market;
   // Unknown context blocks context-based entries without touching quotes or ordinary risk exits.
   const reportMarket={...accepted,football:null};
-  return {fetchedAt:now,market:accepted,reportMarket,state:assessFootballContext(reportMarket,now,previous?.state),error};
+  return {fetchedAt:now,successfulCheckAt:lastSuccessfulCheck(previous,now),market:accepted,reportMarket,state:assessFootballContext(reportMarket,now,previous?.state),error};
 };
 
-/** Official US SDK: events.retrieveBySlug → /v1/events/slug/{slug}.
- * https://github.com/Polymarket/polymarket-us-typescript/blob/main/src/resources/events.ts
- * Receipt time comes only from completion of this fetch. Cache reads never refresh either clock.
+/** Official get-events filters select one event and its full-game winner market.
+ * The provider may cache this endpoint; eventState.updatedAt remains authoritative.
+ * Actual successful receipt time is reported separately and never refreshes game facts.
  */
 export async function loadPriorityContext(market:TennisMarket,deps:PriorityContextDependencies,signal?:AbortSignal):Promise<PriorityContextResult>{
   if(!isFootballMarket(market)){
-    const record={fetchedAt:market.observedAt,market,reportMarket:market,state:assessFootballContext(market,deps.now()),error:null};
+    const record={fetchedAt:market.observedAt,successfulCheckAt:null,market,reportMarket:market,state:assessFootballContext(market,deps.now()),error:null};
     return result(record,deps.now(),true);
   }
   const key=`tennis:priority-context:v1:${market.eventId}:${market.slug}`;
@@ -44,7 +49,7 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
     if(saved&&sameGame(market,saved.market)&&sameGame(market,saved.reportMarket))previous=saved;
     const now=deps.now();
     if(previous&&Number.isFinite(previous.fetchedAt)&&previous.fetchedAt<=now&&now-previous.fetchedAt<PRIORITY_CONTEXT_TTL_MS)return result(previous,now,true);
-    if(!/^[a-zA-Z0-9_-]{1,250}$/.test(market.eventSlug))throw new Error('A verified event slug is required for the current game report.');
+    if(!/^[1-9]\d{0,19}$/.test(market.eventId))throw new Error('A verified numeric event ID is required for the current game report.');
     signal?.throwIfAborted();
     const controller=new AbortController(),timeoutMs=Math.max(1,Math.min(PRIORITY_CONTEXT_TIMEOUT_MS,deps.timeoutMs??PRIORITY_CONTEXT_TIMEOUT_MS));
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -56,10 +61,12 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
       signal?.addEventListener('abort',cancel,{once:true});
     });
     let raw:unknown;
-    try{raw=await Promise.race([deps.fetchEvent('/v1/events/slug/'+encodeURIComponent(market.eventSlug),controller.signal),deadline]);}
+    try{raw=await Promise.race([deps.fetchEvent('/v1/events?id='+encodeURIComponent(market.eventId)+'&sportsMarketTypes=football_team_full_game_winner',controller.signal),deadline]);}
     finally{if(timer)clearTimeout(timer);if(cancel)signal?.removeEventListener('abort',cancel);}
     signal?.throwIfAborted();
-    const receivedAt=deps.now(),event=raw&&typeof raw==='object'&&'event' in raw?(raw as {event:unknown}).event:raw;
+    const receivedAt=deps.now(),events=raw&&typeof raw==='object'&&'events' in raw?(raw as {events:unknown}).events:null;
+    if(!Array.isArray(events)||events.length!==1)throw new Error('The current report did not return exactly one verified event.');
+    const event=events[0];
     const candidates=normalizeTennisEvent(event,market.league,receivedAt).filter(candidate=>sameGame(market,candidate));
     if(candidates.length!==1||!candidates[0].footballIdentity?.yesTeamId||!candidates[0].footballIdentity.noTeamId||candidates[0].footballIdentity.yesTeamId===candidates[0].footballIdentity.noTeamId)throw new Error('The current report did not match this game and its explicit team identities.');
     const reportMarket=candidates[0];
@@ -72,13 +79,13 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
       (oldMarket.contextUpdatedAt===null||reportMarket.contextUpdatedAt>=oldMarket.contextUpdatedAt)&&reportMarket.observedAt>=oldMarket.observedAt;
     // Conflicts remain visible to the engine through reportMarket; the field display keeps its last consistent facts.
     const accepted=ordered&&state.assessment.status!=='conflicting'?reportMarket:oldMarket;
-    const record:PriorityContextRecord={fetchedAt:receivedAt,market:accepted,reportMarket,state,error:state.assessment.status==='conflicting'?state.assessment.reason:null};
+    const record:PriorityContextRecord={fetchedAt:receivedAt,successfulCheckAt:receivedAt,market:accepted,reportMarket,state,error:state.assessment.status==='conflicting'?state.assessment.reason:null};
     await deps.write(key,record);
-    return {...record,assessment:state.assessment,cacheHit:false};
+    return {...record,successfulCheckAt:receivedAt,assessment:state.assessment,cacheHit:false};
   }catch(error){
     const record=unavailable(market,previous,deps.now(),message(error));
     if(!signal?.aborted)await deps.write(key,record).catch(()=>{});
-    return {...record,assessment:record.state.assessment,cacheHit:false};
+    return {...record,successfulCheckAt:lastSuccessfulCheck(record,deps.now()),assessment:record.state.assessment,cacheHit:false};
   }
 }
 
