@@ -11,6 +11,12 @@ import type {MigrationManifest} from '../lib/runner/contracts';
 import type {TennisSession} from '../lib/tennis/types';
 
 const owner='synthetic-owner-123',env:RunnerBindings={DUGOUT_RUNNER_URL:'https://paper.example.workers.dev',DUGOUT_RUNNER_SECRET:'synthetic-secret-at-least-thirty-two-characters'};
+test('runner transport uses the edge-supported manual redirect mode and never forwards signed requests',async()=>{
+  let calls=0;
+  const request=(async(_url:RequestInfo|URL,init?:RequestInit)=>{calls++;assert.equal(init?.redirect,'manual');return new Response(null,{status:307,headers:{Location:'https://other.invalid/collect'}});}) as typeof fetch;
+  await assert.rejects(runnerRequest(env,owner,'synthetic-epoch-123','/v1/state','GET',undefined,request),/redirect/);
+  assert.equal(calls,1);
+});
 function harness(){
   const sql=new DatabaseSync(':memory:');
   sql.exec('CREATE TABLE tennis_sessions(owner_id TEXT PRIMARY KEY,value TEXT NOT NULL,revision INTEGER NOT NULL);CREATE TABLE tennis_journal(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,session_id TEXT NOT NULL,kind TEXT NOT NULL,value TEXT NOT NULL,created_at INTEGER NOT NULL);CREATE TABLE tennis_observations(id TEXT PRIMARY KEY,slug TEXT,time INTEGER,value TEXT NOT NULL);');
@@ -37,7 +43,7 @@ test('requires a Sites owner and never accepts the private-owner fallback or unr
 test('signs only server-controlled owner/epoch and rejects redirect and oversized request bodies',async()=>{
   let calls=0;
   const fetcher:typeof fetch=async(input,init)=>{
-    calls++;assert.equal(init?.redirect,'error');
+    calls++;assert.equal(init?.redirect,'manual');
     const verified=await verifyRunnerRequest(new Request(String(input),init),env.DUGOUT_RUNNER_SECRET!);
     assert.equal(verified.owner,owner);assert.equal(verified.epoch,'epoch-12345678');
     assert.equal(verified.path,'/v1/state');

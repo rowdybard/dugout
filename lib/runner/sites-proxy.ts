@@ -50,8 +50,14 @@ export async function runnerRequest<T>(env:RunnerBindings,owner:string,epoch:str
   if(new TextEncoder().encode(body).byteLength>MAX_REQUEST_BYTES)throw new RunnerError(413,'Background runner request is too large.');
   const headers=await signRunnerRequest(config.secret,url,method,body,owner,epoch);
   let response:Response;
-  try{response=await fetcher(url,{method,headers:{...headers,'Content-Type':'application/json'},body:method==='GET'?undefined:body,signal:AbortSignal.timeout(15000),redirect:'error'});}
-  catch{throw new RunnerError(503,'Background runner is unreachable. Browser trading remains disabled for this account.');}
+  try{response=await fetcher(url,{method,headers:{...headers,'Content-Type':'application/json'},body:method==='GET'?undefined:body,signal:AbortSignal.timeout(15000),redirect:'manual'});}
+  catch(error){
+    // Log only transport diagnostics, never signed headers, request data or credentials.
+    const diagnostic=(error instanceof Error?`${error.name}: ${error.message}`:'Unknown fetch failure').replaceAll(config.secret,'[redacted]').slice(0,300);
+    console.error('Dugout runner transport:',diagnostic);
+    throw new RunnerError(503,'Background runner is unreachable. Browser trading remains disabled for this account.');
+  }
+  if(response.status>=300&&response.status<400){await response.body?.cancel();throw new RunnerError(502,'The background runner returned a redirect. Its signed request was not forwarded.');}
   return await boundedJson(response) as T;
 }
 function sessionResponse(state:RunnerState,env:RunnerBindings){
