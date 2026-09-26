@@ -61,7 +61,7 @@ test('Auto still rejects a widened execution book and cools both strategy tracks
   assert.equal(canceled.pending,null);assert.equal(canceled.cash,100);assert.equal(canceled.ledger.length,0);
   for(const side of ['YES','NO'])for(const strategy of ['recovery','momentum'])assert.equal(canceled.autoSignals?.[`synthetic-auto:${side}:${strategy}`]?.phase,'COOLDOWN');
   const waiting=stepTennisSession(canceled,[input(NOW+2000,.64,.65)],NOW+2000);
-  assert.match(waiting.lastReason,/Entry cooldown: 58s/);
+  assert.match(waiting.lastReason,/Entry cooldown: 8s/);
   assert.match(waiting.lastReason,/resumes automatically/);
   assert.equal(waiting.pending,null);assert.equal(waiting.cash,100);
 });
@@ -77,6 +77,19 @@ test('explicit rule changes cancel Auto pending entries and preserve the journal
   const session=queued('momentum');
   const result=applyTennisAction(session,{action:'update-rules',sessionId:session.id,expectedRulesRevision:0,commandId:'synthetic-rules-change',rules:{entryBudget:5}},[],NOW);
   assert.equal(result.pending,null);assert.equal(result.cash,100);assert.deepEqual(result.autoSignals,{});assert.deepEqual(result.ledger,session.ledger);
+});
+
+test('unfilled entries retry soon while completed trades retain the full configured rest',()=>{
+  const prepared=queued('momentum');prepared.config.cooldownMs=300000;
+  const canceled=stepTennisSession(prepared,[input(NOW,.60,.65)],NOW);
+  assert.equal(canceled.signals['synthetic-auto:YES'].cooldownUntil,NOW+10000);
+  assert.equal(canceled.cash,100);assert.equal(canceled.positions.length,0);
+  assert.equal(stepTennisSession(canceled,[input(NOW+5000,.64,.65)],NOW+5000).pending,null);
+  let filled=stepTennisSession(prepared,[input(NOW,.64,.65)],NOW);
+  filled=stepTennisSession(filled,[input(NOW+2000,.75,.76)],NOW+2000);
+  filled=stepTennisSession(filled,[input(NOW+4000,.75,.76)],NOW+4000);
+  assert.equal(filled.positions[0].status,'closed');
+  assert.equal(filled.signals['synthetic-auto:YES'].cooldownUntil,NOW+304000);
 });
 test('expired Auto entry cannot immediately create a replacement intent',()=>{
   const session=queued('momentum'),later=NOW+40000;

@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {sameOrigin,db} from '@/lib/server/storage';
 import {readTennisSession,updateTennisSession,tennisRuntime} from '@/lib/tennis/server';
+import {exportTennisJournal} from '@/lib/tennis/journal-export';
 import type {TennisAction} from '@/lib/tennis/types';
 
 import {tennisRulesPatchSchema} from '@/lib/tennis/rules';
@@ -16,8 +17,7 @@ export async function GET(req:Request){
   try{
     const {ownerId,session}=await readTennisSession(req);
     if(new URL(req.url).searchParams.get('export')==='1'){
-      const rows=await db().prepare('SELECT kind,value,created_at FROM tennis_journal WHERE owner_id=? AND session_id=? ORDER BY created_at LIMIT 10001').bind(ownerId,session.id).all<{kind:string;value:string;created_at:number}>();
-      return Response.json({session,records:rows.results.slice(0,10000).map(r=>({kind:r.kind,value:JSON.parse(r.value),time:r.created_at})),truncated:rows.results.length>10000},{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename="dugout-tennis-paper-session.json"'}});
+      return await exportTennisJournal(db(),ownerId);
     }
     return Response.json({session,runtime:tennisRuntime()},{headers:{'Cache-Control':'no-store'}});
   }catch(e){return Response.json({error:e instanceof Error?e.message:'Paper account unavailable.'},{status:503});}

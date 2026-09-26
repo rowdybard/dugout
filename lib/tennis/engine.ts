@@ -179,10 +179,11 @@ function settle(session: TennisSession, position: TennisPosition, input: TennisI
   return true;
 }
 
-function setCooldown(session: TennisSession, slug: string, now: number) {
+function setCooldown(session: TennisSession, slug: string, now: number, unfilled=false) {
+  const duration=unfilled?Math.min(session.config.cooldownMs,10_000):session.config.cooldownMs;
   for (const side of ['YES', 'NO'] as const) {
-    session.signals[keyFor(slug, side)] = { phase: 'COOLDOWN', confirmations: 0, cooldownUntil: now + session.config.cooldownMs,
-      lastObservedAt: session.consumedBooks[slug], reason: 'Waiting after an entry/exit attempt before looking for another dip.' };
+    session.signals[keyFor(slug, side)] = { phase: 'COOLDOWN', confirmations: 0, cooldownUntil: now + duration,
+      lastObservedAt: session.consumedBooks[slug], reason: unfilled?'Brief retry delay after an unfilled entry. A new signal and full checks are still required.':'Resting after a completed trade before looking for another entry.' };
     for(const strategy of ['recovery','momentum'])if(session.autoSignals)session.autoSignals[`${keyFor(slug,side)}:${strategy}`]=structuredClone(session.signals[keyFor(slug,side)]);
   }
 }
@@ -219,7 +220,7 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
     executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt });
   record(session, now, intent.slug, intent.side, result.apply ? intent.action : 'SKIP', result.apply ? result.status.toUpperCase() : 'FILL_FAILED',
     `${intent.reason} ${result.reason}`, input);
-  if (!result.apply && intent.action === 'BUY') setCooldown(session, intent.slug, now);
+  if (!result.apply && intent.action === 'BUY') setCooldown(session, intent.slug, now,true);
   // Paper exits are IOC: unfilled quantity stays in the position and is retried on later data.
   if (intent.action === 'SELL' && holding(session)) {
     session.lastReason = `Exit ${result.status}; ${holding(session)!.quantity} contracts remain. Waiting for a later book to retry.`;
@@ -242,7 +243,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   if (now < intent.executeAfter) { session.lastReason = 'Paper execution delay is still running.'; return true; }
   if (now - intent.createdAt > Math.max(30_000, session.config.executionDelayMs * 3)) {
     session.pending = null;
-    if(intent.action==='BUY'&&intent.decisionMode==='auto')setCooldown(session,intent.slug,now);
+    if(intent.action==='BUY'&&intent.decisionMode==='auto')setCooldown(session,intent.slug,now,true);
     record(session, now, intent.slug, intent.side, 'SKIP', 'INTENT_EXPIRED', 'The paper order expired before a usable later book arrived.');
     return false;
   }
@@ -259,7 +260,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
       session.pending = null;
       session.consumedBooks[intent.slug] = input.receivedAt;
       record(session, now, intent.slug, intent.side, 'SKIP', issue.code, `Pending entry canceled: ${issue.reason}`, input);
-      if(intent.decisionMode==='auto')setCooldown(session,intent.slug,now);
+      if(intent.decisionMode==='auto')setCooldown(session,intent.slug,now,true);
       return false;
     }
   }
