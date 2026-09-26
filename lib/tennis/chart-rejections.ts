@@ -22,22 +22,16 @@ export const CHART_HISTORY_SQL = `SELECT time,
   ORDER BY time DESC LIMIT 600`;
 
 type RejectionRow = {slug:unknown;bookTime:unknown};
-const indexTasks = new WeakMap<object,Promise<void>>();
+const indexedBindings = new WeakSet<object>();
 
 async function ensureIndex(database:Pick<D1Database,'prepare'>):Promise<void> {
   const binding=database as object;
-  let task=indexTasks.get(binding);
-  if(!task){
-    task=Promise.resolve().then(()=>database.prepare(CREATE_INDEX).run()).then(()=>{});
-    indexTasks.set(binding,task);
-  }
-  try{await task;}
-  catch(error){
-    if(indexTasks.get(binding)===task)indexTasks.delete(binding);
-    throw error;
-  }
+  if(indexedBindings.has(binding))return;
+  // Only completed work may be reused across Worker requests. An interrupted
+  // request must not leave the next caller waiting on its pending D1 promise.
+  await database.prepare(CREATE_INDEX).run();
+  indexedBindings.add(binding);
 }
-
 /** Keep rejected books in the journal; only exclude them from this owner's chart. */
 export async function readChartRejections(database:Pick<D1Database,'prepare'>,ownerId:string,now:number):Promise<Record<string,number[]>> {
   if(!Number.isSafeInteger(now)||now<=0)throw new Error('Chart rejection time is invalid.');

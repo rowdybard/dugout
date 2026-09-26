@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     }
     let markets: TennisMarket[];
     try {
-      markets = (await getTennisCatalog({includeHistory:false,leagues:session.config.leagues})).markets;
+      markets = (await getTennisCatalog({includeHistory:false,leagues:session.config.leagues,signal:req.signal})).markets;
     } catch {
       // Existing positions must remain observable when discovery is unavailable.
       markets = [];

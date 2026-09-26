@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 const sqlite=new DatabaseSync(':memory:');
 sqlite.exec('CREATE TABLE profiles(id TEXT PRIMARY KEY,value TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 0); CREATE TABLE cache(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated INTEGER NOT NULL); CREATE TABLE snapshots(id TEXT PRIMARY KEY,slug TEXT,time INTEGER,price REAL,bid REAL,ask REAL,volume REAL,depth REAL,signals TEXT); CREATE TABLE trading_observations(id TEXT PRIMARY KEY,slug TEXT,time INTEGER,price REAL,bid REAL,ask REAL,depth REAL,source TEXT);');
 export const state={catalogCalls:0,inputCalls:0,replay:false};
+export function waitUntil(task:Promise<unknown>){void task.catch(()=>{});}
 export function reset(){sqlite.exec('DELETE FROM profiles; DELETE FROM cache;');state.catalogCalls=0;state.inputCalls=0;state.replay=false;}
 class Statement{
   values:unknown[]=[];

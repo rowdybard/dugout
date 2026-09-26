@@ -2,23 +2,22 @@ import { replayData } from "./replay";
 import { PolymarketUS } from "polymarket-us";
 import { cached, db } from "./storage";
 import type { Book, Point } from "@/lib/market/types";
-import {createPublicSourceBudget,publicRetryAfterMs} from '../bot/public-source-budget';
-import {abortable} from './request-budget';
+import {publicRetryAfterMs} from '../bot/public-source-budget';
+import {createServerPublicSourceBudget} from './public-source-budget';
+import {waitUntil} from 'cloudflare:workers';
 import {fetchFreshMarketBook} from '../trading/fresh-book';
 export const sdk = new PolymarketUS({ timeout: 12000 });
-const requestBudget=createPublicSourceBudget();
+const requestBudget=createServerPublicSourceBudget();
 /** A provider-requested pause survives Worker restarts and other UI requests. */
 async function publicRead<T>(request:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
   signal?.throwIfAborted();
   const saved=await db().prepare('SELECT value FROM cache WHERE key=?').bind('polymarket:backoff').first<{value:string}>();
   const until=saved?Number(saved.value):0;
   if(Number.isFinite(until)&&until>Date.now())throw new Error(`Polymarket US requests are paused until ${new Date(until).toISOString()}.`);
-  try{return await abortable(requestBudget.run(request,signal),signal);}
-  catch(error){
-    const retryAt=requestBudget.blockedUntil();
-    if(retryAt>Date.now())await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind('polymarket:backoff',String(retryAt),Date.now()).run();
-    throw error;
-  }
+  return requestBudget.run(request,signal,{
+    retain:task=>waitUntil(task),
+    onBackoff:async retryAt=>{await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind('polymarket:backoff',String(retryAt),Date.now()).run();},
+  });
 }
 export const BASE = "https://gateway.polymarket.us";
 export type Raw = Record<string, any>;

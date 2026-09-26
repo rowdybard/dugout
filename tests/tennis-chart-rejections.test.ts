@@ -11,7 +11,7 @@ const plain=(value:Record<string,number[]>)=>JSON.parse(JSON.stringify(value)) a
 function fixture(){
   const sqlite=new DatabaseSync(':memory:');
   sqlite.exec('CREATE TABLE tennis_journal(id TEXT PRIMARY KEY,owner_id TEXT,session_id TEXT,kind TEXT,value TEXT,created_at INTEGER); CREATE TABLE tennis_observations(id TEXT PRIMARY KEY,slug TEXT,time INTEGER,value TEXT); CREATE INDEX tennis_observations_slug_time ON tennis_observations(slug,time);');
-  let creates=0,failNextCreate=false,lastRead='';
+  let creates=0,failNextCreate=false,lastRead='',nextCreatePause:Promise<void>|null=null;
   const database={prepare(sql:string){
     let args:unknown[]=[];
     const statement={
@@ -19,6 +19,7 @@ function fixture(){
       async run(){
         if(sql.startsWith('CREATE INDEX')){
           creates++;
+          const pause=nextCreatePause;nextCreatePause=null;if(pause)await pause;
           if(failNextCreate){failNextCreate=false;throw new Error('index creation unavailable');}
         }
         return sqlite.prepare(sql).run(...args as never[]);
@@ -29,7 +30,7 @@ function fixture(){
   }} as unknown as Pick<D1Database,'prepare'>;
   const add=(id:string,owner:string,session:string,value:unknown,createdAt=NOW,kind='decision')=>
     sqlite.prepare('INSERT INTO tennis_journal VALUES(?,?,?,?,?,?)').run(id,owner,session,kind,JSON.stringify(value),createdAt);
-  return {sqlite,database,add,creates:()=>creates,lastRead:()=>lastRead,failCreate:()=>{failNextCreate=true;}};
+  return {sqlite,database,add,creates:()=>creates,lastRead:()=>lastRead,failCreate:()=>{failNextCreate=true;},pauseCreate:()=>{let resolve!:()=>void,reject!:(error:Error)=>void;nextCreatePause=new Promise<void>((yes,no)=>{resolve=yes;reject=no;});return {resolve,reject};}};
 }
 
 test('rejections remain owner-fenced across resets, deduplicated and within the six-hour window',async()=>{
@@ -44,9 +45,9 @@ test('rejections remain owner-fenced across resets, deduplicated and within the 
   const [a,b]=await Promise.all([readChartRejections(f.database,'owner-a',NOW),readChartRejections(f.database,'owner-b',NOW)]);
   assert.deepEqual(plain(a),{'game-a':[early,NOW-1000],'game-b':[NOW-500]});
   assert.deepEqual(plain(b),{'private-game':[NOW-300]});
-  assert.equal(f.creates(),1,'concurrent reads share one idempotent index build');
+  assert.equal(f.creates(),2,'concurrent requests each own an idempotent index build');
   assert.deepEqual(await readChartRejections(f.database,'owner-a',NOW),a);
-  assert.equal(f.creates(),1);
+  assert.equal(f.creates(),2);
   assert.deepEqual(f.sqlite.prepare('SELECT id,owner_id,session_id,kind,value,created_at FROM tennis_journal ORDER BY id').all(),before,'lookup never rewrites evidence');
   const plan=f.sqlite.prepare(`EXPLAIN QUERY PLAN ${f.lastRead()}`).all('owner-a',early,NOW);
   assert.ok(plan.some(row=>String(row.detail).includes('tennis_journal_order_rejections')),JSON.stringify(plan));
@@ -120,5 +121,28 @@ test('history SQL omits rejected times before its 600-point limit while retainin
   assert.equal(rows.length,600);
   assert.ok(rows.every(row=>!rejected.includes(row.time)));
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS count FROM tennis_observations').get()?.count,1201);
+  f.sqlite.close();
+});
+
+test('a hung request cannot poison another request on the same D1 binding',async()=>{
+  const f=fixture(),firstCreate=f.pauseCreate();
+  f.add('rejected','owner','session',{code:'BOOK_ORDER',slug:'game',bookTime:NOW-100});
+  const first=readChartRejections(f.database,'owner',NOW);
+  const cancelled=assert.rejects(first,/first request disconnected/);
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{
+    const second=await Promise.race([
+      readChartRejections(f.database,'owner',NOW),
+      new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('Second request reused a hung first-request promise.')),250);}),
+    ]);
+    assert.deepEqual(plain(second),{game:[NOW-100]});
+    assert.equal(f.creates(),2,'the second request issues its own CREATE INDEX');
+  }finally{
+    if(timer)clearTimeout(timer);
+    firstCreate.reject(new Error('first request disconnected'));
+    await cancelled;
+  }
+  assert.deepEqual(plain(await readChartRejections(f.database,'owner',NOW)),{game:[NOW-100]});
+  assert.equal(f.creates(),2,'a late failure must not erase another request\'s completed index');
   f.sqlite.close();
 });

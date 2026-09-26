@@ -99,7 +99,7 @@ export async function advanceLeagueDiscovery<T extends DiscoveryMarket>(
   previous: LeagueDiscoveryState<T> | undefined,
   league: string,
   deps: DiscoveryDependencies<T>,
-  {deadlineAt, signal}: {deadlineAt: number; signal?: AbortSignal},
+  {deadlineAt, signal, maxPages=Number.POSITIVE_INFINITY}: {deadlineAt: number; signal?: AbortSignal;maxPages?:number},
 ): Promise<LeagueDiscoveryState<T>> {
   if (!Number.isFinite(deadlineAt)) throw new Error('Discovery requires a finite deadline.');
   if (previous && (previous.version !== 1 || previous.league !== league)) {
@@ -124,7 +124,8 @@ export async function advanceLeagueDiscovery<T extends DiscoveryMarket>(
   state.status = 'scanning';
   state.interrupted = null;
   // A previous source error remains visible until a successful page proves recovery.
-  while (deps.now() < deadlineAt && !signal?.aborted) {
+  let acceptedPages=0;
+  while (deps.now() < deadlineAt && !signal?.aborted && acceptedPages<maxPages) {
     try {
       const events = await boundedPage(league, state.nextOffset, deps, deadlineAt, signal);
       if (signal?.aborted) throw new DiscoveryInterruption('cancelled');
@@ -156,6 +157,7 @@ export async function advanceLeagueDiscovery<T extends DiscoveryMarket>(
       state.nextOffset += events.length;
       state.pageFingerprints.push(fingerprint);
       state.lastPageAt = observedAt;
+      acceptedPages++;
       state.failures = 0;
       state.error = null;
       state.nextAttemptAt = 0;

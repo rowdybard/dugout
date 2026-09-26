@@ -52,7 +52,7 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     // Existing positions and pending orders get the entire data budget. A slow
     // discovery request must never delay a possible exit on a known market.
     if(action.action==='tick'&&!chosen.size&&session.status==='running'){
-      const catalog=await withDeadline(getTennisCatalog({includeHistory:false,leagues:session.config.leagues}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
+      const catalog=await withDeadline(getTennisCatalog({includeHistory:false,leagues:session.config.leagues,signal:controller.signal}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
       const candidates=catalog.markets.filter(m=>m.active&&m.live&&!m.ended&&session.config.leagues.includes(m.league)&&(!session.config.focusSlug||m.slug===session.config.focusSlug)).sort((a,b)=>a.slug.localeCompare(b.slug));
       // Rotate over every live candidate. Both tours receive books when available.
       const tourPools=session.config.leagues.map(league=>candidates.filter(m=>m.league===league));
