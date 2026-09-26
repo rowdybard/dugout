@@ -1,13 +1,13 @@
 'use client';
 
 import {useCallback,useEffect,useRef,useState} from 'react';
-import type {TennisAction,TennisCatalog,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
+import type {FootballAssessment,TennisAction,TennisCatalog,TennisInput,TennisMarket,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
-import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote} from '@/lib/tennis/chart-data';
+import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote,marketWithWatchedBook,marketWithWatchedContext} from '@/lib/tennis/chart-data';
 import {managedMarketStream} from '@/lib/trading/managed-market-stream';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
-  const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(20000)}).catch(cause=>{
+  const response=await fetch(url,{cache:'no-store',...init,signal:init?.signal?AbortSignal.any([init.signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)}).catch(cause=>{
     throw new Error(cause?.name==='TimeoutError'?'The connection timed out. Reconnecting to your saved session.':'Connection interrupted. Retrying with fresh data; your saved balance is safe.');
   });
   let data:T & {error?:string};
@@ -27,10 +27,14 @@ export function useTennis() {
   const [streamStatus,setStreamStatus]=useState('connecting');
   const [now,setNow]=useState(()=>Date.now());
   const [watchedSlug,watchMarket]=useState<string|null>(null);
+  const [watchedBookError,setWatchedBookError]=useState<string|null>(null);
+  const [watchedContextError,setWatchedContextError]=useState<string|null>(null);
+  const [contextAssessments,setContextAssessments]=useState<Record<string,FootballAssessment>>({});
   const [catalogAttempt,setCatalogAttempt]=useState(0);
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
   const focusSlug=session?.config.focusSlug;
+  const contextSlugs=[...new Set([session?.pending?.market,...(session?.positions.filter(p=>p.status==='open').map(p=>p.lastContext??p.market)??[]),catalog?.markets.find(m=>m.slug===watchedSlug)].filter(m=>m&&(m.league==='CFB'||m.league==='NFL')).map(m=>m!.slug))].join(',');
   const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   const accept=useCallback((response:TennisSessionResponse)=>{
@@ -60,7 +64,7 @@ export function useTennis() {
         const rejected=new Set(market.rejectedQuoteTimes??[]);
         const history=mergeTennisHistory(market.history,(existing?.history??[]).filter(point=>!rejected.has(point.time)));
         const newest=existing&&(existing.quoteObservedAt??existing.observedAt)>(market.quoteObservedAt??market.observedAt)?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,quoteObservedAt:existing.quoteObservedAt,quoteSource:existing.quoteSource,quoteSourceTime:existing.quoteSourceTime,history}:{...market,history};
-        return marketWithSessionQuotes(newest,sessionRef.current);
+        return marketWithSessionQuotes(existing?marketWithWatchedContext(newest,existing,Date.now()):newest,sessionRef.current);
       })}));setFeedError(null);
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
     finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);setCatalogAttempt(value=>value+1);if(catalogRerun.current)void refreshCatalog();}}
@@ -117,6 +121,25 @@ export function useTennis() {
     return()=>clearInterval(timer);
   },[visible,refresh,catalogAttempt,catalog?.discovery?.complete,catalog?.discovery?.nextRefreshAt]);
   useEffect(()=>{
+    if(!visible||!contextSlugs){queueMicrotask(()=>setWatchedContextError(null));return;}
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async()=>{
+      // Held/pending games are first. Their reports never wait behind discovery or chart history.
+      await Promise.all(contextSlugs.split(',').map(async slug=>{
+        try{
+          const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null}>(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,{signal:controller.signal});
+          if(controller.signal.aborted)return;
+          setContextAssessments(current=>({...current,[slug]:data.assessment}));
+          setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===slug?marketWithWatchedContext(m,data.market,Date.now()):m)}:current);
+          if(slug===watchedSlug)setWatchedContextError(data.error??(data.assessment.status==='conflicting'?data.assessment.reason:null));
+        }catch(cause){if(!controller.signal.aborted&&slug===watchedSlug)setWatchedContextError(cause instanceof Error?cause.message:'Waiting for the latest game report.');}
+      }));
+      if(!controller.signal.aborted)timer=setTimeout(()=>void load(),3000);
+    };
+    queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedContextError(null);void load();}});
+    return()=>{controller.abort();clearTimeout(timer);};
+  },[visible,contextSlugs,watchedSlug]);
+  useEffect(()=>{
     if(!visible||!watchedSlug)return;
     let cancelled=false;
     const load=async()=>{
@@ -133,10 +156,29 @@ export function useTennis() {
     return()=>{cancelled=true;clearInterval(timer);};
   },[visible,watchedSlug]);
   useEffect(()=>{
+    if(!visible||!watchedSlug)return;
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async()=>{
+      try{
+        const {input}=await readJson<{input:TennisInput}>(`/api/tennis/book?slug=${encodeURIComponent(watchedSlug)}`,{signal:controller.signal});
+        if(controller.signal.aborted)return;
+        setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===watchedSlug?marketWithWatchedBook(m,input,sessionRef.current,Date.now()):m)}:current);
+        setWatchedBookError(null);
+      }catch(cause){if(!controller.signal.aborted)setWatchedBookError(cause instanceof Error?cause.message:'Waiting for a fresh book for this game.');}
+      finally{if(!controller.signal.aborted)timer=setTimeout(()=>void load(),3000);}
+    };
+    queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedBookError(null);void load();}});
+    return()=>{controller.abort();clearTimeout(timer);};
+  },[visible,watchedSlug]);
+  useEffect(()=>{
     if(!visible||!sessionId)return;
     const tick=()=>{
       const current=sessionRef.current;
       if(!current||inflight.current)return;
+      if(runtime?.mode==='service'||runtime?.mode==='migrating'){
+        if(!commandQueued.current){inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
+        return;
+      }
       // Pausing entries does not pause exit checks; existing positions still need monitoring.
       if(['running','paused','stopping'].includes(current.status)||current.pending||current.positions.some(position=>position.status==='open')){
         void perform({action:'tick',sessionId:current.id},true);
@@ -144,7 +186,7 @@ export function useTennis() {
     };
     const timer=setInterval(tick,Math.max(2000,runtime?.intervalMs??2500));
     return()=>clearInterval(timer);
-  },[visible,sessionId,runtime?.intervalMs,perform]);
+  },[visible,sessionId,runtime?.intervalMs,runtime?.mode,perform,accept]);
   useEffect(()=>{
     if(!visible||!runtime?.streamConfigured)return;
     queueMicrotask(()=>setStreamStatus('connecting'));
@@ -165,5 +207,5 @@ export function useTennis() {
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
+  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
 }

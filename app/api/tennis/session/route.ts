@@ -1,4 +1,7 @@
 import {z} from 'zod';
+import {env} from 'cloudflare:workers';
+import {proxyRunnerSession,type RunnerBindings} from '@/lib/runner/sites-proxy';
+import {runnerError} from '@/lib/runner/protocol';
 import {sameOrigin,db} from '@/lib/server/storage';
 import {readTennisSession,updateTennisSession,tennisRuntime} from '@/lib/tennis/server';
 import {exportTennisJournal} from '@/lib/tennis/journal-export';
@@ -15,18 +18,20 @@ const schema=z.union([
 ]);
 export async function GET(req:Request){
   try{
+    const runner=await proxyRunnerSession(req,db(),env as RunnerBindings);if(runner)return runner;
     const {ownerId,session}=await readTennisSession(req);
     if(new URL(req.url).searchParams.get('export')==='1'){
       return await exportTennisJournal(db(),ownerId);
     }
     return Response.json({session,runtime:tennisRuntime()},{headers:{'Cache-Control':'no-store'}});
-  }catch(e){return Response.json({error:e instanceof Error?e.message:'Paper account unavailable.'},{status:503});}
+  }catch(e){return runnerError(e);}
 }
 export async function POST(req:Request){
   try{
     sameOrigin(req);const parsed=schema.safeParse(await req.json());
     if(!parsed.success)return Response.json({error:'Check the amount and paper-session settings.'},{status:400});
+    const runner=await proxyRunnerSession(req,db(),env as RunnerBindings,parsed.data as TennisAction);if(runner)return runner;
     const session=await updateTennisSession(req,parsed.data as TennisAction);
     return Response.json({session,runtime:tennisRuntime()},{headers:{'Cache-Control':'no-store'}});
-  }catch(e){return Response.json({error:e instanceof Error?e.message:'Paper action could not complete.'},{status:400});}
+  }catch(e){return runnerError(e);}
 }

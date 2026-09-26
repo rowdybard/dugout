@@ -44,5 +44,7 @@ next-env.d.ts
 /.agents/
 /.codex/
 /outputs/
+/services/runner/outputs/
+/services/runner/build/
 /work/
 __pycache__/

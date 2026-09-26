@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "dugout-paper-runner",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {"enabled": true, "head_sampling_rate": 0.1},
+  "vars": {"RUNNER_OWNER_ID": "", "RUNNER_ENGINE_VERSION": "pending-build"},
+  "secrets": {"required": ["RUNNER_HMAC_SECRET"]},
+  "durable_objects": {"bindings": [{"name":"PAPER_RUNNERS","class_name":"OwnerPaperRunner"}]},
+  "migrations": [{"tag":"v1","new_sqlite_classes":["OwnerPaperRunner"]}]
+}

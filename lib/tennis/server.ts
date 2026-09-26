@@ -1,8 +1,10 @@
 import {env} from 'cloudflare:workers';
+import {readRunnerOwnedSession,type RunnerBindings} from '../runner/sites-proxy';
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
 import {defaultTennisConfig,createTennisSession,stepTennisSession,applyTennisAction} from './engine';
 import {normalizeTennisConfig} from './rules';
+import {normalizePositionExitRules} from './football-context';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
 
@@ -12,6 +14,7 @@ export function tennisRuntime():TennisRuntime {
     description:'Paper checks run while this page is open and visible. Keep it open to manage exits.'};
 }
 export async function readTennisSession(req:Request):Promise<{ownerId:string;session:TennisSession;stored:boolean}> {
+  const runner=await readRunnerOwnedSession(req,db(),env as RunnerBindings);if(runner)return runner;
   const {id:ownerId}=await profile(req);
   let row=await db().prepare('SELECT value,revision FROM tennis_sessions WHERE owner_id=?').bind(ownerId).first<{value:string;revision:number}>();
   if(!row){
@@ -21,7 +24,7 @@ export async function readTennisSession(req:Request):Promise<{ownerId:string;ses
   }
   if(!row)throw new Error('The tennis paper account could not be loaded.');
   const saved=JSON.parse(row.value) as TennisSession;
-  return {ownerId,session:{...saved,config:normalizeTennisConfig(saved.config),revision:row.revision},stored:true};
+  return {ownerId,session:normalizePositionExitRules({...saved,config:normalizeTennisConfig(saved.config),revision:row.revision}),stored:true};
 }
 type Loaded=Awaited<ReturnType<typeof readTennisSession>>;
 const reason=(e:unknown)=>e instanceof Error?e.message:'A tennis source is unavailable.';
@@ -84,11 +87,17 @@ async function persist(loaded:Loaded,next:TennisSession,action:TennisAction,inpu
   const knownDecisions=new Set(old.decisions.map(d=>d.id)),knownLedger=new Set(old.ledger.map(e=>e.id));
   for(const d of next.decisions)if(!knownDecisions.has(d.id))addJournal(`${next.id}:${d.id}`,'decision',d,d.time);
   for(const e of next.ledger)if(!knownLedger.has(e.id))addJournal(`${next.id}:${e.id}`,'execution',{...e,configVersion:next.config.version},e.time);
+  for(const [positionId,shadow] of Object.entries(next.shadowExits??{}))if(JSON.stringify(shadow)!==JSON.stringify(old.shadowExits?.[positionId]))
+    addJournal(`${next.id}:shadow:${positionId}:${revision}`,'shadow-exit',shadow,Date.now());
   if(action.commandId)addJournal(`command:${action.commandId}`,'control',{fingerprint:JSON.stringify(action),action,sessionId:next.id},Date.now());
   if(next.id!==old.id){addJournal(`archive:${old.id}`,'archive',old,Date.now());addJournal(`config:${next.id}`,'config',next.config,Date.now());}
   if(JSON.stringify(next.config)!==JSON.stringify(old.config))addJournal(`rules:${next.id}:${next.rulesRevision??0}:${revision}`,'config',{before:old.config,after:next.config,rulesRevision:next.rulesRevision??0,source:'USER'},Date.now());
   // Capture each decision's exact input once. Shared market rows contain no account data.
   const usedBooks=new Set(next.decisions.filter(d=>!knownDecisions.has(d.id)).map(d=>`${d.slug}:${d.bookTime}`));
+  for(const shadow of Object.values(next.shadowExits??{})){
+    if(shadow.pending)usedBooks.add(`${shadow.slug}:${shadow.pending.bookTime}`);
+    for(const fill of shadow.fills){usedBooks.add(`${shadow.slug}:${fill.signalBookTime}`);usedBooks.add(`${shadow.slug}:${fill.executionBookTime}`);}
+  }
   for(const input of inputs){
     if(!usedBooks.has(`${input.market.slug}:${input.receivedAt}`))continue;
     const value={...input,market:{...input.market,history:[]}};

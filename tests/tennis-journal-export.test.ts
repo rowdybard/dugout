@@ -51,6 +51,15 @@ test('empty journals export valid JSON and canceled downloads stop paging',async
   const reads=f.reads();await Promise.resolve();assert.equal(f.reads(),reads);assert.ok(reads<=1);f.sqlite.close();
 });
 
+test('shadow comparisons export their exact signal and execution books without becoming account executions',async()=>{
+  const f=fixture();
+  f.add('shadow-only',{slug:'game',pending:{bookTime:789},fills:[{signalBookTime:123,executionBookTime:456}]},'owner',f.session.id,'shadow-exit');
+  for(const time of [123,456,789])f.sqlite.prepare('INSERT INTO tennis_observations VALUES(?,?,?,?)').run(`game:${time}`,'game',time,JSON.stringify({book:{bids:[{price:.5,quantity:20}]}}));
+  const data=await(await exportTennisJournal(f.database,'owner')).json() as ExportDocument;
+  assert.equal(data.recordCount,1);assert.equal(data.observationCount,3);assert.deepEqual(data.missingObservationIds,[]);
+  assert.equal(data.session.cash,100);assert.equal(data.session.ledger.length,0);f.sqlite.close();
+});
+
 test('journal read failures cannot produce a valid file claiming a complete export',async()=>{
   const f=fixture();f.add('one');
   const response=await exportTennisJournal(f.database,'owner');

@@ -6,7 +6,24 @@ import type {RestBookReceipt} from '../trading/fresh-book';
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
 export type FootballContext={
   possessionTeam:string|null;down:number|null;yardsToGo:number|null;
-  fieldPosition:{team:string;yard:number}|null;timeouts:{team:string;remaining:number}[];
+  possessionTeamId?:string|null;
+  fieldPosition:{team:string;yard:number;teamId?:string}|null;timeouts:{team:string;remaining:number}[];
+};
+export type FootballReport={
+  eventId:string;yesTeamId:string;noTeamId:string;reportTime:number;receiptTime:number;
+  score:string;period:string;clock:string;possessionTeamId:string;down:number;yardsToGo:number;
+  fieldPosition:{teamId:string;yard:number};
+};
+export type FootballAssessment={status:'fresh'|'stale'|'unknown'|'conflicting';reason:string;reportTime:number|null;receiptTime:number;reportAgeMs:number|null;receiptAgeMs:number};
+export type FootballReportState={report?:FootballReport;assessment:FootballAssessment;conflictedAt?:number};
+export type PositionExitRules={targetReturn:number;stopReturn:number;maxHoldMs:number;source:'entry'|'legacy-snapshot'};
+export type ShadowExit={
+  positionId:string;slug:string;side:TradeSide;reason:'POSSESSION_LOST'|'FOURTH_DOWN';
+  context:FootballReport;startedAt:number;initialQuantity:number;remainingQuantity:number;costBasis:number;proceeds:number;fees:number;
+  status:'pending'|'partial'|'closed'|'ended';
+  pending?:{id:string;createdAt:number;executeAfter:number;bookTime:number;limitPrice:number};
+  fills:{id:string;time:number;signalBookTime:number;executionBookTime:number;execution:PaperExecution}[];
+  lastBookTime?:number;closedAt?:number;
 };
 export type TennisPricePoint=Point & {bid?:number;ask?:number;score?:string|null;period?:string|null;scoreUpdatedAt?:number|null};
 export type TennisMarket={
@@ -14,6 +31,7 @@ export type TennisMarket={
   yesName:string;noName:string;startTime:string;
   live:boolean;ended:boolean;score:string|null;period:string|null;tournament:string|null;clock?:string|null;
   football?:FootballContext|null;
+  footballIdentity?:{yesTeamId:string;noTeamId:string};
   active:boolean;bid:number|null;ask:number|null;price:number|null;
   observedAt:number;contextUpdatedAt:number|null;history:TennisPricePoint[];
   quoteObservedAt?:number;quoteSource?:'CATALOG'|'REST'|'WEBSOCKET'|'REPLAY';
@@ -24,6 +42,7 @@ export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string
 export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null;restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
+  decisionPolicy?:'price-v1'|'football-context-v1';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
@@ -41,10 +60,11 @@ export type TennisPosition={
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
   lastContext?:TennisMarket;
+  exitRules?:PositionExitRules;entryContext?:FootballReport;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];
 };
-export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy']};
-export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules};
+export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport};
+export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment};
 export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
 export type TennisSession={
   id:string;revision:number;scanCursor?:number;decisionSequence?:number;mode:'paper';status:'idle'|'running'|'paused'|'stopping'|'stopped';
@@ -52,6 +72,7 @@ export type TennisSession={
   quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null}>;
   autoSignals?:Record<string,TennisSignal>;
   bookSourceTimes?:Record<string,number>;
+  footballReports?:Record<string,FootballReportState>;shadowExits?:Record<string,ShadowExit>;shadowContexts?:Record<string,FootballReport>;
   autoStatus?:{time:number;checked:number;qualified:number;reason:string;selected?:'recovery'|'momentum'};
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
@@ -65,5 +86,7 @@ export type TennisAction=
  |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string}
  |{action:'reset';bankroll:number;commandId:string}
  |{action:'update-rules';rules:Partial<Omit<TennisConfig,'startingCash'|'version'>>;expectedRulesRevision:number;sessionId:string;commandId:string};
-export type TennisRuntime={mode:'browser';intervalMs:number;backgroundConnected:false;streamConfigured:boolean;description:string};
+export type TennisRuntime={mode:'browser'|'migrating'|'service';intervalMs:number;backgroundConnected:boolean;streamConfigured:boolean;description:string;
+  lastSuccessfulCheck?:number;quoteAgeMs?:number|null;gameReportAgeMs?:number|null;failureReason?:string|null;
+  usage?:{day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number}};
 export type TennisSessionResponse={session:TennisSession;runtime:TennisRuntime;error?:string};

@@ -12,7 +12,9 @@
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/*.test.ts services/trading/*.test.ts",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/*.test.ts services/trading/*.test.ts services/runner/tests/*.test.ts",
+    "runner:check": "tsc -p services/runner/tsconfig.json",
+    "runner:build": "wrangler deploy --dry-run --config services/runner/wrangler.jsonc --minify --outdir outputs/runner-build",
     "trading:stream": "node --experimental-strip-types services/trading/server.ts"
   },
   "dependencies": {

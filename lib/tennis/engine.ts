@@ -13,6 +13,8 @@ import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
 import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
+import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
+import {advanceShadowExits} from './shadow-exits.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -37,7 +39,8 @@ export function tennisEquity(session: TennisSession): number {
 function record(session: TennisSession, now: number, slug: string, side: TradeSide, action: TennisDecision['action'], code: string, reason: string, input?: TennisInput, more: Partial<TennisDecision> = {}) {
   session.lastReason = reason;
   session.decisionSequence = (session.decisionSequence ?? session.decisions.length) + 1;
-  session.decisions.push({ id: `${session.id}:d:${session.decisionSequence}`, time: now, slug, side, action, code, reason, bookTime: input?.receivedAt, rulesRevision: session.rulesRevision ?? 0, ...more });
+  session.decisions.push({ id: `${session.id}:d:${session.decisionSequence}`, time: now, slug, side, action, code, reason, bookTime: input?.receivedAt, rulesRevision: session.rulesRevision ?? 0,
+    ...(input&&isFootballMarket(input.market)?{context:session.footballReports?.[slug]?.assessment}:{}),...more });
   session.decisions = session.decisions.slice(-300);
   if (action === 'SKIP') session.rejectionCounts[code] = (session.rejectionCounts[code] ?? 0) + 1;
 }
@@ -90,6 +93,10 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   if (issue) return { code: 'DATA', reason: issue };
   if (!input.market.live) return { code: 'NOT_LIVE', reason: 'Waiting for the match to start. The bot only enters live matches.' };
   if (!Number.isFinite(input.market.observedAt) || input.market.observedAt > now || now - input.market.observedAt > 45_000) return { code: 'MATCH_STALE', reason: 'Live match status needs a fresh update.' };
+  if(session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(input.market)){
+    const context=session.footballReports?.[input.market.slug]?.assessment;
+    if(context?.status!=='fresh')return {code:`CONTEXT_${(context?.status??'unknown').toUpperCase()}`,reason:context?.reason??'Waiting for verified football context.'};
+  }
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This tour is not selected for the experiment.' };
   if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return {code:'FOCUS',reason:'New entries are restricted to the focused game.'};
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
@@ -142,7 +149,8 @@ function stage(session: TennisSession, input: TennisInput, side: TradeSide, acti
     id: id ?? `${session.id}:order:${session.revision}:${now}`, market: structuredClone(input.market), slug: input.market.slug, side, action,
     positionId: action === 'SELL' ? holding(session)?.id : undefined, budget,
     limitPrice, createdAt: now, executeAfter: now + session.config.executionDelayMs, observedAt: input.receivedAt, source, reason,
-    ...(action==='BUY'?{signalConfig:structuredClone(session.config),signalSnapshot:structuredClone(session.signals[keyFor(input.market.slug,side)]),decisionMode:session.config.strategy}:{}),
+    ...(action==='BUY'?{signalConfig:structuredClone(session.config),signalSnapshot:structuredClone(session.signals[keyFor(input.market.slug,side)]),decisionMode:session.config.strategy,
+      ...(session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(input.market)?{contextSnapshot:structuredClone(session.footballReports?.[input.market.slug]?.report)}:{})}:{}),
   };
   record(session, now, input.market.slug, side, 'SIGNAL', action === 'BUY' ? 'ENTRY_PENDING' : 'EXIT_PENDING',
     `${reason} Waiting at least ${session.config.executionDelayMs / 1000}s and for a later fresh book before simulating a fill.`, input);
@@ -203,7 +211,9 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
         name: intent.side === 'YES' ? input.market.yesName : input.market.noName, quantity: result.filledQty, initialQuantity: result.filledQty,
         costBasis: -result.cashDelta, entryCost: -result.cashDelta, entryPrice: result.averagePrice, entryFees: result.fees, openedAt: now,
         status: 'open', realizedPnl: 0, exitFees: 0, proceeds: 0, netLiquidationValue: null, liquidationQuantity: 0, markedAt: null,
-        market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy });
+        market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy,
+        exitRules:{targetReturn:(intent.signalConfig??session.config).targetReturn,stopReturn:(intent.signalConfig??session.config).stopReturn,maxHoldMs:(intent.signalConfig??session.config).maxHoldMs,source:'entry'},
+        ...(intent.contextSnapshot?{entryContext:structuredClone(intent.contextSnapshot)}:{}) });
     } else if (oldPosition) {
       const full = Math.abs(result.filledQty - oldPosition.quantity) < EPSILON;
       const allocated = full ? oldPosition.costBasis : exact(oldPosition.costBasis * result.filledQty / oldPosition.quantity);
@@ -234,10 +244,23 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
 function processPending(session: TennisSession, inputs: TennisInput[], now: number): boolean {
   const intent = session.pending;
   if (!intent) return false;
+  const input = inputs.find(item => item.market.slug === intent.slug);
   if (intent.action === 'BUY' && intent.source !== 'AUTOMATIC') {
     session.pending = null;
     record(session, now, intent.slug, intent.side, 'SKIP', 'RETIRED_ENTRY', 'An earlier user-placed entry was canceled. Only the bot can open a position.');
     return false;
+  }
+  if(intent.action==='BUY'&&session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(intent.market)){
+    const state=session.footballReports?.[intent.slug];
+    const boundary=!!intent.contextSnapshot&&!!state?.report&&footballBoundaryChanged(intent.contextSnapshot,state.report);
+    if(!intent.contextSnapshot||state?.assessment.status!=='fresh'||boundary){
+      session.pending=null;
+      resetFootballSetup(session,intent.slug,'The game context changed. Confirming a new setup.');
+      record(session,now,intent.slug,intent.side,'SKIP',boundary?'CONTEXT_CHANGED':`CONTEXT_${(state?.assessment.status??'unknown').toUpperCase()}`,
+        !intent.contextSnapshot?'Pending entry canceled: its original game-context snapshot is missing. Confirming a new setup.':
+          boundary?'Pending entry canceled: score, possession or quarter changed. Confirming a new setup.':`Pending entry canceled: ${state?.assessment.reason??'verified context is unavailable.'}`,input);
+      return true;
+    }
   }
   if (intent.action === 'BUY' && (session.status === 'stopped' || session.status === 'stopping' || (intent.source === 'AUTOMATIC' && session.status !== 'running'))) {
     session.pending = null;
@@ -251,7 +274,6 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
     record(session, now, intent.slug, intent.side, 'SKIP', 'INTENT_EXPIRED', 'The paper order expired before a usable later book arrived.');
     return false;
   }
-  const input = inputs.find(item => item.market.slug === intent.slug);
   if (!input || dataIssue(session, input, now) || input.receivedAt <= intent.observedAt || input.receivedAt < intent.executeAfter || input.receivedAt <= (session.consumedBooks[intent.slug] ?? -1)) {
     session.lastReason = 'Waiting for a new authoritative book after the execution delay; cached quotes cannot fill an order.';
     return true;
@@ -400,6 +422,16 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
 }
 
 type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;cost:number};
+function resetFootballSetup(session:TennisSession,slug:string,reason:string){
+  for(const side of ['YES','NO'] as const){
+    const key=keyFor(slug,side),old=session.signals[key];
+    session.signals[key]={phase:'WATCHING',confirmations:0,cooldownUntil:old?.cooldownUntil,reason};
+    for(const strategy of ['recovery','momentum'])if(session.autoSignals){
+      const track=`${key}:${strategy}`;
+      session.autoSignals[track]={phase:'WATCHING',confirmations:0,cooldownUntil:session.autoSignals[track]?.cooldownUntil,reason};
+    }
+  }
+}
 function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide,now:number):AutoCandidate[]{
   const key=keyFor(input.market.slug,side),quote=quotes(input,side),history=session.histories[key]??[];
   const candidates:AutoCandidate[]=[];
@@ -456,7 +488,7 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
 /** Pure reducer. Callers persist the complete returned state with one account revision/CAS. */
 export function stepTennisSession(previous: TennisSession, inputs: TennisInput[], now: number): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
-  const session = structuredClone(previous);
+  const session = normalizePositionExitRules(structuredClone(previous));
   session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;
@@ -464,6 +496,20 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   if (configIssue) { session.status = 'paused'; session.pending = null; session.lastReason = configIssue; return session; }
   const sorted = inputs.filter(input => input && input.market && input.book).sort((a, b) => b.receivedAt - a.receivedAt);
   const current = [...new Map(sorted.map(input => [input.market.slug, input] as const).reverse()).values()];
+  session.footballReports??={};
+  for(const input of current){
+    if(!isFootballMarket(input.market)||input.source==='REPLAY')continue;
+    const prior=session.footballReports[input.market.slug],next=assessFootballContext(input.market,now,prior);
+    session.footballReports[input.market.slug]=next;
+    if(session.config.decisionPolicy==='football-context-v1'&&prior?.report&&next.report&&footballBoundaryChanged(prior.report,next.report))
+      resetFootballSetup(session,input.market.slug,'Score, possession or quarter changed. Confirming a new setup.');
+  }
+  // A missing market update cannot preserve yesterday's fresh assessment.
+  for(const [slug,state] of Object.entries(session.footballReports))if(!current.some(input=>input.market.slug===slug&&input.source!=='REPLAY')&&state.report){
+    state.assessment={...state.assessment,reportAgeMs:now-state.report.reportTime,receiptAgeMs:now-state.report.receiptTime};
+    if(state.assessment.status==='fresh'&&(now-state.report.reportTime>45000||now-state.report.receiptTime>45000))
+      state.assessment={...state.assessment,status:'stale',reason:'The football report is older than 45 seconds. Waiting for fresh context.'};
+  }
   session.coverage ??= {};
   session.quotes ??= {};
   session.bookSourceTimes ??= {};
@@ -488,6 +534,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     }
   }
   const open = holding(session);
+  for(const input of current)advanceShadowExits(session,input,now,!dataIssue(session,input,now),policy(session,input,now));
   if (open) settle(session, open, current.find(input => input.market.slug === open.slug), now);
   const processed = processPending(session, current, now);
   const position = holding(session);
@@ -504,9 +551,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
         ? position.netLiquidationValue / (position.costBasis * position.liquidationQuantity / position.quantity) - 1 : null;
       // A profit target requires buyers for the entire position. Partial books can still reduce losses.
       const reason = session.exitRequested?.positionId === position.id ? session.exitRequested.reason : session.status === 'stopping' ? 'Session stopped: attempting to close remaining paper quantity.'
-        : completeMark && availableReturn !== null && availableReturn >= session.config.targetReturn - EPSILON ? 'Net profit target reached after estimated exit fees.'
-          : availableReturn !== null && availableReturn <= -session.config.stopReturn + EPSILON ? 'Net loss threshold reached; attempting a price-bounded exit.'
-            : now - position.openedAt >= session.config.maxHoldMs ? 'Maximum holding time reached.' : null;
+        : completeMark && availableReturn !== null && availableReturn >= position.exitRules!.targetReturn - EPSILON ? 'Net profit target reached after estimated exit fees.'
+          : availableReturn !== null && availableReturn <= -position.exitRules!.stopReturn + EPSILON ? 'Net loss threshold reached; attempting a price-bounded exit.'
+            : now - position.openedAt >= position.exitRules!.maxHoldMs ? 'Maximum holding time reached.' : null;
       if (reason) stage(session, input, position.side, 'SELL', now, session.exitRequested?.source ?? 'AUTOMATIC', reason);
       else if (!processed) record(session, now, position.slug, position.side, 'WAIT', availableReturn === null ? 'NO_EXIT_DEPTH' : 'HOLDING',
         availableReturn === null ? 'No executable exit price is currently available. The position remains open.' : 'Holding until net profit, loss, or time exit rules trigger.', input, { netReturn: availableReturn ?? undefined });
@@ -566,7 +613,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if ('sessionId' in action && action.sessionId && action.sessionId !== previous.id) return previous;
   if (action.commandId && previous.commandIds.includes(action.commandId)) return previous;
   if (action.action === 'tick') return stepTennisSession(previous, inputs, now);
-  let session = structuredClone(previous);
+  let session = normalizePositionExitRules(structuredClone(previous));
   session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;

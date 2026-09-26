@@ -3,6 +3,7 @@ import type {TennisConfig} from './types';
 
 const positive=z.number().finite().positive();
 export const tennisRulesSchema=z.object({
+  decisionPolicy:z.enum(['price-v1','football-context-v1']).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
@@ -19,7 +20,7 @@ export const tennisRulesSchema=z.object({
 export const tennisRulesPatchSchema=tennisRulesSchema.partial();
 
 export function defaultTennisConfig(startingCash=100):TennisConfig {
-  return {version:'tennis-recovery-v1',strategy:'recovery',startingCash,focusSlug:null,
+  return {version:'tennis-recovery-v1',decisionPolicy:'football-context-v1',strategy:'recovery',startingCash,focusSlug:null,
     entryBudget:Math.min(5,Math.round(startingCash*.2*1e6)/1e6),leagues:['ATP','WTA'],
     baselineWindowMs:60_000,minimumHistoryMs:30_000,minSamples:10,
     declinePoints:3,recoveryPoints:1,recoveryConfirmations:2,momentumPoints:3,momentumConfirmations:2,
@@ -29,7 +30,8 @@ export function defaultTennisConfig(startingCash=100):TennisConfig {
 
 /** Add newly introduced fields without rewriting saved balances or historical rules. */
 export function normalizeTennisConfig(config:TennisConfig):TennisConfig {
-  return {...defaultTennisConfig(config.startingCash),...config};
+  // Old exports retain their original price-only semantics during replay.
+  return {...defaultTennisConfig(config.startingCash),...config,decisionPolicy:config.decisionPolicy??'price-v1'};
 }
 
 export function validateTennisConfig(config:TennisConfig):string|null {

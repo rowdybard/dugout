@@ -27,6 +27,10 @@ export async function exportTennisJournal(database:Pick<D1Database,'prepare'>,ow
         if((row.kind==='decision'||row.kind==='execution')&&typeof value.slug==='string'&&value.slug){
           for(const time of [value.bookTime,value.signalBookTime,value.executionBookTime])if(typeof time==='number'&&Number.isFinite(time))observationIds.add(`${value.slug}:${time}`);
         }
+        if(row.kind==='shadow-exit'&&typeof value.slug==='string'&&value.slug){
+          const times=[value.pending?.bookTime,...(Array.isArray(value.fills)?value.fills.flatMap((fill:{signalBookTime?:number;executionBookTime?:number})=>[fill.signalBookTime,fill.executionBookTime]):[])];
+          for(const time of times)if(typeof time==='number'&&Number.isFinite(time))observationIds.add(`${value.slug}:${time}`);
+        }
         return JSON.stringify({id:row.id,kind:row.kind,value,time:row.created_at});
       });
       yield `${count?',':''}${encoded.join(',')}`;

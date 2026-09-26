@@ -4,7 +4,7 @@ import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/u
 import {defaultTennisConfig,describeTennisRules,normalizeTennisConfig,validateTennisConfig} from '@/lib/tennis/rules';
 import type {TennisAction,TennisConfig,TennisSession} from '@/lib/tennis/types';
 import {tennisCommandId} from './command-id';
-type NumberKey={ [K in keyof TennisConfig]:TennisConfig[K] extends number?K:never }[keyof TennisConfig];
+type NumberKey={ [K in keyof TennisConfig]-?:TennisConfig[K] extends number?K:never }[keyof TennisConfig];
 export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session:TennisSession;busy:boolean;error:string|null;onClose:()=>void;onAction:(action:TennisAction)=>Promise<boolean>}) {
   const [draft,setDraft]=useState(()=>normalizeTennisConfig(session.config));
   const [revision]=useState(session.rulesRevision??0),[more,setMore]=useState(false);
@@ -36,7 +36,7 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
       {field('maxSessionLossFraction','Stop the session at','Percent lost from the starting balance',.1,50,.01,.1)}
     </div>}
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
-    <p className="tennis-order-help">Always paper money, live matches, and one position at a time. Each entry is limited to 20% of the starting balance. Changes apply to held positions too. An exit already triggered remains active. These strategies are unproven.</p>
+    <p className="tennis-order-help">Always paper money, live matches, and one position at a time. Each entry is limited to 20% of the starting balance. Profit, loss and holding limits are saved at entry; changes apply to future positions. An exit already triggered remains active. These strategies are unproven.</p>
     {error&&<p className="tennis-dialog-error" role="alert">{error}</p>}
     <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...defaultTennisConfig(session.config.startingCash),strategy:'auto',leagues:draft.leagues,focusSlug:draft.focusSlug})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
   </DialogContent></Dialog>;

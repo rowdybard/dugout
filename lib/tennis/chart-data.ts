@@ -1,6 +1,18 @@
-import type {TennisMarket,TennisPricePoint,TennisSession} from './types';
+import type {TennisInput,TennisMarket,TennisPricePoint,TennisSession} from './types';
 import type {StreamQuote} from '../trading/stream-types';
 import {bookOrderIssue} from './book-order.ts';
+
+/** Independent play reports may update the field, never the book's receipt time or chart evidence. */
+export function marketWithWatchedContext(stored:TennisMarket,latest:TennisMarket,now:number):TennisMarket {
+  // Discovery may arrive later with an older play. Provider time wins; receipt only breaks ties.
+  if(latest.slug!==stored.slug||latest.league!==stored.league||latest.eventId!==stored.eventId||latest.yesName!==stored.yesName||latest.noName!==stored.noName||
+    stored.footballIdentity&&(!latest.footballIdentity||latest.footballIdentity.yesTeamId!==stored.footballIdentity.yesTeamId||latest.footballIdentity.noTeamId!==stored.footballIdentity.noTeamId)||
+    !Number.isFinite(latest.observedAt)||latest.observedAt>now||latest.contextUpdatedAt===null||!Number.isFinite(latest.contextUpdatedAt)||latest.contextUpdatedAt>latest.observedAt||
+    stored.contextUpdatedAt!==null&&(latest.contextUpdatedAt<stored.contextUpdatedAt||latest.contextUpdatedAt===stored.contextUpdatedAt&&latest.observedAt<=stored.observedAt))return stored;
+  return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&stored.execution?.active===true&&latest.active,
+    score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,tournament:latest.tournament,
+    observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt};
+}
 const validPrice=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;
 export function quoteMidpoint(bid:number|null,ask:number|null):number|null{return validPrice(bid)&&validPrice(ask)&&bid<=ask?(bid+ask)/2:null;}
 /** Display clocks can differ slightly; execution still uses the strict server clock. */
@@ -58,6 +70,35 @@ export function marketWithStreamQuote(market:TennisMarket,quote:StreamQuote,sess
   const midpoint=quoteMidpoint(quote.bid,quote.ask),points=[...market.history];
   if(midpoint!==null&&(!points.length||quote.receivedAt-points.at(-1)!.time>=1000))points.push({time:quote.receivedAt,price:midpoint,bid:quote.bid??undefined,ask:quote.ask??undefined,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt});
   return marketWithSessionQuotes({...market,bid:quote.bid,ask:quote.ask,price:midpoint,quoteObservedAt:quote.receivedAt,quoteSource:'WEBSOCKET',quoteSourceTime:quote.sourceTime,history:points.slice(-1200)},session);
+}
+
+/** The watched-book endpoint is display-only, with the same age/order evidence as a bot check. */
+export function watchedBookIssue(input:TennisInput,session:TennisSession|null,now:number,market?:TennisMarket):string|null{
+  if(!input?.market||!input.book||!['REST','WEBSOCKET'].includes(input.source))return 'Waiting for a verified live book.';
+  if(market&&(input.market.slug!==market.slug||input.market.league!==market.league||input.market.eventId!==market.eventId||input.market.yesName!==market.yesName||input.market.noName!==market.noName))return 'This quote belongs to a different game.';
+  const ageLimit=Math.min(5000,session?.config.maxBookAgeMs??5000);
+  if(!Number.isFinite(now)||!Number.isFinite(input.receivedAt)||input.receivedAt>now||now-input.receivedAt>ageLimit)return 'The selected game book is stale. Checking again.';
+  if(input.source==='REST'){
+    const receipt=input.restReceipt;
+    if(!receipt||!Number.isFinite(receipt.requestedAt)||!Number.isFinite(receipt.receivedAt)||receipt.requestedAt!==input.receivedAt||receipt.receivedAt<receipt.requestedAt||receipt.receivedAt>now||!['MISS','BYPASS','DYNAMIC'].includes(receipt.cacheStatus)||(receipt.cacheAgeSeconds!==null&&receipt.cacheAgeSeconds!==0))return 'The selected game book has no verified fresh REST receipt.';
+  }
+  const previous=Math.max(market?.quoteSourceTime??-Infinity,session?.bookSourceTimes?.[input.market.slug]??-Infinity,session?.quotes?.[input.market.slug]?.sourceTime??-Infinity);
+  const ordering=bookOrderIssue(input,Number.isFinite(previous)?previous:undefined,now);if(ordering)return ordering;
+  const previousReceipt=Math.max(market&&['REST','WEBSOCKET'].includes(market.quoteSource??'')?market.quoteObservedAt??0:0,session?.quotes?.[input.market.slug]?.time??0);
+  if(input.receivedAt<previousReceipt)return 'A newer game book has already arrived.';
+  const rejected=new Set([...(market?.rejectedQuoteTimes??[]),...(session?.decisions??[]).filter(d=>d.slug===input.market.slug&&d.code==='BOOK_ORDER').map(d=>d.bookTime)]);
+  if(rejected.has(input.receivedAt))return 'This book was already rejected. Waiting for a fresh quote.';
+  const {bids,asks}=input.book;
+  if(!Array.isArray(bids)||!Array.isArray(asks)||!bids.length||!asks.length||[...bids,...asks].some(level=>!validPrice(level.price)||!Number.isFinite(level.quantity)||level.quantity<0)||bids[0].quantity<=0||asks[0].quantity<=0||bids.some((level,i)=>i>0&&level.price>bids[i-1].price)||asks.some((level,i)=>i>0&&level.price<asks[i-1].price)||bids[0].price>asks[0].price)return 'The selected game book has incomplete or invalid quotes.';
+  return null;
+}
+
+/** Refresh prices using actual receipt time; never rejuvenate score or game-status metadata. */
+export function marketWithWatchedBook(market:TennisMarket,input:TennisInput,session:TennisSession|null,now:number):TennisMarket{
+  if(watchedBookIssue(input,session,now,market))return market;
+  const bid=input.book.bids[0].price,ask=input.book.asks[0].price,price=(bid+ask)/2;
+  return marketWithSessionQuotes({...market,bid,ask,price,quoteObservedAt:input.receivedAt,quoteSource:input.source,quoteSourceTime:input.sourceTime,
+    history:mergeTennisHistory(market.history,[{time:input.receivedAt,price,bid,ask,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt}])},session);
 }
 export function chartFills(session:TennisSession|null,slug:string,side:'YES'|'NO',start:number,end:number){
   return (session?.ledger??[]).filter(entry=>entry.slug===slug&&entry.side===side&&entry.source==='AUTOMATIC'&&entry.execution?.apply&&entry.execution.filledQty>0&&entry.time>=start&&entry.time<=end&&['BUY','SELL'].includes(entry.action))

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, primaryKey, check } from 'drizzle-orm/sqlite-core';
 import {sql} from 'drizzle-orm';
 export const cache = sqliteTable('cache',{key:text('key').primaryKey(),value:text('value').notNull(),updated:integer('updated').notNull()});
 export const snapshots = sqliteTable('snapshots',{id:text('id').primaryKey(),slug:text('slug').notNull(),time:integer('time').notNull(),price:real('price'),bid:real('bid'),ask:real('ask'),volume:real('volume'),depth:real('depth'),signals:text('signals')},t=>[index('snapshot_slug_time').on(t.slug,t.time)]);
@@ -23,3 +23,25 @@ export const tennisJournal = sqliteTable('tennis_journal', {
 export const tennisObservations = sqliteTable('tennis_observations', {
   id: text('id').primaryKey(), slug: text('slug').notNull(), time: integer('time').notNull(), value:text('value').notNull(),
 }, t => [index('tennis_observations_slug_time').on(t.slug,t.time)]);
+export const tennisRunnerOwners=sqliteTable('tennis_runner_owners',{
+  ownerId:text('owner_id').primaryKey().notNull(),
+  mode:text('mode').notNull(),epoch:text('epoch').notNull().unique(),migrationId:text('migration_id').notNull().unique(),
+  sourceSessionId:text('source_session_id').notNull(),sourceRevision:integer('source_revision').notNull(),
+  originalSnapshot:text('original_snapshot').notNull(),snapshot:text('snapshot').notNull(),
+  journalThrough:integer('journal_through').notNull(),journalTotal:integer('journal_total').notNull(),
+  journalCursor:integer('journal_cursor').notNull().default(0),journalDone:integer('journal_done').notNull().default(0),
+  observationCursor:text('observation_cursor').notNull().default(''),observationDone:integer('observation_done').notNull().default(0),
+  nextChunk:integer('next_chunk').notNull().default(0),uploadedChunks:integer('uploaded_chunks').notNull().default(0),
+  remoteStarted:integer('remote_started').notNull().default(0),phase:text('phase').notNull(),manifest:text('manifest'),
+  revision:integer('revision').notNull().default(0),error:text('error'),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull(),
+},table=>[
+  check('tennis_runner_owner_mode',sql`${table.mode} IN ('frozen','active')`),
+  check('tennis_runner_owner_phase',sql`${table.phase} IN ('journal','observations','ready','uploading','active')`),
+]);
+export const tennisRunnerChunks=sqliteTable('tennis_runner_chunks',{
+  ownerId:text('owner_id').notNull(),epoch:text('epoch').notNull(),idx:integer('idx').notNull(),
+  data:text('data').notNull(),sha256:text('sha256').notNull(),byteLength:integer('byte_length').notNull(),
+},table=>[primaryKey({columns:[table.ownerId,table.epoch,table.idx]})]);
+export const tennisRunnerRefs=sqliteTable('tennis_runner_refs',{
+  ownerId:text('owner_id').notNull(),epoch:text('epoch').notNull(),observationId:text('observation_id').notNull(),
+},table=>[primaryKey({columns:[table.ownerId,table.epoch,table.observationId]})]);

@@ -1,0 +1,8 @@
+import type {TennisMarket,TennisRuntime,TennisSession} from '@/lib/tennis/types';
+import {decisionView} from '@/lib/tennis/decision-view';
+
+const age=(value:number|null)=>value===null?'waiting for data':value<1000?'under 1s':value<60000?`${Math.floor(value/1000)}s old`:`${Math.floor(value/60000)}m old`;
+export function DecisionCard({session,market,runtime,now}:{session:TennisSession;market?:TennisMarket;runtime:TennisRuntime|null;now:number}){
+  const view=decisionView(session,market,runtime,now);
+  return <div className="tennis-decision-card" role="status"><strong>{view.state}</strong><p>{view.reason}</p><div><span>Quote: {age(view.quoteAge)}</span>{view.football&&<span>Game report: {age(view.gameAge)}</span>}</div></div>;
+}

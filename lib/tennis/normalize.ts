@@ -31,8 +31,9 @@ function footballContext(raw:unknown,sides:Raw[]):FootballContext|null{
   const field=object(drive.fieldPosition),territory=teamName(field.teamId),yard=integer(field.yard,0,50);
   const down=integer(drive.down,1,4);
   return {possessionTeam:teamName(drive.possessionTeamId),down,
+    possessionTeamId:teamName(drive.possessionTeamId)?String(drive.possessionTeamId):null,
     yardsToGo:down!==null?integer(drive.yfd,0,100):null,
-    fieldPosition:territory&&yard!==null?{team:territory,yard}:null,
+    fieldPosition:territory&&yard!==null?{team:territory,yard,teamId:String(field.teamId)}:null,
     timeouts:sides.flatMap(side=>{
       const team=object(side.team),matches=list(state.timeouts).filter(t=>String(t.teamId)===String(team.id));
       const remaining=matches.length===1?integer(matches[0].remaining,0,3):null;
@@ -92,7 +93,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
       :!execution.active||event.active!==true?'Market is not accepting new trades.':undefined;
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
       yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
-      ...(football?{clock:string(state.elapsed)||null,football:footballContext(state.footballState,sides)}:{}),
+      ...(football?{clock:string(state.elapsed)||null,football:footballContext(state.footballState,sides),footballIdentity:{yesTeamId:String(object(yes[0].team).id),noTeamId:String(object(no[0].team).id)}}:{}),
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
       observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});
   }
