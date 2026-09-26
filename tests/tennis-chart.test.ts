@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chartFills,marketWithSessionQuotes,mergeTennisHistory,outcomeHistory,withQuoteGaps} from '../lib/tennis/chart-data.ts';
+import {chartFills,marketWithSessionQuotes,mergeTennisHistory,outcomeHistory,quoteGaps,quoteMidpoint,withQuoteGaps} from '../lib/tennis/chart-data.ts';
 import {createTennisSession} from '../lib/tennis/engine.ts';
 import type {TennisMarket,TennisLedgerEntry} from '../lib/tennis/types.ts';
+test('stream midpoint comes from current quotes, and unavailable or crossed pairs stay empty',()=>{
+  assert.equal(quoteMidpoint(.39,.41),.4);assert.equal(quoteMidpoint(null,.41),null);assert.equal(quoteMidpoint(.5,.4),null);assert.equal(quoteMidpoint(NaN,.4),null);
+});
 
 test('chart history merges sorted observations without losing recorded fields or mutating inputs',()=>{
   const saved=[{time:20,price:.4,bid:.39,ask:.41,score:'1-1'}];
@@ -20,6 +23,7 @@ test('opposite player swaps buy and sell sides; invalid or missing pairs stay un
 });
 test('chart leaves a visible break for missing observations without inventing quotes',()=>{
   assert.equal(withQuoteGaps([]).length,0);
+  assert.deepEqual(quoteGaps([{time:0,price:.5},{time:30001,price:.6}]),[{from:{time:0,price:.5},to:{time:30001,price:.6}}]);
   assert.equal(withQuoteGaps([{time:0,price:.5},{time:30000,price:.6}]).length,2);
   assert.deepEqual(withQuoteGaps([{time:0,price:.5},{time:30001,price:.6}]),[{time:0,price:.5},{time:1,price:null,bid:null,ask:null},{time:30001,price:.6}]);
 });

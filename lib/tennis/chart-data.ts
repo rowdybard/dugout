@@ -1,5 +1,6 @@
 import type {TennisMarket,TennisPricePoint,TennisSession} from './types';
 const validPrice=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;
+export function quoteMidpoint(bid:number|null,ask:number|null):number|null{return validPrice(bid)&&validPrice(ask)&&bid<=ask?(bid+ask)/2:null;}
 export function mergeTennisHistory(...sources:TennisPricePoint[][]):TennisPricePoint[]{
   const rows=new Map<number,TennisPricePoint>();
   for(const points of sources)for(const point of points){
@@ -25,6 +26,9 @@ export function withQuoteGaps(points:TennisPricePoint[],gapMs=30_000){
     result.push(point);
   });
   return result;
+}
+export function quoteGaps(points:TennisPricePoint[],gapMs=30_000){
+  return points.flatMap((point,i)=>i&&point.time-points[i-1].time>gapMs?[{from:points[i-1],to:point}]:[]);
 }
 
 /** A real book can refresh prices, never the catalog's live/score timestamp. */

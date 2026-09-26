@@ -1,8 +1,8 @@
 'use client';
 
 import {useState} from 'react';
-import {Area,CartesianGrid,ComposedChart,Line,ReferenceDot,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
-import {chartFills,outcomeHistory,withQuoteGaps} from '@/lib/tennis/chart-data';
+import {Area,CartesianGrid,ComposedChart,Line,ReferenceArea,ReferenceLine,ReferenceDot,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
+import {chartFills,outcomeHistory,quoteGaps,withQuoteGaps} from '@/lib/tennis/chart-data';
 import type {TennisMarket,TennisPricePoint,TennisSession} from '@/lib/tennis/types';
 
 const cents=(value:number|null|undefined)=>value==null?'—':`${(value*100).toFixed(1)}¢`;
@@ -28,7 +28,7 @@ export function TennisMatchChart({market,session,now}:{market:TennisMarket;sessi
   const signal=session?.signals[`${market.slug}:${side}`];
   const referenceFresh=signal?.lastObservedAt&&now-signal.lastObservedAt<=(session?.config.baselineWindowMs??60000);
   const fills=first?chartFills(session,market.slug,side,first.time,now):[];
-  const gaps=data.length-points.length;
+  const gaps=quoteGaps(points);
   return <div className="tennis-match-chart">
     <div className="tennis-score-row"><span><i className={`tennis-dot ${market.live&&market.active?'is-live':''}`}/>{market.ended?'ENDED':market.live&&market.active?'IN PLAY':market.live?'PLAY INTERRUPTED':'UPCOMING'} · {market.league}</span><b>{market.score||'Score not supplied'}</b><small>{market.contextUpdatedAt?`Score reported ${timestamp(market.contextUpdatedAt)}`:`Match status checked ${timestamp(market.observedAt)}`}</small></div>
     <div className="tennis-outcomes" role="group" aria-label="Choose player to follow">{(['YES','NO'] as const).map(s=><button type="button" key={s} aria-pressed={side===s} onClick={()=>setSide(s)}><span>{s==='YES'?market.yesName:market.noName}</span><small>{side===s?'Following this player':'Switch to this player'}</small></button>)}</div>
@@ -39,14 +39,17 @@ export function TennisMatchChart({market,session,now}:{market:TennisMarket;sessi
       <XAxis dataKey="time" type="number" domain={['dataMin','dataMax']} scale="time" tickFormatter={value=>new Date(value).toLocaleString([],first&&last&&new Date(first.time).toDateString()!==new Date(last.time).toDateString()?{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}:{hour:'numeric',minute:'2-digit'})} tick={{fill:'#99ab93',fontSize:11}} minTickGap={65} tickLine={false} axisLine={false}/>
       <YAxis domain={fullScale?[0,1]:[(low:number)=>Math.max(0,Math.floor((low-.02)*100)/100),(high:number)=>Math.min(1,Math.ceil((high+.02)*100)/100)]} tickFormatter={value=>`${Math.round(value*100)}¢`} tick={{fill:'#99ab93',fontSize:11}} width={45} tickLine={false} axisLine={false}/>
       <Tooltip content={<QuoteTooltip/>}/>
+      {gaps.map(gap=><ReferenceArea key={`gap-${gap.from.time}`} x1={gap.from.time} x2={gap.to.time} fill="#d7bb82" fillOpacity={.07} strokeOpacity={0} label={last&&first&&(gap.to.time-gap.from.time)/(last.time-first.time)>.12?{value:'No recorded quotes',position:'insideTop',fill:'#cbbb97',fontSize:10}:false}/>)}
+      {gaps.flatMap(gap=>(['bid','ask'] as const).flatMap(key=>gap.from[key]!=null&&gap.to[key]!=null?[<ReferenceLine key={`${key}-${gap.from.time}`} segment={[{x:gap.from.time,y:gap.from[key]!},{x:gap.to.time,y:gap.to[key]!}]} stroke={key==='ask'?'#a7d7ff':'#c2f477'} strokeOpacity={.6} strokeDasharray="4 6"/>]:[]))}
       <Area type="linear" dataKey="band" stroke="none" fill="#8cb9c7" fillOpacity={.13} connectNulls={false} isAnimationActive={false} tooltipType="none"/>
       <Line type="linear" dataKey="ask" name="Buy quote" stroke="#a7d7ff" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false}/>
       <Line type="linear" dataKey="bid" name="Sell quote" stroke="#c2f477" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false}/>
       <Line type="linear" dataKey="price" name="Midpoint" stroke="#869983" strokeDasharray="2 5" dot={false} strokeWidth={1} connectNulls={false} isAnimationActive={false}/>
       {fills.map(fill=><ReferenceDot key={fill.id} x={fill.time} y={fill.price} r={5} fill={fill.action==='BUY'?'#c2f477':'#f2ba75'} stroke="#182415" ifOverflow="extendDomain" label={{value:fill.action==='BUY'?'IN':'OUT',position:'top',fill:'#e8f1dd',fontSize:10}}/>)}
     </ComposedChart></ResponsiveContainer></div>}
-    <div className="tennis-chart-legend"><span className="is-ask">● Buy quote</span><span className="is-bid">● Sell quote</span><span>Shaded gap = spread</span><button className="tennis-link" aria-pressed={fullScale} onClick={()=>setFullScale(!fullScale)}>{fullScale?'Full 0–100¢ scale':'Zoomed price scale'} · switch</button></div>
-    <p className="tennis-chart-note">{first&&last?`${points.length} captured quotes · ${timestamp(first.time)} to ${timestamp(last.time)}${gaps?` · ${gaps} gaps with no observations`:''}`:'Only captured observations appear here.'} · Available history is limited to the latest saved observations.</p>
+    <div className="tennis-chart-legend"><span className="is-ask">● Buy quote</span><span className="is-bid">● Sell quote</span><span>Blue band = spread</span><span>Gray dots = midpoint</span>{!!gaps.length&&<span>Amber + dashed bridge = missing quotes</span>}<button className="tennis-link" aria-pressed={fullScale} onClick={()=>setFullScale(!fullScale)}>{fullScale?'Full 0–100¢ scale':'Zoomed price scale'} · switch</button></div>
+    {!!gaps.length&&<p className="tennis-quote-gap-note">{gaps.length===1?'One interval has':'Some intervals have'} no recorded quotes. Dashed lines only connect the observations on either side; prices during those intervals are unknown.</p>}
+    <p className="tennis-chart-note">{first&&last?`${points.length} captured quotes · ${timestamp(first.time)} to ${timestamp(last.time)}`:'Only captured observations appear here.'} · Available history is limited to the latest saved observations.</p>
     <div className="tennis-chart-bot"><span className="tennis-section-label">WHAT THE BOT SEES</span><p>{!market.live?'Waiting for this match to start.':!market.active?market.unavailableReason||'Waiting for play to resume.':signal?.reason||'Waiting for the next book check on this match.'}</p>{referenceFresh&&signal?.baseline!==undefined&&<small>Current bot reference: {cents(signal.baseline)} · saved rules #{session?.rulesRevision??0}</small>}</div>
     {!!fills.length&&<div className="tennis-fill-key">{fills.slice(-4).map(fill=><span key={fill.id}>{fill.action==='BUY'?'Entry':'Exit'} {cents(fill.price)} · {fill.execution!.filledQty} contracts · ${fill.execution!.fees.toFixed(2)} fees · {timestamp(fill.time)}</span>)}</div>}
     <p className="tennis-order-help">The bot buys at seller quotes and exits to buyer quotes. Fees affect the final result. These are market prices, not a prediction or the tennis score.</p>

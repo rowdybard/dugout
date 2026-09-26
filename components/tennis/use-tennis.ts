@@ -3,7 +3,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {TennisAction,TennisCatalog,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
-import {mergeTennisHistory,marketWithSessionQuotes} from '@/lib/tennis/chart-data';
+import {mergeTennisHistory,marketWithSessionQuotes,quoteMidpoint} from '@/lib/tennis/chart-data';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   const response=await fetch(url,{cache:'no-store',...init,signal:AbortSignal.timeout(20000)}).catch(cause=>{
@@ -36,6 +36,7 @@ export function useTennis() {
       return response.session;
     });
     setRuntime(response.runtime);
+    setNow(Date.now());
     setConnectionIssue(null);
     setCatalog(current=>current?{...current,markets:current.markets.map(m=>marketWithSessionQuotes(m,response.session))}:current);
     if(response.error)setError(response.error);
@@ -125,11 +126,14 @@ export function useTennis() {
     const merge=(quote:StreamQuote)=>{
       if(!quote.valid)return;
       setStreamStatus('live');
+      setNow(Date.now());
+      // The stream price may be a last trade. The chart's midpoint is the current pair.
+      const midpoint=quoteMidpoint(quote.bid,quote.ask);
       setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>{
         if(market.slug!==quote.slug||quote.receivedAt<(market.quoteObservedAt??market.observedAt))return market;
         const points=[...market.history];
-        if(quote.price!==null&&(!points.length||quote.receivedAt-points[points.length-1].time>=1000))points.push({time:quote.receivedAt,price:quote.price,bid:quote.bid??undefined,ask:quote.ask??undefined,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt});
-        return {...market,bid:quote.bid,ask:quote.ask,price:quote.price,quoteObservedAt:quote.receivedAt,quoteSource:'WEBSOCKET' as const,history:points.slice(-1200)};
+        if(midpoint!==null&&(!points.length||quote.receivedAt-points[points.length-1].time>=1000))points.push({time:quote.receivedAt,price:midpoint,bid:quote.bid??undefined,ask:quote.ask??undefined,score:market.score,period:market.period,scoreUpdatedAt:market.contextUpdatedAt});
+        return {...market,bid:quote.bid,ask:quote.ask,price:midpoint,quoteObservedAt:quote.receivedAt,quoteSource:'WEBSOCKET' as const,history:points.slice(-1200)};
       })});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
