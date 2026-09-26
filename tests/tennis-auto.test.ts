@@ -13,11 +13,11 @@ test('unusable or inconsistent quotes explain the blocked entry',()=>{
   assert.match(quoteAvailabilityIssue(.8,.7)!,/disagree/);
   assert.equal(quoteAvailabilityIssue(.7,.71),null);
 });
-function input(time:number,bid:number,ask:number,slug='synthetic-auto',league:'ATP'|'WTA'='ATP'):TennisInput{
+function input(time:number,bid:number,ask:number,slug='synthetic-auto',league:'ATP'|'WTA'|'NFL'|'CFB'='ATP'):TennisInput{
   return {receivedAt:time,source:'REST',book:{bids:[{price:bid,quantity:100}],asks:[{price:ask,quantity:100}],state:'MARKET_STATE_OPEN',time:new Date(time).toISOString()},market:{slug,eventId:slug,eventSlug:slug,title:'Synthetic Auto A vs B',league,yesName:'Synthetic A',noName:'Synthetic B',startTime:new Date(NOW-600000).toISOString(),live:true,ended:false,active:true,score:null,period:null,tournament:null,bid,ask,price:(bid+ask)/2,observedAt:time,contextUpdatedAt:null,history:[],execution:{slug,league,active:true,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.01,feeCoefficient:.0695}}};
 }
-function queued(strategy:'recovery'|'momentum',slugs=['synthetic-auto'],league:'ATP'|'WTA'='ATP'){
-  let session=applyTennisAction(createTennisSession({...defaultTennisConfig(),strategy:'auto',entryBudget:10},NOW-60000),{action:'start',commandId:'synthetic-start'},[],NOW-60000);
+function queued(strategy:'recovery'|'momentum',slugs=['synthetic-auto'],league:'ATP'|'WTA'|'NFL'|'CFB'='ATP'){
+  let session=applyTennisAction(createTennisSession({...defaultTennisConfig(),strategy:'auto',entryBudget:10,leagues:[league]},NOW-60000),{action:'start',commandId:'synthetic-start'},[],NOW-60000);
   for(let i=0;i<12;i++){const t=NOW-60000+i*4000;session=stepTennisSession(session,slugs.map(slug=>input(t,strategy==='recovery'?.71:.59,strategy==='recovery'?.72:.60,slug,league)),t);}
   const path=strategy==='recovery'?[[.61,.62],[.63,.64],[.64,.65]]:[[.61,.62],[.64,.65],[.64,.65]];
   path.forEach(([bid,ask],i)=>{const t=NOW-12000+i*5000;session=stepTennisSession(session,slugs.map(slug=>input(t,bid,ask,slug,league)),t);});
@@ -32,7 +32,7 @@ test('automatic thresholds use prior quote noise, round to ticks, and do not cha
   assert.equal(noisy.momentumPoints,6);assert.equal(noisy.recoveryPoints,2);
   assert.equal(adaptiveTennisRules([{time:1,price:.1},{time:2,price:.9}],.49,.5,.01,3),null);
 });
-for(const strategy of ['recovery','momentum'] as const)for(const league of ['ATP','WTA'] as const)test(`Auto chooses ${strategy} on ${league}, waits for a later book, and preserves cash/provenance`,()=>{
+for(const strategy of ['recovery','momentum'] as const)for(const league of ['ATP','WTA','NFL','CFB'] as const)test(`Auto chooses ${strategy} on ${league}, waits for a later book, and preserves cash/provenance`,()=>{
   const session=queued(strategy,['synthetic-auto'],league),original=structuredClone(session);
   assert.equal(session.pending?.signalConfig?.strategy,strategy);assert.equal(session.pending?.decisionMode,'auto');
   assert.equal(session.pending?.action,'BUY');assert.equal(session.cash,100);assert.equal(session.ledger.length,0);assert.equal(session.positions.length,0);
@@ -97,4 +97,16 @@ test('Auto replaces old strategy reasons and confirmations when usable buyers di
   }
   assert.match(result.signals['synthetic-auto:NO'].reason,/No usable buyers/);
   assert.ok(result.decisions.some(d=>d.code==='BOOK'&&d.side==='NO'&&d.time===NOW));
+});
+
+test('switching to football cancels tennis entry intents but keeps held tennis exits working',()=>{
+  const queuedSession=queued('momentum');
+  const action={action:'update-rules' as const,sessionId:queuedSession.id,expectedRulesRevision:0,commandId:'football-switch',rules:{leagues:['NFL','CFB'] as ('NFL'|'CFB')[]}};
+  const canceled=applyTennisAction(queuedSession,action,[],NOW);assert.equal(canceled.pending,null);assert.equal(canceled.cash,100);
+  let held=stepTennisSession(queuedSession,[input(NOW,.64,.65)],NOW);
+  const cash=held.cash,ledger=structuredClone(held.ledger);
+  held=applyTennisAction(held,action,[],NOW+1);
+  assert.equal(held.cash,cash);assert.deepEqual(held.ledger,ledger);assert.equal(held.positions[0].status,'open');
+  held=stepTennisSession(held,[input(NOW+2000,.75,.76)],NOW+2000);assert.equal(held.pending?.action,'SELL');
+  held=stepTennisSession(held,[input(NOW+4000,.75,.76)],NOW+4000);assert.equal(held.positions[0].status,'closed');assert.equal(held.ledger.at(-1)?.action,'SELL');
 });

@@ -12,7 +12,7 @@ const timestamp = z.string().refine((value) => Number.isFinite(Date.parse(value)
 export const slugSchema = z.string().min(1).max(250).regex(/^[a-zA-Z0-9._:-]+$/);
 export const selectionSchema = z.object({
   slug: slugSchema,
-  league: z.enum(["MLB", "NFL", "ATP", "WTA"]),
+  league: z.enum(["MLB", "NFL", "ATP", "WTA", "CFB"]),
   detail: z.enum(["book", "lite"]),
 }).strict();
 export const selectionsSchema = z.array(selectionSchema).max(500).refine(

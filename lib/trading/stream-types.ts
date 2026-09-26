@@ -1,7 +1,7 @@
 /** Internal Dugout contracts, not Polymarket response types. All times are UTC ms. */
 export type StreamSelection = {
   slug: string;
-  league: "MLB" | "NFL" | "ATP" | "WTA";
+  league: "MLB" | "NFL" | "ATP" | "WTA" | "CFB";
   detail: "book" | "lite";
 };
 
@@ -44,7 +44,7 @@ export type StreamHealth = {
 export type StreamLevel = { price: string; quantity: string };
 export type StreamQuote = {
   slug: string;
-  league: "MLB" | "NFL" | "ATP" | "WTA";
+  league: "MLB" | "NFL" | "ATP" | "WTA" | "CFB";
   /** Display numbers only. Execution must use the accompanying decimal strings. */
   bid: number | null;
   ask: number | null;
@@ -150,19 +150,19 @@ export function selectTennisStreamMarkets(
   requestedSlug: string | null = null,
 ): TennisStreamSelectionResult {
   const isTennis = (market: TennisStreamCandidate) =>
-    (market.league === 'ATP' || market.league === 'WTA') && /^[a-zA-Z0-9._:-]{1,250}$/.test(market.slug);
+    (['ATP','WTA','NFL','CFB'].includes(market.league)) && /^[a-zA-Z0-9._:-]{1,250}$/.test(market.slug);
   if (requestedSlug !== null && !/^[a-zA-Z0-9._:-]{1,250}$/.test(requestedSlug)) {
-    return { ok: false, status: 400, error: 'Choose a valid tennis market.' };
+    return { ok: false, status: 400, error: 'Choose a valid game market.' };
   }
   const protectedTennis = protectedMarkets.filter(isTennis);
   const activeTennis = catalog.filter(market => isTennis(market) && market.active && !market.ended);
   const knownMarkets = new Map([...activeTennis, ...protectedTennis].map(market => [market.slug, market]));
   if (requestedSlug !== null && !knownMarkets.has(requestedSlug)) {
-    return { ok: false, status: 404, error: 'This tennis market is not in the verified catalog or your paper session.' };
+    return { ok: false, status: 404, error: 'This game market is not in the verified catalog or your paper session.' };
   }
   const selections = new Map<string, StreamSelection>();
   const add = (market: TennisStreamCandidate) => selections.set(market.slug, {
-    slug: market.slug, league: market.league as 'ATP' | 'WTA', detail: 'book',
+    slug: market.slug, league: market.league as 'ATP' | 'WTA' | 'NFL' | 'CFB', detail: 'book',
   });
   // Position exits remain subscribed even if discovery no longer returns their markets.
   for (const market of protectedTennis) add(market);

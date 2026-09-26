@@ -26,12 +26,12 @@ async function displayHistory(slug:string):Promise<TennisPricePoint[]>{
 }
 
 /** Four public pages maximum, cached across all clients; no per-market network fanout. */
-export async function getTennisCatalog({includeHistory=true}:{includeHistory?:boolean}={}):Promise<TennisCatalog>{
-  const catalog=await cached<TennisCatalog>('tennis:catalog:v1',CATALOG_TTL,async()=>{
+export async function getTennisCatalog({includeHistory=true,leagues=['ATP','WTA']}:{includeHistory?:boolean;leagues?:TennisLeague[]}={}):Promise<TennisCatalog>{
+  const catalog=await cached<TennisCatalog>(`paper-sports:catalog:v2:${[...leagues].sort().join(',')}`,CATALOG_TTL,async()=>{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis discovery deadline','TimeoutError')),CATALOG_DEADLINE);
     const markets:TennisMarket[]=[],errors:string[]=[];
     try{
-      await Promise.all((['ATP','WTA'] as const).map(async league=>{
+      await Promise.all(leagues.map(async league=>{
         try{
           for(let page=0;page<MAX_PAGES;page++){
             controller.signal.throwIfAborted();
@@ -59,12 +59,12 @@ export async function getTennisCatalog({includeHistory=true}:{includeHistory?:bo
   return {...catalog,markets};
 }
 
-export async function getTennisMarket(slug:string):Promise<TennisMarket>{
-  if(typeof slug!=='string'||slug.length>200||!/^[-a-zA-Z0-9]+$/.test(slug))throw new Error('Choose a verified tennis match.');
-  const current=(await getTennisCatalog({includeHistory:false})).markets.find(m=>m.slug===slug);
+export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP','WTA']):Promise<TennisMarket>{
+  if(typeof slug!=='string'||slug.length>200||!/^[-a-zA-Z0-9]+$/.test(slug))throw new Error('Choose a verified game market.');
+  const current=(await getTennisCatalog({includeHistory:false,leagues})).markets.find(m=>m.slug===slug);
   if(current)return current;
   const previous=await readCached<TennisMarket>(`tennis:verified:${slug}`);
-  if(!previous||previous.value.slug!==slug||!['ATP','WTA'].includes(previous.value.league))throw new Error('This match is not in the verified ATP/WTA singles catalog.');
+  if(!previous||previous.value.slug!==slug||!['ATP','WTA','NFL','CFB'].includes(previous.value.league))throw new Error('This match is not in the verified tennis/football winner catalog.');
   return {...previous.value,active:false,history:await displayHistory(slug),unavailableReason:'Match is no longer in the active catalog. New entries are blocked; held positions can still be checked.'};
 }
 
@@ -96,7 +96,7 @@ async function confirmedSettlement(market:TennisMarket,signal?:AbortSignal):Prom
 export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,options:{allowRest?:boolean}={}):Promise<TennisInput>{
   signal?.throwIfAborted();
   // Stored mapping is trusted only because the server obtained it from the strict catalog.
-  if(!['ATP','WTA'].includes(market.league)||!market.slug)throw new Error('Unsupported tennis market.');
+  if(!['ATP','WTA','NFL','CFB'].includes(market.league)||!market.slug)throw new Error('Unsupported paper market.');
   const allowRest=options.allowRest!==false;
   const verified=allowRest?await refreshedRules(market,signal):market;
   const streamed=await currentStreamBook(market.slug);
@@ -104,7 +104,7 @@ export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,op
   if(!observed&&!allowRest){
     const stored=await readCached<ObservedBook>(`tennis:book:${market.slug}`),now=Date.now();
     if(stored&&stored.value.source==='REST'&&freshTennisBook(stored.value.receivedAt,now))observed=stored.value;
-    if(!observed)throw new Error('Waiting for a fresh tennis book; REST scan rotates through matches.');
+    if(!observed)throw new Error('Waiting for a fresh game book; REST checks rotate through live games.');
   }
   const settlement=allowRest?await confirmedSettlement(verified,signal):null;
   if(!observed){

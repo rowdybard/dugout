@@ -59,7 +59,7 @@ export function executePaperCommand(
   }
   if (!command.commandId || typeof command.commandId !== 'string' || command.commandId.length > 128) return reject('A valid command ID is required.');
   if (command.marketSlug !== market.slug || !market.slug) return reject('Command market does not match the loaded market.');
-  if (!['MLB', 'NFL', 'ATP', 'WTA'].includes(market.league)) return reject('Only MLB, NFL, ATP, and WTA paper markets are supported.');
+  if (!['MLB', 'NFL', 'ATP', 'WTA', 'CFB'].includes(market.league)) return reject('Only MLB, NFL, CFB, ATP, and WTA paper markets are supported.');
   if (command.side !== 'YES' && command.side !== 'NO') return reject('Choose a valid market outcome.');
   if (command.action !== 'BUY' && command.action !== 'SELL') return reject('Choose buy or sell.');
   if (command.source !== 'MANUAL' && command.source !== 'AUTOMATIC') return reject('Order source is invalid.');

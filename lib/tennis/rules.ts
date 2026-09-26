@@ -4,7 +4,7 @@ import type {TennisConfig} from './types';
 const positive=z.number().finite().positive();
 export const tennisRulesSchema=z.object({
   strategy:z.enum(['auto','recovery','momentum']),
-  entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA'])).min(1).max(2),
+  entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
   baselineWindowMs:positive.max(3_600_000),minimumHistoryMs:positive.max(3_600_000),
   minSamples:z.number().int().min(3).max(200),
   declinePoints:positive.max(40),recoveryPoints:positive.max(40),
@@ -40,7 +40,7 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   if(config.entryBudget>Math.min(100,startingCash*.2)+1e-7||Math.round(config.entryBudget*1e6)/1e6!==config.entryBudget)return 'Each bot entry is capped at 20% of the starting balance and $100.';
   if(config.minimumHistoryMs>config.baselineWindowMs)return 'Warm-up time must fit inside the history window.';
   if(config.recoveryPoints>=config.declinePoints)return 'Recovery must be smaller than the drop you wait for.';
-  if(new Set(config.leagues).size!==config.leagues.length)return 'Select each tour once.';
+  if(new Set(config.leagues).size!==config.leagues.length)return 'Select each league once.';
   return null;
 }
 

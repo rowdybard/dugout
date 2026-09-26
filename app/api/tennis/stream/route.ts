@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     if (session.pending?.market) protectedMarkets.push(session.pending.market);
     let markets: TennisMarket[];
     try {
-      markets = (await getTennisCatalog({includeHistory:false})).markets;
+      markets = (await getTennisCatalog({includeHistory:false,leagues:session.config.leagues})).markets;
     } catch {
       // Existing positions must remain observable when discovery is unavailable.
       markets = [];
@@ -28,6 +28,6 @@ export async function GET(req: Request) {
     // heartbeat checks and the validated D1 book cache. No private account channel.
     return await marketStream(req, selected.selections);
   } catch {
-    return Response.json({ error: 'The tennis live connection is unavailable. Paper checks will retry available market data.' }, { status: 503 });
+    return Response.json({ error: 'The live game connection is unavailable. Paper checks will retry available market data.' }, { status: 503 });
   }
 }

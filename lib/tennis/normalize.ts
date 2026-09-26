@@ -15,6 +15,8 @@ export function tennisNumber(value:unknown):number|null{
 const timestamp=(value:unknown):number|null=>{const parsed=Date.parse(string(value));return Number.isFinite(parsed)?parsed:null;};
 const price=(value:unknown):number|null=>{const n=tennisNumber(object(value).value);return n!==null&&n>=0&&n<=1?n:null;};
 const decimal=(value:number)=>Number.isSafeInteger(Math.round(value*1e6))&&Math.abs(value*1e6-Math.round(value*1e6))<0.00001;
+const isFootball=(league:TennisLeague)=>league==='NFL'||league==='CFB';
+const winnerType=(league:TennisLeague)=>isFootball(league)?'football_team_full_game_winner':'tennis_match_winner';
 
 /** Match the paper engine's quote budget; transport heartbeats never extend it. */
 export function freshTennisBook(receivedAt:number,now:number,maxAgeMs=5000):boolean{
@@ -23,33 +25,39 @@ export function freshTennisBook(receivedAt:number,now:number,maxAgeMs=5000):bool
 
 /** No fee/tick/minimum defaults: missing rules must block simulated execution. */
 export function normalizeTennisExecution(raw:unknown,league:TennisLeague):ExecutionMarket|null{
+  if(!['ATP','WTA','NFL','CFB'].includes(league))return null;
   const market=object(raw),slug=string(market.slug);
   const minimum=tennisNumber(market.minimumTradeQty),tick=tennisNumber(market.orderPriceMinTickSize),fee=tennisNumber(market.feeCoefficient);
-  if(!slug||market.sportsMarketType!=='tennis_match_winner'||minimum===null||minimum<=0||tick===null||tick<=0||tick>=1||fee===null||fee<0||fee>1||![minimum,tick,fee].every(decimal))return null;
+  if(!slug||market.sportsMarketType!==winnerType(league)||minimum===null||minimum<=0||tick===null||tick<=0||tick>=1||fee===null||fee<0||fee>1||![minimum,tick,fee].every(decimal))return null;
   return {slug,league,active:market.active===true&&market.closed!==true&&market.archived!==true&&market.hidden!==true
     &&market.status==='MARKET_STATUS_OPEN',minimumTradeQty:minimum,quantityIncrement:minimum,priceIncrement:tick,feeCoefficient:fee};
 }
 
 /** YES/NO mapping uses explicit long flags, never title order or listing prices. */
 export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:number):TennisMarket[]{
+  if(!['ATP','WTA','NFL','CFB'].includes(league))return [];
   const event=object(raw),eventId=typeof event.id==='number'?String(event.id):string(event.id),eventSlug=string(event.slug);
   if(!eventId||!eventSlug||!Number.isFinite(observedAt)||event.hidden===true||event.archived===true)return [];
-  const state=object(event.eventState),tennis=object(state.tennisState);
+  const state=object(event.eventState),tennis=object(state.tennisState),football=isFootball(league);
+  if(football&&string(state.type)&&state.type!=='football')return [];
   const tournament=string(tennis.tournamentName)||null;
   if(/doubles|mixed/i.test(tournament??'')||/doubles|mixed/i.test(string(event.title)))return [];
   const result:TennisMarket[]=[];
   for(const market of list(event.markets)){
-    if(market.sportsMarketType!=='tennis_match_winner'||market.hidden===true||market.archived===true)continue;
+    if(market.sportsMarketType!==winnerType(league)||market.hidden===true||market.archived===true)continue;
     const slug=string(market.slug),sides=list(market.marketSides);
     const yes=sides.filter(s=>s.long===true),no=sides.filter(s=>s.long===false);
     if(!slug||yes.length!==1||no.length!==1||sides.length!==2)continue;
-    const yesName=string(yes[0].description),noName=string(no[0].description);
+    const yesName=string(football?object(yes[0].team).name:yes[0].description),noName=string(football?object(no[0].team).name:no[0].description);
     if(!yesName||!noName||yesName===noName||/[\/]/.test(yesName+noName))continue;
     // The league endpoint supplies the league; embedded participant leagues may not contradict it.
     if(sides.some(side=>{const sideLeague=string(object(side.team).league);return sideLeague&&sideLeague.toUpperCase()!==league;}))continue;
+    // Football team identity is explicit; mascot text or title order is not a mapping.
+    if(football&&sides.some(side=>!object(side.team).id||String(side.teamId)!==String(object(side.team).id)||string(object(side.team).league).toUpperCase()!==league))continue;
+    if(football&&String(object(yes[0].team).id)===String(object(no[0].team).id))continue;
     const startTime=string(event.startTime)||string(market.gameStartTime),start=timestamp(startTime);
-    const live=event.live===true,ended=event.ended===true||state.ended===true||event.closed===true;
     const period=string(event.period)||string(state.period)||null;
+    const live=event.live===true&&state.live!==false,ended=event.ended===true||state.ended===true||event.closed===true||(football&&/^(FT|FINAL|ENDED)$/i.test(period??''));
     const interrupted=/sus|delay|postpon|cancel|retir|walkover|abandon|interrupt/i.test(period??'');
     const execution=normalizeTennisExecution(market,league);
     const validPhase=!ended&&!interrupted&&(live||(event.live===false&&start!==null&&start>observedAt));
@@ -62,6 +70,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
       :!execution.active||event.active!==true?'Market is not accepting new trades.':undefined;
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
       yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
+      ...(football?{clock:string(state.elapsed)||null}:{}),
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
       observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});
   }

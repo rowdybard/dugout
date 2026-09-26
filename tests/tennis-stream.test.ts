@@ -11,11 +11,11 @@ const candidate = (slug: string, league = 'ATP', live = false, startTime = new D
   slug, league, live, startTime, active: true, ended: false,
 });
 
-test('tennis subscription catalog rejects unknown, malformed, non-tennis and ended requests', () => {
-  const markets = [candidate('known-atp'), candidate('known-nfl', 'NFL'), { ...candidate('ended-wta', 'WTA'), ended: true }];
-  for (const slug of ['unknown', 'known-nfl', 'ended-wta']) {
+test('paper subscription catalog rejects unknown, malformed, unsupported-sport and ended requests', () => {
+  const markets = [candidate('known-atp'), candidate('known-mlb', 'MLB'), { ...candidate('ended-wta', 'WTA'), ended: true }];
+  for (const slug of ['unknown', 'known-mlb', 'ended-wta']) {
     assert.deepEqual(selectTennisStreamMarkets(markets, [], slug), {
-      ok: false, status: 404, error: 'This tennis market is not in the verified catalog or your paper session.',
+      ok: false, status: 404, error: 'This game market is not in the verified catalog or your paper session.',
     });
   }
   for (const slug of ['', '../private', 'x'.repeat(251)]) {
