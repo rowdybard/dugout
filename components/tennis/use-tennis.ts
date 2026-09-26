@@ -129,6 +129,9 @@ export function useTennis() {
         try{
           const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null}>(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,{signal:controller.signal});
           if(controller.signal.aborted)return;
+          // Render new receipt timestamps against this response's clock, rather
+          // than the previous one-second UI tick (which can look like future data).
+          setNow(Date.now());
           setContextAssessments(current=>({...current,[slug]:data.assessment}));
           setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===slug?marketWithWatchedContext(m,data.market,Date.now()):m)}:current);
           if(slug===watchedSlug)setWatchedContextError(data.error??(data.assessment.status==='conflicting'?data.assessment.reason:null));
