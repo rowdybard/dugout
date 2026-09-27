@@ -16,7 +16,8 @@ function input(time:number,bid:number,side:TradeSide='YES',football=false):Tenni
       execution:{slug:SLUG,league:football?'CFB':'ATP',active:true,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.005,feeCoefficient:.0695}}};
 }
 function queued(side:TradeSide='YES',football=false){
-  const config={...defaultLiveTennisConfig(),entryBudget:10,focusSlug:SLUG,leagues:[football?'CFB' as const:'ATP' as const]};
+  // Scalping mechanics are tested with the evidence gate off; tests/decision-engine.test.ts covers the gate.
+  const config={...defaultLiveTennisConfig(),evidenceGate:undefined,entryBudget:10,focusSlug:SLUG,leagues:[football?'CFB' as const:'ATP' as const]};
   let session=createTennisSession(config,NOW-60001);session.id='synthetic-local-account';
   session=applyTennisAction(session,{action:'start',commandId:'synthetic-start'},[],NOW-60001);
   for(const [offset,bid] of trajectory){const quote=input(NOW+offset*1000,bid,side,football);session=stepTennisSession(session,[quote],quote.receivedAt);if(session.pending)return {session,quote};}
@@ -144,4 +145,16 @@ test('malformed provider depth produces a recorded rejection instead of aborting
   const next=stepTennisSession(session,[invalid],invalid.receivedAt);
   assert.equal(next.cash,100);assert.equal(next.pending,null);assert.equal(next.ledger.length,0);
   assert.ok(next.decisions.at(-1)?.analysis?.reasons.some(r=>r.code==='BOOK_INVALID'));
+});
+
+test('evidence gate: the live bot asks the decision engine and never enters an untested or losing regime',()=>{
+  const config={...defaultLiveTennisConfig(),entryBudget:10,focusSlug:SLUG,leagues:['ATP' as const]};
+  assert.equal(config.evidenceGate,'evidence-v1');
+  let session=createTennisSession(config,NOW-60001);session.id='synthetic-gated-account';
+  session=applyTennisAction(session,{action:'start',commandId:'synthetic-start'},[],NOW-60001);
+  for(const [offset,bid] of trajectory){const quote=input(NOW+offset*1000,bid);session=stepTennisSession(session,[quote],quote.receivedAt);}
+  // The same move that stages an entry with the gate off is refused with the engine's reason.
+  assert.equal(session.pending,null);assert.equal(session.ledger.length,0);assert.equal(session.cash,100);
+  const refusal=session.decisions.find(d=>d.code==='EVIDENCE_NO_EVIDENCE');
+  assert.ok(refusal,session.lastReason);assert.match(refusal.reason,/^Decision engine: No study covers ATP live taker-scalp/);
 });

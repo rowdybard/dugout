@@ -3,6 +3,7 @@
 ## Current operating guides
 
 - **[Strategy lab handoff](STRATEGY-LAB-HANDOFF.md): read this first.** It covers the real-money goal, audit findings, decisions, verified data sources and the live checklist.
+- **[Decision engine](DECISION-ENGINE.md):** the research turned into GO / PAPER ONLY / NO verdicts that the bot and the bet checker consult, plus the CFB favourite forward test.
 - [Project README](../README.md)
 - [Bot and developer manual](BOT-MANUAL.md)
 - [Architecture](ARCHITECTURE.md)

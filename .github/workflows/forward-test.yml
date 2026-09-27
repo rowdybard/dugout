@@ -1,0 +1,53 @@
+# CFB pregame favourite forward test (docs/DECISION-ENGINE.md). Paper picks only: no keys, no orders.
+# Every 15 minutes the script records the latest pregame quote (5 min – 3 h before kickoff) and settles
+# finished games. The ledger lives on the `forward-test-data` branch so main history stays clean.
+name: Forward test
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forward-test
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check out ledger branch
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git fetch --depth=1 origin forward-test-data; then
+            git worktree add -B forward-test-data ../ledger FETCH_HEAD
+          else
+            git worktree add --orphan -b forward-test-data ../ledger
+          fi
+
+      - name: Observe and settle
+        env:
+          FORWARD_LEDGER: ../ledger/research/forward/cfb-favourite-pregame.json
+        run: node --experimental-strip-types scripts/forward-test.ts run
+
+      - name: Commit ledger when it changed
+        working-directory: ../ledger
+        run: |
+          if [ -n "$(git status --porcelain -- research/forward/cfb-favourite-pregame.json)" ]; then
+            git add research/forward
+            git commit -m "Forward test: update CFB favourite ledger"
+            git push origin forward-test-data
+          else
+            echo "No new observations or settlements."
+          fi

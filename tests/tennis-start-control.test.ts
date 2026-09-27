@@ -12,7 +12,7 @@ test('Start records policy upgrade before native resume, without resetting money
   const before=session(),snapshot=structuredClone(before),actions:TennisAction[]=[];
   assert.equal(await startPaperBot(before,runtime('service'),async action=>{actions.push(action);return true;},()=>`test-${actions.length}`),true);
   assert.deepEqual(actions,[{action:'update-rules',sessionId:before.id,expectedRulesRevision:0,commandId:'test-0',
-    rules:{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',baselineWindowMs:60000,minimumHistoryMs:30000,minSamples:10,maxSpreadPoints:2,maxBookAgeMs:5000}},
+    rules:{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',evidenceGate:'evidence-v1',baselineWindowMs:60000,minimumHistoryMs:30000,minSamples:10,maxSpreadPoints:2,maxBookAgeMs:5000}},
     {action:'resume',sessionId:before.id,commandId:'test-1'}]);
   assert.deepEqual(before,snapshot);
 });
@@ -25,14 +25,14 @@ test('failed or conflicting policy save prevents resume',async()=>{
 
 test('explicit upgrade satisfies history floors and tightens data gates without touching stake or loss limits',()=>{
   const config={...session().config,baselineWindowMs:15000,minimumHistoryMs:5000,minSamples:3,maxSpreadPoints:6,maxBookAgeMs:10000};
-  assert.deepEqual(localMoveUpgradeRules(config),{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',baselineWindowMs:30000,minimumHistoryMs:30000,minSamples:10,maxSpreadPoints:2,maxBookAgeMs:5000});
+  assert.deepEqual(localMoveUpgradeRules(config),{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',evidenceGate:'evidence-v1',baselineWindowMs:30000,minimumHistoryMs:30000,minSamples:10,maxSpreadPoints:2,maxBookAgeMs:5000});
   const strict={...config,baselineWindowMs:90000,minimumHistoryMs:60000,minSamples:30,maxSpreadPoints:1,maxBookAgeMs:2000};
-  assert.deepEqual(localMoveUpgradeRules(strict),{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',baselineWindowMs:90000,minimumHistoryMs:60000,minSamples:30,maxSpreadPoints:1,maxBookAgeMs:2000});
+  assert.deepEqual(localMoveUpgradeRules(strict),{decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',evidenceGate:'evidence-v1',baselineWindowMs:90000,minimumHistoryMs:60000,minSamples:30,maxSpreadPoints:1,maxBookAgeMs:2000});
   assert.equal('entryBudget' in localMoveUpgradeRules(config),false);assert.equal('stopReturn' in localMoveUpgradeRules(config),false);
 });
 
 test('already current policy resumes without resetting history through a redundant rules update',async()=>{
-  const saved=session();saved.config={...saved.config,decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1'};
+  const saved=session();saved.config={...saved.config,decisionEngine:'local-move-v1',strategy:'auto',decisionPolicy:'football-context-v1',evidenceGate:'evidence-v1'};
   const actions:TennisAction[]=[];
   await startPaperBot(saved,runtime('browser'),async action=>{actions.push(action);return true;},()=> 'test-command');
   assert.deepEqual(actions,[{action:'resume',sessionId:saved.id,runForMs:10_800_000,commandId:'test-command'}]);

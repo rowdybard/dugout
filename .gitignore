@@ -52,3 +52,7 @@ __pycache__/
 /research/data/
 /research/*.log
 .venv/
+
+# Forward-test ledgers live on the forward-test-data branch
+research/forward/*.json
+research/forward/summary.md

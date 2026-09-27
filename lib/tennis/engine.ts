@@ -17,6 +17,7 @@ import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
+import {decide} from '../decision/engine.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -106,6 +107,11 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   const quote = quotes(input, side);
   if (quote.bid === undefined || quote.ask === undefined || quote.bid > quote.ask) return { code: 'BOOK', reason: 'A valid two-sided book is required.' };
   if (quote.ask - quote.bid > session.config.maxSpreadPoints / 100 + EPSILON) return { code: 'SPREAD', reason: 'The gap between buying and selling prices is too wide.' };
+  if (session.config.evidenceGate === 'evidence-v1') {
+    // Every strategy in this engine buys live and sells within minutes: a taker scalp.
+    const verdict = decide({ sport: input.market.league, phase: 'live', style: 'taker-scalp', mode: session.mode, ask: quote.ask, bid: quote.bid, feeCoefficient: input.market.execution!.feeCoefficient });
+    if (!verdict.permitted) return { code: `EVIDENCE_${verdict.code}`, reason: `Decision engine: ${verdict.reason}` };
+  }
   if (!Number.isFinite(budget) || budget <= 0 || budget > Math.min(session.config.startingCash * 0.25, 100) + EPSILON || budget > session.cash || exact(budget) !== budget) return { code: 'BUDGET', reason: 'The paper amount exceeds available cash or the per-entry cap.' };
   if (holding(session)) return { code: 'POSITION', reason: 'One open position at a time. Close it before another entry.' };
   const buy = simulate(session, input, { ...freshCommand(session, input, side, 'BUY', now, quote.ask), budget }, now);

@@ -50,6 +50,8 @@ export type TennisConfig={
   decisionPolicy?:'price-v1'|'football-context-v1';
   /** Absent retains historical strategy/replay semantics. New live accounts use local-move-v1. */
   decisionEngine?:'local-move-v1';
+  /** Evidence gate: every entry must be permitted by lib/decision. Absent retains historical replay semantics. */
+  evidenceGate?:'evidence-v1';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;

@@ -5,6 +5,7 @@ const positive=z.number().finite().positive();
 export const tennisRulesSchema=z.object({
   decisionPolicy:z.enum(['price-v1','football-context-v1']).optional(),
   decisionEngine:z.literal('local-move-v1').optional(),
+  evidenceGate:z.literal('evidence-v1').optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
@@ -31,7 +32,7 @@ export function defaultTennisConfig(startingCash=100):TennisConfig {
 
 /** Current product defaults. The older factory is retained for historical resets/replay. */
 export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
-  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1'};
+  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1'};
 }
 
 /** Add newly introduced fields without rewriting saved balances or historical rules. */
