@@ -7,7 +7,8 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 ## Start here
 
 - **[Strategy lab handoff](docs/STRATEGY-LAB-HANDOFF.md): read this first.** As of September 27, 2026, the project is rebuilding its strategy from historical data toward a real-money, context-driven decision engine. It holds the audit findings, decisions, data sources and the current checklist.
-- [Decision engine](docs/DECISION-ENGINE.md): what the research permits, how the bot consults it, the bet checker, and the CFB favourite forward test.
+- [Decision engine](docs/DECISION-ENGINE.md): what the research permits, how the bot consults it, the plugs for new research, the bet checker, and the CFB favourite forward test.
+- [Data platform](docs/DATA-PLATFORM.md): where the research data lives (R2 plus DuckDB), how to search it, and how research streams into the engine.
 - [Full bot and developer manual](docs/BOT-MANUAL.md): operation, actual rules, editing, troubleshooting, configuration and limitations.
 - [Chad's getting-started guide](chad.md): plain-English customer instructions and access status.
 - [Maintainer handoff](docs/MAINTAINER-HANDOFF.md): where things stand and what remains unverified.

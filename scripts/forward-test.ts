@@ -12,6 +12,7 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {FORWARD_TEST,observe,settle,summarize,type ForwardRow,type Stat} from '../lib/decision/forward.ts';
 import {listOpenGames,loadBook,loadMarket} from '../lib/decision/polymarket.ts';
+import {engineFromEnv} from '../lib/decision/host.ts';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const ledgerPath=resolve(root,process.env.FORWARD_LEDGER??'research/forward/cfb-favourite-pregame.json');
@@ -24,12 +25,14 @@ const now=Date.now();
 let observed=0,settled=0;const errors:string[]=[];
 
 if(command==='run'){
+  const {engine,status}=await engineFromEnv();
+  if(status)console.log(`Evidence pack ${status.version} (${status.trust}) from ${status.source}${status.error?`; load failed, using ${engine.pack.version}: ${status.error}`:''}`);
   const games=await listOpenGames('cfb',now+FORWARD_TEST.maxLeadMs);
   for(const game of games){
     if(game.startTime===null||game.startTime-now<FORWARD_TEST.minLeadMs)continue;
     try{
       const book=await loadBook(game.slug);
-      const row=book&&observe(bySlug.get(game.slug),game,book,Date.now());
+      const row=book&&observe(bySlug.get(game.slug),game,book,Date.now(),engine);
       if(row){bySlug.set(row.slug,row);observed++;}
     }catch(error){errors.push(`${game.slug}: ${(error as Error).message}`);}
   }

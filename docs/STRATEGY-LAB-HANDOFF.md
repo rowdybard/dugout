@@ -4,8 +4,11 @@ Started September 27, 2026. **Read this first** if you are picking the project u
 
 Last updated: 2026-09-27. **Resumed as a decision engine** after the owner's pause: the research now drives an evidence-gated engine ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)). The Cloudflare paper runner stays paused and undeployed. The only scheduled job is the paper-only forward test (`.github/workflows/forward-test.yml`), which runs once merged to `main`.
 
+**Research on hold (owner, Sep 27):** no data fetching or studies from cloud sessions until the owner is at the PC to store the data. Engine and data-platform code only.
+
 **Decision engine (Sep 27):**
-- `lib/decision/` holds the evidence registry, `decide()`, `quotePolicy()`, the forward test and read-only Polymarket US parsing.
+- `lib/decision/` is the full engine: strategies propose, evidence gates, then sizing (¼ Kelly on the lower bound), risk kill switches and a ranked plan. Research plugs in through evidence packs, features, signals, models and strategies ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)).
+- Data platform: Cloudflare R2 plus DuckDB for the 5 GB lake, searchable with `research/datastore/lake.py`. Evidence packs stream into engine hosts with SHA-256 pinning ([`docs/DATA-PLATFORM.md`](DATA-PLATFORM.md)). Built and tested on synthetic data; the first upload runs from the owner's PC.
 - The live bot consults it at the entry gate (`evidenceGate: 'evidence-v1'`). Today it refuses every live scalp, as the research says it should.
 - `scripts/check-bet.ts` gives a GO / PAPER ONLY / NO verdict for any market.
 - `scripts/forward-test.ts` tracks the CFB pregame favourite lead on games from Sep 28 onward, under the 300-trade kill rule.
@@ -240,7 +243,7 @@ Last updated: 2026-09-27. **Resumed as a decision engine** after the owner's pau
   - `lib/strategy/` interface and plugins: `local-move-v1`, `never-trade`, `random-entry`, `fair-value-divergence`, `reaction-*`, `near-settlement`, `pregame-value`
   - `scripts/backtest.ts`: same decision code as the runner, taker fills with 1–2 observations of delay, `feeUnits` fees, walk-forward, held-out final block
   - `backtests/*.md`
-- [ ] **Step 8: Dynamic engine.** Started Sep 27: the evidence gate and regime matching are in `lib/decision/`, and the bot consults them. Still open: a pregame hold strategy in the runner, the maker pilot and the dashboard card.
+- [ ] **Step 8: Dynamic engine.** Engine built Sep 27 (`lib/decision/`: plan, gate, sizing, risk, packs, features, models, strategies; the bot consults the gate). Still open: the runner hosting `engine.plan` (pregame hold and settlement exits, pinned pack version in session state), the live book recorder into R2, the maker pilot and the dashboard card.
   - `lib/strategy/regime.ts` and `selector.ts`, with ¼-Kelly stakes and caps
   - replace the single `local-move-v1` call in `stepTennisSession`
   - add MLB and NFL live feeds to the runner input adapter

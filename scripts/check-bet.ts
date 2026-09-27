@@ -6,9 +6,11 @@
  *
  * Options: --side yes|no (default: both), --style taker-hold|taker-scalp|maker (default taker-hold),
  * --mode paper|pilot|real (default real), --model 0.81 (your own probability, context only), --json.
+ * With --slug it also prints the engine's full plan: what every strategy proposed and why it was taken or refused.
  * Read-only: it never places an order.
  */
-import {decide,quotePolicy,type DecisionRequest,type Mode,type Verdict} from '../lib/decision/engine.ts';
+import {type DecisionRequest,type Mode,type Plan,type Verdict} from '../lib/decision/engine.ts';
+import {engineFromEnv} from '../lib/decision/host.ts';
 import {formatEstimate,type Phase,type Sport,type Style} from '../lib/decision/evidence.ts';
 import {loadBook,loadMarket,phaseAt} from '../lib/decision/polymarket.ts';
 
@@ -23,6 +25,9 @@ const pick=<T extends string>(name:string,allowed:readonly T[],fallback?:T):T=>{
 };
 const price=(name:string)=>{const raw=flag(name);if(raw===undefined)return undefined;const value=Number(raw);if(!Number.isFinite(value))fail(`--${name} must be a number`);return value;};
 
+const {engine,status}=await engineFromEnv();
+if(status?.error)console.error(`Evidence pack load failed (${status.error}); using ${engine.pack.version}.`);
+const decide=engine.decide,quotePolicy=engine.quotePolicy;
 const style=pick<Style>('style',['taker-hold','taker-scalp','maker'],'taker-hold');
 const mode=pick<Mode>('mode',['paper','pilot','real'],'real');
 const model=price('model')??null;
@@ -31,6 +36,7 @@ const cents=(x:number)=>`${(x*100).toFixed(1)}¢`;
 type Row={label:string;request:DecisionRequest;verdict:Verdict};
 const rows:Row[]=[];
 let heading='';
+let plan:Plan|null=null;
 
 const slug=flag('slug');
 if(slug){
@@ -40,6 +46,9 @@ if(slug){
   const phase=phaseAt(market!,Date.now());
   if(!phase||market!.closed)fail(`${slug} is closed or has no start time.`);
   heading=`${market!.title}\n${market!.sport} · ${phase} · ${book!.open?'book open':'book NOT open'} · fee coefficient ${market!.feeCoefficient??'unknown (0.0695 assumed)'}`;
+  const now=Date.now();
+  plan=engine.plan({now,market:{slug:market!.slug,sport:market!.sport!,title:market!.title,startTime:market!.startTime,feeCoefficient:market!.feeCoefficient,
+    open:book!.open,observedAt:now,yes:{...book!.yes,name:market!.yes.name},no:{...book!.no,name:market!.no.name}}},{mode});
   const sides=flag('side')?[pick('side',['yes','no'] as const)]:(['yes','no'] as const);
   for(const side of sides){
     const quote=book![side];
@@ -56,7 +65,7 @@ if(slug){
   rows.push({label:'Side',request,verdict:decide(request)});
 }
 
-if(has('json')){console.log(JSON.stringify(rows.map(({label,verdict})=>({label,verdict})),null,2));process.exit(0);}
+if(has('json')){console.log(JSON.stringify({verdicts:rows.map(({label,verdict})=>({label,verdict})),plan},null,2));process.exit(0);}
 
 console.log(heading);
 console.log(`Style: ${style} · mode: ${mode}\n`);
@@ -77,4 +86,8 @@ for(const {label,request,verdict} of rows){
 if(slug&&style!=='maker'&&rows[0]?.request.sport){
   const policy=quotePolicy(rows[0].request.sport,rows[0].request.phase,mode);
   console.log(`Resting orders here: ${policy.quote?'yes':'no'} (${policy.status}). ${policy.reason}`);
+}
+if(plan){
+  console.log(`\nEngine plan (${plan.engine}, pack ${plan.pack}): ${plan.summary}`);
+  for(const trade of plan.considered)console.log(`  ${trade.blocked?'✗':'✓'} ${trade.proposal.strategy} ${trade.proposal.side.toUpperCase()} ${trade.proposal.style} at ${cents(trade.proposal.price)}${trade.stake?` · $${trade.stake.toFixed(2)}`:''} — ${trade.blocked??'GO'}: ${trade.reason}`);
 }

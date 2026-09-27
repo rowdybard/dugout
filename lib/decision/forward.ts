@@ -1,9 +1,11 @@
-import {decide,DEFAULT_FEE_COEFFICIENT} from './engine.ts';
+import {defaultEngine,DEFAULT_FEE_COEFFICIENT,type Engine} from './engine.ts';
+import type {DecisionContext,SideKey} from './context.ts';
 import type {GameMarket} from './polymarket.ts';
+import {hashSide} from './strategies.ts';
 
 /**
  * Forward test of the CFB pregame favourite lead (research/studies/pregame.py rule), on games that
- * start after the lead was found. The entry is whatever the decision engine permits in paper mode;
+ * start after the lead was found. The entry is the engine's paper plan from the favourite-hold strategy;
  * nothing here is tuned. Ledger: research/forward/cfb-favourite-pregame.json.
  */
 
@@ -25,30 +27,35 @@ export type ForwardRow={
   yes:SideSnapshot;no:SideSnapshot;
   /** The side the engine permitted, if any, at its ask. */
   pick:{side:'yes'|'no';ask:number;evidence:string|null}|null;
+  /** Engine and evidence-pack versions that made the pick. */
+  engine?:{version:string;pack:string};
   yesSettle:number|null;settledAt:string|null;
 };
 
 const iso=(ms:number)=>new Date(ms).toISOString();
 
 /** Record or refresh the pregame observation for one game. Returns null when the rule says not to observe now. */
-export function observe(previous:ForwardRow|undefined,game:GameMarket,book:{yes:{ask:number|null;bid:number|null};no:{ask:number|null;bid:number|null};open:boolean},now:number):ForwardRow|null {
+export function observe(previous:ForwardRow|undefined,game:GameMarket,book:{yes:{ask:number|null;bid:number|null};no:{ask:number|null;bid:number|null};open:boolean},now:number,engine:Engine=defaultEngine):ForwardRow|null {
   if(game.sport!=='CFB'||game.startTime===null||game.closed||!book.open)return null;
   if(game.startTime<FORWARD_TEST.firstGameStart)return null;
   const lead=game.startTime-now;
   if(lead<FORWARD_TEST.minLeadMs||lead>FORWARD_TEST.maxLeadMs)return null;
   if(previous&&Date.parse(previous.observedAt)>=now)return null;
   const feeCoefficient=game.feeCoefficient??DEFAULT_FEE_COEFFICIENT;
-  const snapshot=(side:'yes'|'no')=>{
+  const ctx:DecisionContext={now,market:{slug:game.slug,sport:'CFB',title:game.title,startTime:game.startTime,feeCoefficient,open:true,observedAt:now,
+    yes:{...book.yes,name:game.yes.name},no:{...book.no,name:game.no.name}}};
+  const plan=engine.plan(ctx,{mode:'paper',strategies:['favourite-hold']});
+  const snapshot=(side:SideKey):SideSnapshot=>{
     const quote=book[side],name=game[side].name;
-    if(quote.ask===null)return {side:{name,ask:null,bid:quote.bid,code:'NO_ASK'} as SideSnapshot,permitted:false,evidence:null};
-    const verdict=decide({sport:'CFB',phase:'pregame',style:'taker-hold',mode:'paper',ask:quote.ask,bid:quote.bid,feeCoefficient});
-    return {side:{name,ask:quote.ask,bid:quote.bid,code:verdict.code} as SideSnapshot,permitted:verdict.permitted,evidence:verdict.deciding?.id??null};
+    if(quote.ask===null)return {name,ask:null,bid:quote.bid,code:'NO_ASK'};
+    const verdict=engine.gate(ctx,{strategy:'favourite-hold',strategyVersion:'1',side,style:'taker-hold',price:quote.ask,exit:{kind:'hold-to-settlement'},rationale:'Forward-test snapshot.'},'paper');
+    return {name,ask:quote.ask,bid:quote.bid,code:verdict.code};
   };
-  const yes=snapshot('yes'),no=snapshot('no');
-  const chosen=yes.permitted?'yes':no.permitted?'no':null,picked=chosen==='yes'?yes:no;
+  const action=plan.actions.find(a=>a.proposal.style==='taker-hold');
   return {slug:game.slug,title:game.title,startTime:iso(game.startTime),observedAt:iso(now),minutesBeforeStart:Math.round(lead/6000)/10,feeCoefficient,
-    yes:yes.side,no:no.side,
-    pick:chosen?{side:chosen,ask:picked.side.ask!,evidence:picked.evidence}:null,
+    yes:snapshot('yes'),no:snapshot('no'),
+    pick:action?{side:action.proposal.side,ask:action.proposal.price,evidence:action.verdict.deciding?.id??null}:null,
+    engine:{version:engine.version,pack:engine.pack.version},
     yesSettle:null,settledAt:null};
 }
 
@@ -62,11 +69,7 @@ const fee=(price:number,coefficient:number)=>coefficient*price*(1-price);
 export function holdReturn(ask:number,won:number,coefficient:number){const cost=ask+fee(ask,coefficient);return (won-cost)/cost;}
 
 /** Deterministic side for the random-entry control, fixed by the slug. */
-export function controlSide(slug:string):'yes'|'no' {
-  let hash=2166136261;
-  for(let i=0;i<slug.length;i++){hash^=slug.charCodeAt(i);hash=Math.imul(hash,16777619);}
-  return (hash>>>0)%2===0?'yes':'no';
-}
+export const controlSide=(slug:string):SideKey=>hashSide(slug);
 
 export type Stat={n:number;mean:number|null;lo:number|null;hi:number|null;winRate:number|null};
 function stat(values:number[],wins:number[]):Stat {

@@ -18,11 +18,20 @@ export type Role='favourite'|'underdog';
 export type EvidenceStatus='dropped'|'lead'|'proven';
 
 export type Estimate={mean:number;lo:number|null;hi:number|null;unit:'return'|'cents'};
+/**
+ * Research plug: a condition on any named feature (lib/decision/features.ts), for example
+ * {feature:'secondsRemaining',op:'lte',value:600} or {feature:'signal.qbOut',op:'eq',value:true}.
+ */
+export type Condition={feature:string;op:'eq'|'ne'|'in'|'gt'|'gte'|'lt'|'lte'|'between';value:number|string|boolean|(number|string)[]};
 export type Evidence={
   id:string;title:string;status:EvidenceStatus;
   sports:Sport[];phases:Phase[];styles:Style[];
   /** Price band of the side bought, (min,max], matching pregame.py bands. */
   price?:{min:number;max:number};role?:Role;
+  /** All must hold. An unknowable condition never permits a trade, and cannot rule out a losing row. */
+  conditions?:Condition[];
+  /** Limit the row to proposals from these strategy ids (lib/decision/strategies.ts). */
+  strategies?:string[];
   estimate:Estimate;
   /** Conservative bound for maker markouts (filled only when price trades through). */
   conservative?:Estimate;
@@ -99,6 +108,22 @@ export const EVIDENCE:readonly Evidence[]=[
     estimate:{mean:0.48,lo:0.25,hi:0.68,unit:'cents'},conservative:{mean:-0.38,lo:null,hi:null,unit:'cents'},sample:'383 dense CFB games',
     source:'research/studies/results/maker-markout.json',plain:'The most benign window measured. Queue position and reward share decide the real result.'},
 ];
+
+/** true / false, or undefined when the feature value is unknown. */
+export function testCondition(condition:Condition,value:number|string|boolean|undefined):boolean|undefined {
+  if(value===undefined)return undefined;
+  const target=condition.value;
+  switch(condition.op){
+    case 'eq':return value===target;
+    case 'ne':return value!==target;
+    case 'in':return Array.isArray(target)&&(target as (number|string)[]).includes(value as number|string);
+    case 'between':return Array.isArray(target)&&target.length===2&&typeof value==='number'&&value>=Number(target[0])&&value<=Number(target[1]);
+    default:{
+      if(typeof value!=='number'||typeof target!=='number')return false;
+      return condition.op==='gt'?value>target:condition.op==='gte'?value>=target:condition.op==='lt'?value<target:value<=target;
+    }
+  }
+}
 
 export function formatEstimate(estimate:Estimate):string {
   const value=(x:number)=>estimate.unit==='return'?`${x>0?'+':''}${(x*100).toFixed(1)}%`:`${x>0?'+':''}${x.toFixed(2)}¢`;

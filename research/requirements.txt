@@ -6,3 +6,6 @@ pyarrow>=17
 numpy>=2.0
 scikit-learn>=1.5
 lightgbm>=4.5
+# Data lake (research/datastore/lake.py)
+duckdb>=1.1
+boto3>=1.34
