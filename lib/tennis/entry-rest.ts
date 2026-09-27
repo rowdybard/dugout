@@ -6,7 +6,7 @@ export function focusedEntryRest(session:TennisSession|null,now:number):number|n
     session.positions.some(position=>position.status==='open')||!Number.isFinite(now)||
     session.lastTickAt>now||now-session.lastTickAt>20000)return null;
   const slug=session.config.focusSlug;
-  const tracks=session.config.strategy==='auto'
+  const tracks=session.config.strategy==='auto'&&session.config.decisionEngine!=='local-move-v1'
     ?(['YES','NO'] as const).flatMap(side=>(['recovery','momentum'] as const).map(strategy=>session.autoSignals?.[`${slug}:${side}:${strategy}`]))
     :(['YES','NO'] as const).map(side=>session.signals[`${slug}:${side}`]);
   const deadlines=tracks.map(track=>track?.cooldownUntil);

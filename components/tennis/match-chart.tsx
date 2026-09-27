@@ -1,5 +1,7 @@
 'use client';
 import {FootballField} from './football-field';
+import {DecisionMetrics} from './decision-metrics';
+import {decisionEvidence} from '@/lib/tennis/decision-evidence';
 
 import {useState} from 'react';
 import {Area,CartesianGrid,ComposedChart,Line,ReferenceArea,ReferenceLine,ReferenceDot,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
@@ -34,6 +36,7 @@ export function TennisMatchChart({market,session,now,contextAssessment,contextCh
   const isBook=market.quoteSource==='REST'||market.quoteSource==='WEBSOCKET';
   const fresh=isBook&&quoteFreshForDisplay(quoteTime,now,session?.config.maxBookAgeMs??5000);
   const signal=session?.signals[`${market.slug}:${side}`];
+  const evidence=session?decisionEvidence(session,market.slug,side):null;
   const held=session?.positions.find(position=>position.slug===market.slug&&position.side===side&&position.status==='open');
   const pending=session?.pending?.slug===market.slug&&session.pending.side===side?session.pending:null;
   const activeReason=held?session?.lastReason:pending?`${pending.reason} Waiting for a later fresh quote before a fill.`:null;
@@ -69,7 +72,8 @@ export function TennisMatchChart({market,session,now,contextAssessment,contextCh
     </section>}
     <p className="tennis-chart-note">{first&&last?`${points.length} captured quotes · ${timestamp(first.time)} to ${timestamp(last.time)}`:'Only captured observations appear here.'} · Available history is limited to the latest saved observations.</p>
     <div className="tennis-chart-bot"><span className="tennis-section-label">WHAT THE BOT SEES</span><p>{activeReason||(!market.live?'Waiting for this match to start.':!market.active?market.unavailableReason||'Waiting for play to resume.':bookIssue||signal?.reason||'Waiting for the next book check on this match.')}</p>{!activeReason&&!bookIssue&&referenceFresh&&signal?.baseline!==undefined&&<small>Current bot reference: {cents(signal.baseline)} · saved rules #{session?.rulesRevision??0}</small>}</div>
-    {session?.config.strategy==='auto'&&!held&&!pending&&<div className="tennis-auto-options" aria-label="Automatic decision engine">{(['recovery','momentum'] as const).map(strategy=>{const track=session.autoSignals?.[`${market.slug}:${side}:${strategy}`];return <div key={strategy}><b>{strategy==='recovery'?'Watching for a recovery':'Watching for a sustained rise'}</b><p>{bookIssue??track?.reason??'Building independent quote history.'}</p>{!bookIssue&&track?.autoRules&&<small>{strategy==='recovery'?`Current trigger: ${track.autoRules.declinePoints}¢ drop, ${track.autoRules.recoveryPoints}¢ recovery`:`Current trigger: ${track.autoRules.momentumPoints}¢ rise`} · adapts to quote noise</small>}</div>;})}</div>}
+    {session?.config.decisionEngine!=='local-move-v1'&&session?.config.strategy==='auto'&&!held&&!pending&&<div className="tennis-auto-options" aria-label="Automatic decision engine">{(['recovery','momentum'] as const).map(strategy=>{const track=session.autoSignals?.[`${market.slug}:${side}:${strategy}`];return <div key={strategy}><b>{strategy==='recovery'?'Watching for a recovery':'Watching for a sustained rise'}</b><p>{bookIssue??track?.reason??'Building independent quote history.'}</p>{!bookIssue&&track?.autoRules&&<small>{strategy==='recovery'?`Current trigger: ${track.autoRules.declinePoints}¢ drop, ${track.autoRules.recoveryPoints}¢ recovery`:`Current trigger: ${track.autoRules.momentumPoints}¢ rise`} · adapts to quote noise</small>}</div>;})}</div>}
+    {evidence&&<DecisionMetrics {...evidence} name={side==='YES'?market.yesName:market.noName} now={now}/>}
     {!!fills.length&&<div className="tennis-fill-key">{fills.slice(-4).map(fill=><span key={fill.id}>{fill.action==='BUY'?'Entry':'Exit'} {cents(fill.price)} · {fill.execution!.filledQty} contracts · ${fill.execution!.fees.toFixed(2)} fees · {timestamp(fill.time)}</span>)}</div>}
     <p className="tennis-order-help">The bot buys at seller quotes and exits to buyer quotes. Fees affect the final result. These are market prices, not a prediction or the game score.</p>
     </div></details>

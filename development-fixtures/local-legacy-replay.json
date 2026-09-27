@@ -1,0 +1,1403 @@
+{
+  "format": 1,
+  "baselineCommit": "e160ec8830e887bf65349bc35e4d75a1a6d9a74d",
+  "capture": "Exact JSON.stringify(state) SHA-256 from committed baseline code through a git-show TypeScript loader. Synthetic quotes only. Random reset ID alone normalized after reduction.",
+  "sourceFiles": [
+    {
+      "path": "lib/tennis/auto.ts",
+      "sha256": "ca943d9a4dd4eef9d432a404f03569664fbb14c2667f0a89ad7616fe5f75161c"
+    },
+    {
+      "path": "lib/tennis/book-order.ts",
+      "sha256": "f8def2e9d152ed7a087c00f16aac2b799d79a72acc50e478984b8854c54a5208"
+    },
+    {
+      "path": "lib/tennis/engine.ts",
+      "sha256": "54ad5f6623e19aaa3b36fbb8359900170c0bbe6a002bdf607895d648f56eb0c3"
+    },
+    {
+      "path": "lib/tennis/football-context.ts",
+      "sha256": "6d116f7a7bb50db3c8ecadab333701e7c01a432acf17741b60c664e1e9fd8890"
+    },
+    {
+      "path": "lib/tennis/market-context.ts",
+      "sha256": "e18cf70c86609dde6d392ea3c9cf25e943376290f1a61ba168e580a725db9d0c"
+    },
+    {
+      "path": "lib/tennis/quote-status.ts",
+      "sha256": "8ac777f7be0f60cfc1b8f3a5213061aded272985435ffba1ab1e2c5d62ec1d13"
+    },
+    {
+      "path": "lib/tennis/rules.ts",
+      "sha256": "9acdfd4a79f45354a257efe827b8a1a249724bde9fdf167bc070a252b5e82d34"
+    },
+    {
+      "path": "lib/tennis/shadow-exits.ts",
+      "sha256": "8dac98de34b72d4de1f5219aa976e0a46c71bbc550fa92691fe4e46bb0afd5fe"
+    },
+    {
+      "path": "lib/trading/execution.ts",
+      "sha256": "717704c7f3fe6bea98fc7470f769c509a67f66306ccda65f3f4a2f965759446f"
+    },
+    {
+      "path": "lib/trading/money.ts",
+      "sha256": "a42ca1a87fe52e6bd82037b7d071e80d78232c0e366cfb4447c5bfb2de6934ef"
+    }
+  ],
+  "initial": {
+    "id": "legacy-golden-session",
+    "revision": 0,
+    "rulesRevision": 0,
+    "coverage": {},
+    "mode": "paper",
+    "status": "idle",
+    "config": {
+      "version": "tennis-recovery-v1",
+      "decisionPolicy": "football-context-v1",
+      "strategy": "auto",
+      "startingCash": 100,
+      "focusSlug": null,
+      "entryBudget": 10,
+      "leagues": [
+        "ATP"
+      ],
+      "baselineWindowMs": 60000,
+      "minimumHistoryMs": 30000,
+      "minSamples": 10,
+      "declinePoints": 3,
+      "recoveryPoints": 1,
+      "recoveryConfirmations": 2,
+      "momentumPoints": 3,
+      "momentumConfirmations": 2,
+      "maxSpreadPoints": 2,
+      "targetReturn": 0.03,
+      "stopReturn": 0.08,
+      "maxHoldMs": 120000,
+      "cooldownMs": 60000,
+      "executionDelayMs": 1000,
+      "maxBookAgeMs": 5000,
+      "maxSessionLossFraction": 0.2
+    },
+    "cash": 100,
+    "startedAt": 940000,
+    "lastTickAt": 940000,
+    "lastReason": "Ready to test price recovery with fake money. No outcome forecast is used.",
+    "positions": [],
+    "pending": null,
+    "histories": {},
+    "signals": {},
+    "consumedBooks": {},
+    "decisions": [],
+    "ledger": [],
+    "equity": [
+      {
+        "time": 940000,
+        "price": 100
+      }
+    ],
+    "rejectionCounts": {},
+    "evaluated": 0,
+    "commandIds": []
+  },
+  "initialHash": "61b0e61ffa9bebcb09eb059a4eb677647f59bdfa091939364389d73dd6e1227b",
+  "frames": [
+    {
+      "label": "legacy Auto starts",
+      "now": 940000,
+      "inputs": [],
+      "command": {
+        "action": "start",
+        "commandId": "legacy-start"
+      },
+      "expectedHash": "bb1f11d5ba17a890023657e0d3ce9a435026a8ca63c780e6ed056ca21fb08899",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Paper bot started. Gathering fresh live-match quotes."
+      }
+    },
+    {
+      "label": "baseline quote 1",
+      "now": 940000,
+      "inputs": [
+        {
+          "receivedAt": 940000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:15:40.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 940000,
+            "contextUpdatedAt": 940000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "e7440984c6337e40b39f49addd0c6cdfc5b1d95f260e6e336b24dbc709ab1140",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (1/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 2",
+      "now": 944000,
+      "inputs": [
+        {
+          "receivedAt": 944000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:15:44.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 944000,
+            "contextUpdatedAt": 944000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "b7fc3c6532f4e87f47e825494d9b1a3394543d05b44bde3a2d9ecc95c9f336b4",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (2/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 3",
+      "now": 948000,
+      "inputs": [
+        {
+          "receivedAt": 948000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:15:48.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 948000,
+            "contextUpdatedAt": 948000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "e691c643237e6eb0c59619148ff13814021dc405b43fede6f1552132f5d80734",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (3/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 4",
+      "now": 952000,
+      "inputs": [
+        {
+          "receivedAt": 952000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:15:52.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 952000,
+            "contextUpdatedAt": 952000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "f9555c7927849f5214d478042542ef0da73f1eb586d60f726ada39aea31b89b2",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (4/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 5",
+      "now": 956000,
+      "inputs": [
+        {
+          "receivedAt": 956000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:15:56.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 956000,
+            "contextUpdatedAt": 956000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "c1ddd932a6ef12bd65feb3271c3c8a56d7aed1a1377cee657db0dbba13eb032b",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (5/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 6",
+      "now": 960000,
+      "inputs": [
+        {
+          "receivedAt": 960000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:00.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 960000,
+            "contextUpdatedAt": 960000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "b02c19cc94c71916ad8833fe1916c7ee817d9fde3fa85edf8673375e6f3e5790",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (6/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 7",
+      "now": 964000,
+      "inputs": [
+        {
+          "receivedAt": 964000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:04.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 964000,
+            "contextUpdatedAt": 964000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "157079055705bc0bae77f667eed9dc02f0336f217bebe4872ad5be3fe4ca3b12",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (7/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 8",
+      "now": 968000,
+      "inputs": [
+        {
+          "receivedAt": 968000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:08.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 968000,
+            "contextUpdatedAt": 968000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "58d0cf888fd11c25445ee193d4e2271d54d56edf71df65531bfde7120de26131",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (8/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 9",
+      "now": 972000,
+      "inputs": [
+        {
+          "receivedAt": 972000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:12.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 972000,
+            "contextUpdatedAt": 972000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "bd4356d9267321694e3044e8eeba80d9ae475a4b6434a64c3d2b5529933a37d5",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: Collecting fresh quotes (9/10; need 30s of history)."
+      }
+    },
+    {
+      "label": "baseline quote 10",
+      "now": 976000,
+      "inputs": [
+        {
+          "receivedAt": 976000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:16.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 976000,
+            "contextUpdatedAt": 976000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "22e31d05b618278187641e4fe6561e2bf2a0d829b49dff0011d8f769a13928dc",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Auto is watching for a recovery or a sustained rise. Neither setup is ready yet."
+      }
+    },
+    {
+      "label": "baseline quote 11",
+      "now": 980000,
+      "inputs": [
+        {
+          "receivedAt": 980000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:20.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 980000,
+            "contextUpdatedAt": 980000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "7cd384629752f1dcfa83c6ddd1a44669ba95c308cace9b5783e407fb109eb2b5",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Auto is watching for a recovery or a sustained rise. Neither setup is ready yet."
+      }
+    },
+    {
+      "label": "baseline quote 12",
+      "now": 984000,
+      "inputs": [
+        {
+          "receivedAt": 984000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.71,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:24.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.71,
+            "ask": 0.72,
+            "price": 0.715,
+            "observedAt": 984000,
+            "contextUpdatedAt": 984000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "c385677e4689c8f0df30e4ff7af2a0243efd273032c87181346754f1cb14872d",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Auto is watching for a recovery or a sustained rise. Neither setup is ready yet."
+      }
+    },
+    {
+      "label": "legacy drop",
+      "now": 988000,
+      "inputs": [
+        {
+          "receivedAt": 988000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.61,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.62,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:28.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.61,
+            "ask": 0.62,
+            "price": 0.615,
+            "observedAt": 988000,
+            "contextUpdatedAt": 988000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "803a7ac592b35befb9bb77268b58277211a981f2adf72fa3f831d48a73b72600",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Rise: A rise appeared. Waiting for another independent buyer confirmation."
+      }
+    },
+    {
+      "label": "legacy first recovery",
+      "now": 993000,
+      "inputs": [
+        {
+          "receivedAt": 993000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.63,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.64,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:33.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.63,
+            "ask": 0.64,
+            "price": 0.635,
+            "observedAt": 993000,
+            "contextUpdatedAt": 993000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "a771eb34ad3523785adf0b52742fd985e49bde636f4d4fe2833db4c5e15e84a4",
+      "expected": {
+        "cash": 100,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Recovery: Waiting for another independent recovery quote."
+      }
+    },
+    {
+      "label": "legacy Auto entry pending",
+      "now": 998000,
+      "inputs": [
+        {
+          "receivedAt": 998000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.64,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.65,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:38.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.64,
+            "ask": 0.65,
+            "price": 0.645,
+            "observedAt": 998000,
+            "contextUpdatedAt": 998000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "e9179a87031a99982f1a942e871b1829f4117b0ddbc344abb6e488a4a197bfa0",
+      "expected": {
+        "cash": 100,
+        "pending": "BUY",
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Auto selected a recovery. Temporary price drop followed by confirmed buyer recovery; experimental price-only signal. Checking a later fresh book before entry."
+      }
+    },
+    {
+      "label": "legacy later-book entry fills",
+      "now": 1000000,
+      "inputs": [
+        {
+          "receivedAt": 1000000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.64,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.65,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:40.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.64,
+            "ask": 0.65,
+            "price": 0.645,
+            "observedAt": 1000000,
+            "contextUpdatedAt": 1000000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "0d8a40291a4cc9633df4c40e0ebc0f0882b52dabb73df3b5b1cb4efd6b0ad255",
+      "expected": {
+        "cash": 90.01,
+        "pending": null,
+        "fills": 1,
+        "open": 1,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Auto selected a recovery. Temporary price drop followed by confirmed buyer recovery; experimental price-only signal. Paper IOC filled within the selected price limit."
+      }
+    },
+    {
+      "label": "legacy held rules change preserves frozen exit",
+      "now": 1001000,
+      "inputs": [],
+      "command": {
+        "action": "update-rules",
+        "sessionId": "legacy-golden-session",
+        "expectedRulesRevision": 0,
+        "commandId": "legacy-held-rules",
+        "rules": {
+          "targetReturn": 0.5,
+          "stopReturn": 0.3,
+          "maxHoldMs": 500000
+        }
+      },
+      "expectedHash": "c3bd7ba8a22882a57fd601f33d2805766eb98494ac30af274eb091bab8e421ee",
+      "expected": {
+        "cash": 90.01,
+        "pending": null,
+        "fills": 1,
+        "open": 1,
+        "closed": 0,
+        "rulesRevision": 1,
+        "lastReason": "Bot rules saved (revision 1). Gathering a new baseline; balance and history preserved."
+      }
+    },
+    {
+      "label": "legacy original target requests exit",
+      "now": 1005000,
+      "inputs": [
+        {
+          "receivedAt": 1005000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.73,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:45.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.72,
+            "ask": 0.73,
+            "price": 0.725,
+            "observedAt": 1005000,
+            "contextUpdatedAt": 1005000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "1b476e85c78485bd852a844a5fbd7a188b65b19fc0b9a7f773531e64592dbaad",
+      "expected": {
+        "cash": 90.01,
+        "pending": "SELL",
+        "fills": 1,
+        "open": 1,
+        "closed": 0,
+        "rulesRevision": 1,
+        "lastReason": "Net profit target reached after estimated exit fees. Waiting at least 1s and for a later fresh book before simulating a fill."
+      }
+    },
+    {
+      "label": "legacy later-book exit fills",
+      "now": 1007000,
+      "inputs": [
+        {
+          "receivedAt": 1007000,
+          "source": "REST",
+          "book": {
+            "bids": [
+              {
+                "price": 0.72,
+                "quantity": 100
+              }
+            ],
+            "asks": [
+              {
+                "price": 0.73,
+                "quantity": 100
+              }
+            ],
+            "state": "MARKET_STATE_OPEN",
+            "time": "1970-01-01T00:16:47.000Z"
+          },
+          "market": {
+            "slug": "synthetic-legacy-compat",
+            "eventId": "synthetic-legacy-compat",
+            "eventSlug": "synthetic-legacy-compat",
+            "title": "Synthetic Legacy A vs B",
+            "league": "ATP",
+            "yesName": "Synthetic A",
+            "noName": "Synthetic B",
+            "startTime": "1970-01-01T00:06:40.000Z",
+            "live": true,
+            "ended": false,
+            "active": true,
+            "score": "0-0",
+            "period": "1",
+            "tournament": null,
+            "bid": 0.72,
+            "ask": 0.73,
+            "price": 0.725,
+            "observedAt": 1007000,
+            "contextUpdatedAt": 1007000,
+            "history": [],
+            "execution": {
+              "slug": "synthetic-legacy-compat",
+              "league": "ATP",
+              "active": true,
+              "minimumTradeQty": 1,
+              "quantityIncrement": 1,
+              "priceIncrement": 0.01,
+              "feeCoefficient": 0.0695
+            }
+          }
+        }
+      ],
+      "expectedHash": "ec633add24ea4023624ead0077d05ae926d514c0d01f54a86a724cd9495635e8",
+      "expected": {
+        "cash": 100.6,
+        "pending": null,
+        "fills": 2,
+        "open": 0,
+        "closed": 1,
+        "rulesRevision": 1,
+        "lastReason": "Net profit target reached after estimated exit fees. Paper IOC filled within the selected price limit."
+      }
+    },
+    {
+      "label": "legacy reset retains legacy Auto semantics",
+      "now": 1009000,
+      "inputs": [],
+      "command": {
+        "action": "reset",
+        "bankroll": 75,
+        "commandId": "legacy-reset"
+      },
+      "normalizeSessionId": "legacy-golden-reset",
+      "expectedHash": "e3b4d5f94ffc3473741d163a6603e656f06d26a7f5ce6e659316e97dc2ecb0b5",
+      "expected": {
+        "cash": 75,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 0,
+        "lastReason": "Ready to test price recovery with fake money. No outcome forecast is used."
+      }
+    },
+    {
+      "label": "legacy post-reset update rules",
+      "now": 1011000,
+      "inputs": [],
+      "command": {
+        "action": "update-rules",
+        "sessionId": "legacy-golden-reset",
+        "expectedRulesRevision": 0,
+        "commandId": "legacy-reset-rules",
+        "rules": {
+          "entryBudget": 7,
+          "cooldownMs": 0,
+          "focusSlug": "synthetic-legacy-compat"
+        }
+      },
+      "expectedHash": "0e682c68a03ba0f8766bb88f83267ea2e14cf2808ca054dff37587bc261fcdaa",
+      "expected": {
+        "cash": 75,
+        "pending": null,
+        "fills": 0,
+        "open": 0,
+        "closed": 0,
+        "rulesRevision": 1,
+        "lastReason": "Bot rules saved (revision 1). Gathering a new baseline; balance and history preserved."
+      }
+    }
+  ]
+}

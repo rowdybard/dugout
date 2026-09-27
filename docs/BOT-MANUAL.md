@@ -1,8 +1,8 @@
 # Dugout: user and developer manual
 
-This manual describes the actual paper bot, audited against source commit `5ac6e98f89755381d9164980ab8556b18efd7ede` on September 26, 2026, plus the reviewed interface and invited-account access changes included in this source package. Deployment status of those later changes is recorded separately in [RELEASE-STATUS.md](RELEASE-STATUS.md). It separates implemented behavior from production observations. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for current balance, rules, focus, and status.
+This manual describes the paper bot source, including the versioned `local-move-v1` decision engine, adaptive exits, interface and invited-account access guards. The original infrastructure audit used commit `5ac6e98f89755381d9164980ab8556b18efd7ede` on September 26, 2026. Publication and test status of later changes is recorded separately in [RELEASE-STATUS.md](RELEASE-STATUS.md). Implemented behavior and dated production observations are distinct. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for current balance, rules, focus, and status.
 
-Dugout's home page is a tennis and American football **paper-trading dashboard**. Auto is a deterministic decision engine, not Claude. It evaluates market quotes and simulates purchases and exits. The private dashboard and its API are hosted on ChatGPT Sites. The migrated owner's background engine and journal live in a separate Cloudflare Worker with a SQLite Durable Object. Closing the dashboard does not stop an already-running native runner; a paused flat account does not start itself.
+Dugout's home page is a tennis and American football **paper-trading dashboard**. Its local decision engine uses deterministic market calculations, not Claude. It evaluates quotes and simulates purchases and exits. The private dashboard and its API are hosted on ChatGPT Sites. The migrated owner's background engine and journal live in a separate Cloudflare Worker with a SQLite Durable Object. Closing the dashboard does not stop an already-running native runner; a paused flat account does not start itself.
 
 ## Contents
 
@@ -48,8 +48,8 @@ The subsequent interface/account-access source release passed 503 full tests, bo
 2. Choose Tennis, Football, or Both. This changes allowed leagues and clears the saved focus through a rules update. Tennis infrastructure remains available when football is selected.
 3. Choose a game to inspect. Read its buy/sell quotes, game status, and report age. Selecting a chart does **not** authorize that game as the bot focus.
 4. Use the explicit focus control to save that game as the bot focus. Native Start/Resume requires one focus. It never silently switches to another game when the focused game ends or becomes unavailable.
-5. Inspect Bot rules: dollars per trade, profit target, loss-exit threshold, maximum hold, and rest. Saved values can differ from the factory defaults. Auto chooses between supported entry patterns; it does not choose your risk limits.
-6. Press Start when you want paper checks to begin/resume. A waiting reason, rejected setup, pending intent, and completed fill are different states.
+5. Inspect Bot rules: dollars per trade, loss-exit threshold, maximum hold, spread and rest. Saved values can differ from factory defaults. The local model evaluates setups and adjusts profit exits; it does not choose your stake or widen your saved risk limits.
+6. Press Start when you want paper checks to begin/resume. For an older account, the UI first records a rules update selecting the local engine and football quality policy. It preserves money, stake, rest and loss/time settings, while requiring at least 30 seconds/10 quotes and at most 2¢ spread/5-second book age. A failed policy save prevents Start. A waiting reason, rejected setup, pending intent, and completed fill are different states.
 7. Use **More details → History → Download complete saved history** to review results. The chart/recent activity are useful views, but the export is the accounting record.
 
 An already-migrated account does not need migration again. Do not create a new run to refresh a feed: that creates a new simulated bankroll and changes which session is being measured.
@@ -57,6 +57,8 @@ An already-migrated account does not need migration again. Do not create a new r
 ### Layout
 
 The primary view keeps Start/Pause/Stop, Bot rules, sport selection, decision/freshness, runtime status, balance/cash, entry amount, reset, focus, game picker, field, quotes/chart, team/player selection, pending/open positions, and the paper-balance chart available. Ask Claude appears only for the configured site owner. **More details**, closed initially, contains diagnostics, observation progress, History, additional market cards/filters, and the full rules summary. **Chart details** contains extra football facts/timeouts, history bounds, detailed signals/triggers, fill metadata, and explanatory text.
+
+**Decision details** is an optional closed panel below the plain decision reason. It shows the evidence time, warm-up, measured drop/noise, recovery drift, depth, spread, costs, scenario headroom and risk ratio. While held, it distinguishes the saved entry scenario from the latest exit assessment and frozen risk limits. Chart details uses that chart's exact game and outcome. Missing measurements say Not available; an older receipt is not relabeled as a current calculation.
 
 Errors, stale-data indicators, chart legend, and missing-quote warnings remain visible. The old Beginner mode state, toggle, and localStorage preference were removed in the reviewed interface change. A previously saved `true` value no longer controls the interface. Plain wording does not mean the engine has fewer checks.
 
@@ -67,7 +69,7 @@ Errors, stale-data indicators, chart legend, and missing-quote warnings remain v
 | Choose chart/game | Changes inspection and priority display refresh. Does not change saved focus or trade. |
 | Switch chart team/player | Displays YES or NO quotes. Does not limit which outcome the engine may buy. |
 | Set focus | Saves one market slug through a rules update. A held position still receives exit checks. |
-| Start | Starts an idle account, or the UI sends Resume for a paused one. Native operation requires focus and available daily write budget. |
+| Start | Saves the current local policy when required, then starts an idle account or resumes a paused one. Native operation requires focus and available daily write budget. |
 | Pause | Blocks entries and cancels a pending buy. Held positions continue ordinary exit management while their runtime operates. |
 | Stop | Blocks entries; with a position it enters `stopping` and tries a normal delayed liquidation. Flat accounts become `stopped`. |
 | New paper run | Only available without an open position/pending order. Archives the previous run and creates a simulated bankroll; it is not a deposit or recovery of losses. |
@@ -136,40 +138,39 @@ Before proposing a buy, and again before its delayed fill, the engine requires:
 - Available cash for the budget, no conflicting open position, and no active entry rest.
 - Full proposed entry depth at the quoted ask and hypothetical full immediate exit depth at the quoted bid.
 - Immediate estimated spread/fee loss strictly below the loss-exit threshold.
-- Independent history/confirmations for a supported signal. Reusing a receipt does not progress warm-up.
+- Independent history and a qualifying versioned analysis. Reusing a receipt does not progress warm-up or evidence.
 - For football under `football-context-v1`, fresh complete consistent context. This checks data quality, not who will win.
 
 Rejected checks produce reasons. A fresh price alone never forces a trade.
 
-### Warm-up and fixed recovery
+### Current policy: local move analysis
 
-Defaults require a 60-second baseline window, at least 30 seconds of history, and ten independent quotes. The baseline is the median of prior observations, excluding the current one. Each outcome has its own bounded working history.
+The optional `config.decisionEngine: 'local-move-v1'` field selects [opportunity.ts](../lib/tennis/opportunity.ts). It evaluates both YES and NO using only evidence available at the current receipt. The `strategy: auto` field remains for schema compatibility; this branch does **not** run the old recovery-versus-momentum chooser. No model, remote inference, broadcast listening or paid AI call occurs.
 
-Recovery watches for midpoint decline below the baseline and records a trough. Falling midpoint or bid lowers the trough and resets confirmation. A later recovery must occur in **both midpoint and bid**, persist across the configured independent confirmations, and not weaken. The setup expires after its window or if the price fully recovers before entry. A hypothetical return to the earlier baseline must have enough net headroom after fees to meet the target. That scenario is not a forecast.
+The output is `enter`, `wait` or `reject`, with one leading reason, all other reasons, fixed/versioned thresholds and serializable measurements. Missing values are `null`, not zero or a fabricated estimate. It is a conservative local recovery scenario, **not a calibrated probability, expected profit, fair-value estimate or promise that price returns to an earlier level**.
 
-“Collecting fresh quotes (4/10; need 30s of history)” requires both sample and time conditions. Repeated warm-up can follow rule/focus edits, source failure, context-boundary resets, or too few usable observations. Reducing warm-up merely to create fills does not validate the strategy.
+1. **Collect causal evidence.** Defaults use a 60-second window with at least 30 seconds and ten independent quotes. The model requires at least six pre-drop baseline samples, at least two recovery intervals and two positive buyer-price changes. It rejects conflicting same-time quotes and gaps over 15 seconds; future observations cannot train the current calculation. History and independent time must both qualify.
+2. **Measure the drop against prior noise.** A causal peak-to-trough scan identifies the observed drop. Midpoint/bid changes before the drop are scaled by the square root of elapsed seconds. The noise estimate bounds outliers using baseline median absolute deviation and includes a market-tick quantization floor. The drop must reach twice its duration-adjusted noise scale. Drop speed is recorded; the drop itself does not inflate its pre-drop noise baseline.
+3. **Require measurable buyer recovery.** Recovery drift is the bid change per elapsed second from the trough. A two-standard-error allowance uses the larger baseline/recovery residual noise. The resulting lower drift must be positive, with independent positive bid changes. A rising midpoint without supporting buyers is insufficient.
+4. **Check liquidity and book pressure.** The depth band is the larger of two ticks and the spread. Buyer/seller quantities produce imbalance and a depth-weighted price. Adverse pressure reduces the scenario; positive imbalance is not treated as a win prediction. The normal simulator must price a complete buy and immediate full exit, including fees, and there must also be enough quantity at the current best bid.
+5. **Subtract costs and delay risk.** The lower move is capped by both the remaining distance to the observed pre-drop bid and the lower measured recovery drift over the scenario horizon. The horizon uses observed drop/recovery duration, bounded by maximum hold. Spread, executable depth costs, rounded fees, adverse book pressure and a two-sigma execution-delay allowance reduce it. Modeled exit-price fee changes are included. The remaining net headroom must exceed one tick and have at least a 1:1 ratio to the measured structural-risk allowance.
+6. **Stage, then verify again.** Candidates rank by higher net-headroom/risk ratio, then greater total net headroom, then stable market/outcome order. The winner becomes a pending buy. It still requires the normal delay and a later fresh book. The analysis is repeated; a later setup cannot require a higher reference price or lower invalidation price than the staged scenario. Failed gates cancel rather than force a fill.
 
-### Fixed momentum
+Threshold constants such as two-sigma, six baseline observations, a 1:1 minimum ratio and one-tick minimum headroom are disclosed modeling choices in the versioned module. They are not trained probabilities or user-adjustable guarantees. Prices in its calculations are dollars per contract, drift is dollars per second, and volatility is dollars per square-root second. Decision details converts suitable quantities to cents and labels unavailable measurements.
 
-Momentum requires both midpoint and bid to rise above their prior medians by the threshold, maintain the rise without weakening, and pass confirmations. It rejects entries where even maximum $1 payout cannot cover the target after entry costs.
+Repeated warm-up can follow rule/focus edits, source failure, football-boundary resets or too few usable observations. “4/10” is not enough merely because 30 seconds passed. Lowering protections to obtain fills would not establish whether the model works.
 
-### Auto
+### Legacy policies and replay
 
-Auto evaluates recovery and momentum separately for YES and NO. Its noise measure is the larger median absolute midpoint/bid change over up to 120 prior observations, in cents. Rounded upward to the market tick, thresholds are:
+A saved configuration with **no** `decisionEngine` field follows the retained legacy path. Its recovery pattern uses midpoint/bid decline from prior median baselines and independent rebound confirmations; momentum requires a sustained midpoint/bid rise. Legacy Auto evaluates both patterns for each side and adapts cent thresholds to quote noise/spread. Those paths and their historical fixed profit target remain for old state and replay. They are not the current local model.
 
-- Recovery: maximum of 1¢, noise, and spread.
-- Decline: maximum of 3¢, three times noise, twice spread, and recovery plus one tick.
-- Momentum: maximum of 3¢, three times noise, and twice spread.
-
-Invalid or over-40¢ thresholds yield `AUTO_NOISE`. Thresholds remain attached to an active setup during its window. Auto does not loosen confirmations, budget, fee rules, spread, freshness, target, stop, or maximum hold. It does not rewrite source code.
-
-Competing candidates rank by earlier setup time, then lower immediate round-trip cost, then stable market/outcome/strategy order. This is neither AI forecasting nor an optimizer proven to select the most profitable candidate.
+Opening an old account does not silently rewrite that version field. The dashboard Start/Resume upgrade is an explicit journaled rules command. Existing held positions continue their entry-time policy. Retaining old factories, version absence, deterministic ordering and optional new fields avoids reinterpreting historical records as if the new analysis had made them.
 
 ### Football boundaries and shadow exits
 
 A pending football buy records context at its signal. A **newer** report changing score, possession, or quarter cancels it and requires new confirmations. Missing/stale/conflicting context cancels it too. Third-and-long alone is not a programmed real paper sell signal.
 
-The validation phase records separate **shadow exit** experiments for fresh context showing the held team's possession loss or its fourth down. [shadow-exits.ts](../lib/tennis/shadow-exits.ts) uses the same delayed matching/book checks with separate hypothetical quantity/proceeds/fees. It does not mutate actual paper cash, ledger, or position. Real paper exits still use profit, loss, maximum-hold, Stop, and explicit settlement logic.
+The validation phase records separate **shadow exit** experiments for fresh context showing the held team's possession loss or its fourth down. [shadow-exits.ts](../lib/tennis/shadow-exits.ts) uses the same delayed matching/book checks with separate hypothetical quantity/proceeds/fees. It does not mutate actual paper cash, ledger, or position. Actual paper exits use the position's entry-time local or legacy policy, loss/time/Stop controls, and explicit settlement logic. Football quality screening does not turn a down-and-distance observation into an independent actual sell command.
 
 ## Execution, fees, exits, and accounting
 
@@ -185,11 +186,18 @@ The [paper matcher](../lib/trading/execution.ts) is immediate-or-cancel (IOC). I
 
 Cash equals starting cash plus ledger cash deltas. Buys subtract gross cost and fees; exits add proceeds minus fees. Partial exits allocate cost basis proportionally. UI dollars round to two decimals; exports retain account precision.
 
-### Frozen limits and ordinary exits
+### Frozen limits and adaptive exits
 
-Each position saves target return, loss-exit threshold, and maximum hold at entry. Later rule edits apply those limits to future positions; they do not widen a held stop, extend hold, or change target. A legacy open position missing this snapshot receives a one-time snapshot from its existing configuration on load.
+A filled local entry saves its analysis and an immutable [adaptive exit plan](../lib/tennis/exit-analysis.ts): actual all-in unit cost, observed reference bid, structural invalidation price, measured volatility, scenario horizon, delay, tick size and original loss/time limits. Later rules cannot widen that position's stop or extend its maximum hold. `targetReturn` is retained in the snapshot for compatibility; it is **not** a fixed local profit-taking trigger.
 
-Exit checks use executable net liquidation after fees, not midpoint. Profit requires a full-position executable estimate; loss can trigger from available partial liquidation. Hold expiry or Stop can request an exit. Once requested, exit intent remains active rather than disappearing when a later mark changes.
+Exit checks use available executable net liquidation after fees, not midpoint. Entry fees already belong to cost basis and exit fees to the liquidation mark; they are not subtracted twice. Held-market movement is measured independently of the entry detector over a bounded 30-second-to-five-minute lookback, using at least three unique intervals, a newest quote no older than five seconds and gaps no longer than 15 seconds. This measures current bid drift and residual bid/midpoint volatility. Missing evidence remains unavailable; original loss/time exits still operate.
+
+- A complete-position net mark can raise the saved peak. Once gain exceeds the noise buffer, the profit floor becomes the larger of its old value, zero and peak gain minus that buffer. The buffer uses the larger of one tick, half-spread and two-sigma movement over the frozen reaction delay. The floor only ratchets upward; increased volatility cannot widen an already raised floor.
+- Falling through that floor proposes a delayed exit. A partial quote can support reducing risk, but cannot raise a full-position profit peak or prove total profit-taking headroom.
+- A bid below the saved structural invalidation level beyond the noise buffer can invalidate the entry thesis. A profitable complete mark can also qualify when remaining fee-adjusted reference headroom is no larger than the measured risk of waiting, or the original scenario horizon has elapsed with nonpositive recovery and buyer pressure. These conditions require two distinct fresh books spanning at least the frozen reaction delay. Repeated receipts or long observation gaps cannot manufacture confirmations.
+- The original loss threshold, maximum hold, Stop and an already requested exit retain priority. A requested exit stays active rather than disappearing when later marks improve.
+
+A legacy position without an adaptive plan keeps its fixed net profit/loss/time policy. Positions missing legacy `exitRules` receive a one-time snapshot from their existing configuration on load; that normalization does not invent adaptive entry evidence. A legacy profit target needs complete executable depth, while risk exits can reduce available partial quantity.
 
 Execution still requires a fresh later usable book. “Try to exit at 8% loss” does **not** guarantee an 8% realized loss ceiling. Missing buyers, data failure, movement during delay, and partial fills can postpone or worsen execution.
 
@@ -207,7 +215,7 @@ Completed trades invoke the configured per-game rest for both outcomes/tracks, d
 
 [rules.ts](../lib/tennis/rules.ts) defines these source defaults. **This is not the current saved account configuration.** Inspect loaded Bot rules or exported `session.config`. Migration preserves saved strategy settings.
 
-`defaultTennisConfig()` returns `strategy: recovery`; new server accounts, resets, and Restore defaults explicitly select **Auto**. Older records with no decision-policy field normalize to `price-v1` to preserve their historical meaning. New defaults use `football-context-v1`.
+`defaultTennisConfig()` deliberately remains the legacy factory with `strategy: recovery`. `defaultLiveTennisConfig()` adds `decisionEngine: local-move-v1` and `strategy: auto` for fresh server accounts and Restore defaults. Reset keeps a previously local account local and a legacy account on its legacy family; dashboard Start explicitly upgrades an older policy before running. An absent engine version remains legacy, and an absent football decision-policy field normalizes to `price-v1`. New live defaults use `football-context-v1`. None of these defaults replaces a saved account on read.
 
 | Setting | Default | Meaning / validation |
 | --- | --- | --- |
@@ -215,25 +223,25 @@ Completed trades invoke the configured per-game rest for both outcomes/tracks, d
 | Entry budget | min($5, 20% of starting cash) | Maximum including fees; positive, ≤$100 and ≤20% of starting cash. |
 | Leagues | ATP, WTA | At least one unique member of ATP/WTA/NFL/CFB. |
 | Focus | None | Native Start/Resume requires one game. |
-| Baseline window | 60 seconds | Positive, up to an hour. |
-| Minimum history | 30 seconds | Positive, no greater than baseline window. |
-| Minimum quotes | 10 | 3–200 independent observations. |
-| Recovery decline | 3¢ | Positive, ≤40¢; fixed strategy setting. |
-| Recovery amount | 1¢ | Positive, less than decline, ≤40¢. |
-| Recovery confirmations | 2 | 2–20. |
-| Momentum rise | 3¢ | Positive, ≤40¢; fixed strategy setting. |
-| Momentum confirmations | 2 | 2–20. |
-| Maximum spread | 2¢ | Shared legacy schema allows up to 10¢; native service rejects >2¢. |
-| Net target return | 3% | Positive, ≤100%; frozen per position. |
+| Baseline window | 60 seconds | Up to an hour; local policy requires at least 30 seconds. |
+| Minimum history | 30 seconds | No greater than baseline window; local requires at least 30 seconds. |
+| Minimum quotes | 10 | Local requires 10–200 independent observations; legacy schema permits 3–200. |
+| Recovery decline | 3¢ | Legacy only, positive, ≤40¢; hidden and unused by local analysis. |
+| Recovery amount | 1¢ | Legacy only, positive, less than decline, ≤40¢. |
+| Recovery confirmations | 2 | Legacy only, 2–20; local has its own versioned evidence requirements. |
+| Momentum rise | 3¢ | Legacy only, positive, ≤40¢. |
+| Momentum confirmations | 2 | Legacy only, 2–20. |
+| Maximum spread | 2¢ | Local and native reject >2¢; legacy shared schema allows up to 10¢. |
+| Net target return | 3% | Legacy fixed profit trigger; retained but not used as a local profit trigger or shown as a local input. |
 | Loss-exit threshold | 8% | Positive, ≤50%; frozen per position, not guaranteed execution price. |
 | Maximum hold | 2 minutes | Positive, up to an hour; frozen per position. |
 | Rest after trade | 60 seconds | 0–3,600 seconds, per game. |
 | Execution delay | 1 second | 1–30 seconds plus a later usable book. |
-| Maximum book age | 5 seconds | Shared legacy schema allows up to 30 seconds; native rejects >5 seconds. |
+| Maximum book age | 5 seconds | Local and native reject >5 seconds; legacy shared schema permits up to 30 seconds. |
 | Session loss threshold | 20% | Positive, ≤50% of starting cash. |
 | Football report age | 45 seconds | Fixed quality-policy constant, independently for report and receipt; not a normal UI rule. |
 
-Some dialog ranges are broader than native service limits because shared legacy code remains. A rejected save does not mean the wider limit was accepted. Keep native spread/freshness within 2¢/5 seconds.
+The local rules dialog hides fixed strategy/drop/rise/target inputs. Main controls are budget, loss threshold, maximum hold and spread; additional history, delay, freshness, rest and session-risk controls remain expandable. A legacy draft has an explicit Use local decision engine option; Apply is still required. Legacy dialog/schema ranges can be broader than native limits, but a rejected save does not mean the wider value was accepted.
 
 Changing leagues clears focus. A rule update cancels pending buy, increments `rulesRevision`, and clears baseline/signal history, while preserving unexpired cooldowns and held exit snapshots. Expected revision and session identity prevent an old dialog from silently overwriting a newer update. A source-default edit does not retroactively rewrite persisted accounts.
 
@@ -396,6 +404,8 @@ Pagination `complete` means all pages were read, not that every source reference
 
 Every committed native action/tick, including no-input ticks, records input content hashes, time, engine/build identity, source failures, and before/after hashes in the same transaction as session/journal changes. Reset identity is captured as replay entropy. New rows reference exact evidence using `runnerFrameId`/`runnerInputIds`.
 
+Local entry evaluations carry optional `analysis` objects with enter/wait/reject, reasons, thresholds and finite-or-null measurements. Pending entry analysis is revalidated on the later book; the filled position saves `entryAnalysis` and `exitPlan`. Optional `exitAnalysis` records the later adaptive assessment, while `exitState` holds its persistent peak/floor/evidence. These fields do not backfill nonexistent analysis into old journal rows. A saved entry scenario is historical evidence, not a newly recomputed current price opinion.
+
 [replay.ts](../lib/runner/replay.ts) exposes `replayFrame`: validate checkpoint/input hashes, run the same reducer, compare output hash. There is no complete general replay/profit-proof UI. Use the matching engine source and recorded checkpoint for offline verification; changed engine code can intentionally produce a different result.
 
 Legacy imported records are valuable history but do not capture every historical tick. Exact whole-strategy replay is **not** claimed before migration. Never backfill unknown quotes or relabel manual activity as automatic strategy success.
@@ -460,6 +470,10 @@ The actual release used authenticated Cloudflare and Sites tooling. No one repos
 | Polling/control requests | [use-tennis.ts](../components/tennis/use-tennis.ts) |
 | Config/defaults/validation | [rules.ts](../lib/tennis/rules.ts), [rules-dialog.tsx](../components/tennis/rules-dialog.tsx), [types.ts](../lib/tennis/types.ts) |
 | Signals/entry/exit reducer | [engine.ts](../lib/tennis/engine.ts) |
+| Local quantitative entry scenario | [opportunity.ts](../lib/tennis/opportunity.ts) |
+| Adaptive exit plan, measurements and assessment | [exit-analysis.ts](../lib/tennis/exit-analysis.ts) |
+| Explicit Start policy upgrade | [start-control.ts](../lib/tennis/start-control.ts) |
+| Optional recorded decision metrics | [decision-evidence.ts](../lib/tennis/decision-evidence.ts), [decision-metrics.tsx](../components/tennis/decision-metrics.tsx) |
 | Context quality/boundaries | [football-context.ts](../lib/tennis/football-context.ts), [priority-context.ts](../lib/tennis/priority-context.ts) |
 | Isolated exit experiments | [shadow-exits.ts](../lib/tennis/shadow-exits.ts) |
 | Paper execution/fees/money | [execution.ts](../lib/trading/execution.ts), [money.ts](../lib/trading/money.ts) |
@@ -540,7 +554,8 @@ A useful report includes time/timezone, game, state, focus versus chart, reason,
 
 ## Limitations and outstanding validation
 
-- Strategies are unproven. Auto adapts thresholds; it does not hear broadcasts, predict the winner, optimize profit, or guarantee fills.
+- Strategies are unproven. The local model uses observed price movement, depth and explicit noise/cost assumptions; its scenario headroom is not a win probability or validated expected profit. It does not hear broadcasts or guarantee fills.
+- The local policy and adaptive exits need their own genuine live validation. Dated feed smoke checks and older fills do not establish a live round trip under this version.
 - Football currently screens entry quality and produces isolated shadow experiments. Fourth down/possession loss does not independently authorize a real paper early exit.
 - The 45-second gate can correctly prevent entry during provider pauses, kickoff, breaks, or incomplete reports. Fresh quotes cannot cure missing game context.
 - Native scheduling/data integration are implemented with synthetic tests and a read-only live input smoke check. The recorded 60-minute browser-closed experiment and genuine native automatic round trip remain unverified.

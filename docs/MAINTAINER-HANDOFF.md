@@ -17,6 +17,8 @@ Updated September 26, 2026. Read [the manual](BOT-MANUAL.md) and [release eviden
 | --- | --- |
 | Dashboard/charts | `components/tennis/` |
 | Strategy, rules, football assessment | `lib/tennis/` |
+| Pure local entry analysis / adaptive exit measurements | `lib/tennis/opportunity.ts`, `lib/tennis/exit-analysis.ts` |
+| Recorded UI policy upgrade / optional decision measurements | `lib/tennis/start-control.ts`, `components/tennis/decision-metrics.tsx` |
 | Simulated depth/fee execution and source validation | `lib/trading/` |
 | Sites HTTP routes | `app/api/tennis/` |
 | Signed runner proxy/migration contracts | `lib/runner/` |
@@ -25,6 +27,16 @@ Updated September 26, 2026. Read [the manual](BOT-MANUAL.md) and [release eviden
 | Optional standalone read-only stream service | `services/trading/` |
 
 Legacy manual/research modules remain in source for historical compatibility. Do not describe them as current homepage controls or remove historical journal rows to make the interface look bot-only.
+
+## Versioned decision policy
+
+`config.decisionEngine: 'local-move-v1'` selects the new deterministic local entry analysis. An absent field preserves the old strategy path. `defaultTennisConfig()` remains the legacy factory for compatibility; `defaultLiveTennisConfig()` selects local analysis for fresh server accounts. Reset retains the previous local/legacy policy family. Dashboard Start/Resume records an explicit `update-rules` before starting older accounts, preserving money/risk/rest settings and tightening history/spread/freshness only to the required floors/limits.
+
+The new entry module measures causal pre-drop noise, buyer recovery, depth pressure, executable fees and delay friction. Its return scenario is not a calibrated win probability or expected profit. The exit module uses executable net marks, an upward-only profit floor, structural invalidation and remaining scenario headroom versus measured waiting risk. A fixed `targetReturn` is retained in the snapshot for compatibility but is not a local profit trigger. Original stop and maximum hold remain absolute bounds on the policy; delayed fills can still lose more than a trigger value.
+
+`TennisDecision.analysis` and `exitAnalysis` store serializable measurements. Pending intents carry entry analysis; actual buys save `position.entryAnalysis` and an immutable `exitPlan`, while `exitState` evolves with distinct executable books. Existing legacy positions do not acquire adaptive plans by an incidental settings edit. Optional details select evidence for the displayed game/outcome rather than borrowing a newer result from another game. No model calls are added.
+
+These source changes require their own test/deployment and live validation record. The dated 503-test interface release and earlier runner feed smoke do not validate the new strategy's live behavior or profitability. See release evidence for results actually completed.
 
 ## Dated state, not live state
 
@@ -48,7 +60,8 @@ Report-refresh source `5ac6e98f89755381d9164980ab8556b18efd7ede` was deployed to
 
 - 60 minutes of genuine new-runner background operation, including closed dashboards, then full journal/cash/fee reconciliation.
 - A genuine bot-initiated live entry and exit on that runner; read-only checks are not fills.
-- Later-game comparison of fixed candidate rules against an unchanged baseline; no automatic rule tuning.
+- A genuine live entry/exit using `local-move-v1`, with recorded analysis and fee/cash reconciliation; synthetic scenario tests alone are insufficient.
+- Later-game comparison of fixed versioned policies against an unchanged baseline; no automatic rule tuning.
 - Fresh-install verification on a new machine.
 - Current provider model availability/pricing and paid Claude integration; no paid verification call was made.
 

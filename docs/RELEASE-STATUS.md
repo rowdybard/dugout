@@ -36,6 +36,21 @@ The package removes the active Beginner mode toggle/preference, collapses techni
 
 The new `DUGOUT_OWNER_ID` Sites setting must match the existing native `RUNNER_OWNER_ID` before owner setup/adviser controls are available. An absent pin does not remove a writer fence or stop existing runner exit management. Hosted layout/deployment verification is separate from the local checks above.
 
+## Local decision engine verification
+
+The `local-move-v1` engine replaces the current entry decision path with a causal volatility-adjusted recovery scenario. It measures elapsed-time drop magnitude/speed, pre-drop noise, executable bid recovery and its uncertainty, depth imbalance, simulated fees/slippage, spread, delay friction and net scenario headroom versus structural risk. Every assessed opportunity records enter/wait/reject and its measurements. This is an uncalibrated scenario model, not an estimated win probability or demonstrated trading edge.
+
+New fills save adaptive exit evidence, a ratcheting volatility-based profit floor, and immutable loss/holding/delay limits. Confirmed structural failure and exhausted fee-adjusted recovery headroom can request early exits. Existing historical positions retain their old policy. Saved legacy accounts upgrade through a recorded explicit rule command; no implicit account-load migration or automatic Start is introduced.
+
+- Full suite: **564 tests passed**, zero failed/skipped, including 61 new tests.
+- Main and runner TypeScript checks, changed-file ESLint, frontend/Sites production build and native runner production dry build passed.
+- Both outcomes reached real delayed simulated entry through the reducer; spread/depth/context failures canceled entries without cash debits. An integrated sequence held beyond the old target and closed through a delayed volatility-trail exit with reconciled fees and cash.
+- The native SQLite test closed and reopened the database with a pending entry, completed the automatic buy/exit, reopened again, and reproduced every exported replay hash and the full final state. Network access was disabled in that test.
+- Twenty-two full-state golden checkpoints captured from the actual pre-change `e160ec8` implementation matched unchanged legacy Auto entry, fill, held rules, exit, reset and rule-update behavior.
+- Independent review found and fixed malformed-book rejection and changed-setting versus frozen exit-delay mismatches; regression tests cover both.
+
+These are synthetic execution/replay tests. They do not establish a live entry/exit, profitability, calibrated confidence, or a comparison against later games. Publication/account activation evidence is recorded separately after deployment.
+
 ## Not established
 
 - 60 continuous minutes of new-runner live background operation including closed dashboards.

@@ -2,8 +2,8 @@ import {env} from 'cloudflare:workers';
 import {readRunnerOwnedSession,type RunnerBindings} from '../runner/sites-proxy';
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
-import {defaultTennisConfig,createTennisSession,stepTennisSession,applyTennisAction} from './engine';
-import {normalizeTennisConfig} from './rules';
+import {createTennisSession,stepTennisSession,applyTennisAction} from './engine';
+import {defaultLiveTennisConfig,normalizeTennisConfig} from './rules';
 import {normalizePositionExitRules} from './football-context';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
@@ -18,7 +18,7 @@ export async function readTennisSession(req:Request):Promise<{ownerId:string;ses
   const {id:ownerId}=await profile(req);
   let row=await db().prepare('SELECT value,revision FROM tennis_sessions WHERE owner_id=?').bind(ownerId).first<{value:string;revision:number}>();
   if(!row){
-    const session=createTennisSession({...defaultTennisConfig(100),strategy:'auto'},Date.now());
+    const session=createTennisSession(defaultLiveTennisConfig(100),Date.now());
     await db().prepare('INSERT OR IGNORE INTO tennis_sessions(owner_id,value,revision) VALUES(?,?,0)').bind(ownerId,JSON.stringify({...session,revision:0})).run();
     row=await db().prepare('SELECT value,revision FROM tennis_sessions WHERE owner_id=?').bind(ownerId).first<{value:string;revision:number}>();
   }

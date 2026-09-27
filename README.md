@@ -15,7 +15,11 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 
 ## Current interface
 
-Beginner mode is disabled in the active dashboard. A saved browser preference cannot re-enable it. The main view keeps bot controls, current decision, game selection/focus, live field/chart, quotes, balance and active-order/position information visible. Technical details and detailed history are expandable. This presentation change does not change strategy, position limits, fees or execution protections.
+Beginner mode is disabled in the active dashboard. A saved browser preference cannot re-enable it. The main view keeps bot controls, current decision, game selection/focus, live field/chart, quotes, balance and active-order/position information visible. Technical details and detailed history are expandable.
+
+New accounts use the versioned **local decision engine**. It measures a price drop against prior quote noise, checks independently recovering buyer prices and available depth, and subtracts spread, fees and a delay allowance before considering entry. Held positions use frozen entry evidence, a ratcheting volatility buffer and setup-invalidation checks within the original loss/time bounds. These are deterministic local calculations, not AI calls, a win probability or a proven profit forecast. **Decision details** exposes the measurements behind the plain-language reason.
+
+Start/Resume explicitly saves the new policy for an older account before starting. It preserves stake, cash, journal, rest and loss/time settings, while requiring at least 30 seconds/10 quotes and retaining the 2¢/5-second entry limits. Historical configurations without the new version field keep their legacy reducer behavior for replay; existing positions retain their entry-time exit policy.
 
 Selecting a game changes the chart. **Focus bot on this game** changes future entry eligibility. **Pause** prevents entries and continues exits; **Stop** requests an exit and waits for executable conditions. A simulated order is not guaranteed to fill. The full manual describes these distinctions.
 

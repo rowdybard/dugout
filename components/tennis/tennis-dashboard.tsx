@@ -28,6 +28,7 @@ import {DecisionCard} from './decision-card';
 
 import {describeTennisRules} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
+import {localMoveUpgradeRules,startPaperBot} from '@/lib/tennis/start-control';
 
 import {TennisPriceChart,TennisSparkline} from './price-chart';
 
@@ -140,17 +141,9 @@ export function TennisDashboard() {
   const watchMarket=bot.watchMarket;
   useEffect(()=>{watchMarket(selected??followedMarket?.slug??null);},[selected,followedMarket?.slug,watchMarket]);
 
-  const watchDuration=hasFootball?10_800_000:1_800_000;
   const background=bot.runtime?.mode==='service';
   const migrating=bot.runtime?.mode==='migrating';
-  const startBot=async()=>{
-    if(!session?.config.focusSlug||migrating)return;
-    if(background&&session.config.decisionPolicy!=='football-context-v1'){
-      const saved=await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{decisionPolicy:'football-context-v1'}});
-      if(!saved)return;
-    }
-    await bot.perform({action:session.status==='idle'?'start':'resume',...(!background?{runForMs:watchDuration}:{}),commandId:tennisCommandId()});
-  };
+  const startBot=()=>startPaperBot(session,bot.runtime,bot.perform,tennisCommandId);
   const setGameFocus=async(slug:string|null)=>{
     if(!session)return;
     if(await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{focusSlug:slug}}))setFollowed(slug);
@@ -194,14 +187,14 @@ export function TennisDashboard() {
 
       <section className="tennis-command" aria-label="Paper bot controls">
 
-        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.strategy==='auto'?'AUTO DECISION ENGINE':session?.config.strategy==='momentum'?'FOLLOW A RISE':'WAIT FOR A RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
+        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.decisionEngine==='local-move-v1'?'LOCAL DECISION ENGINE':session?.config.strategy==='auto'?'LEGACY AUTO':session?.config.strategy==='momentum'?'LEGACY RISE':'LEGACY RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
 
           <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||migrating||!session?.config.focusSlug||entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)} onClick={()=>void startBot()}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||migrating||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||migrating||!session||session.status==='stopping'||(isPaused&&!session.config.focusSlug)} onClick={()=>{if(isPaused)void startBot();else void bot.perform({action:'pause',commandId:tennisCommandId()});}}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Start paper bot':'Pause bot'}</button>}
 
           {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop bot</button>}
 
           <button className="tennis-secondary" disabled={!session} onClick={()=>setSettingsOpen(true)}>Bot rules</button>{bot.advisorEnabled&&<button className="tennis-secondary" onClick={()=>setAdvisorOpen(true)}>Ask Claude</button>}
-          {session&&session.config.strategy!=='auto'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:{strategy:'auto'},expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use Auto</button>}
+          {session&&session.config.decisionEngine!=='local-move-v1'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:localMoveUpgradeRules(session.config),expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use decision engine</button>}
 
           {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}</div>
 

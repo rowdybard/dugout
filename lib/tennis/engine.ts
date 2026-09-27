@@ -8,7 +8,9 @@ const EPSILON = 0.0000001;
 const freshLive = (input:TennisInput,now:number) => input.market.live && input.market.active && !input.market.ended && Number.isFinite(input.market.observedAt) && input.market.observedAt<=now && now-input.market.observedAt<=45_000;
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
-import {defaultTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+import {defaultTennisConfig,defaultLiveTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
+import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
 import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
 import {currentTennisContext} from './market-context.ts';
@@ -24,7 +26,7 @@ export function createTennisSession(config: TennisConfig = defaultTennisConfig()
   return {
     id: `tennis-${now}-${Math.random().toString(36).slice(2, 10)}`, revision: 0, rulesRevision: 0, coverage: {}, mode: 'paper', status: 'idle',
     config: structuredClone(config), cash: config.startingCash, startedAt: now, lastTickAt: now,
-    lastReason: 'Ready to test price recovery with fake money. No outcome forecast is used.',
+    lastReason: config.decisionEngine==='local-move-v1'?'Ready for local move analysis with fake money. Waiting for an explicit Start.':'Ready to test price recovery with fake money. No outcome forecast is used.',
     positions: [], pending: null, histories: {}, signals: {}, consumedBooks: {}, decisions: [], ledger: [],
     equity: [{ time: now, price: config.startingCash }], rejectionCounts: {}, evaluated: 0, commandIds: [],
   };
@@ -55,9 +57,10 @@ function quotes(input: TennisInput, side: TradeSide) {
 }
 
 function policy(session: TennisSession, input: TennisInput, now: number) {
+  const delay=holding(session)?.exitPlan?.executionDelayMs??session.config.executionDelayMs;
   return {
     now, bookReceivedAt: input.receivedAt, bookSource: input.source, stateCertain: true,
-    maxBookAgeMs: session.config.maxBookAgeMs, maxCommandAgeMs: Math.max(30_000, session.config.executionDelayMs * 3),
+    maxBookAgeMs: session.config.maxBookAgeMs, maxCommandAgeMs: Math.max(30_000, delay * 3),
     maxOrderBudget: Math.min(100, session.config.startingCash * 0.25), maxMarketExposure: Math.min(100, session.config.startingCash * 0.25),
     maxTotalExposure: Math.min(100, session.config.startingCash * 0.25), automation: 'PAPER' as const,
   };
@@ -85,7 +88,7 @@ function simulate(session: TennisSession, input: TennisInput, command: PaperComm
 
 function freshCommand(session: TennisSession, input: TennisInput, side: TradeSide, action: 'BUY' | 'SELL', now: number, limitPrice: number, source: 'MANUAL' | 'AUTOMATIC' = 'AUTOMATIC'): PaperCommand {
   return { commandId: `estimate:${session.id}:${now}:${side}`, marketSlug: input.market.slug, side, action, source,
-    limitPrice, createdAt: now, strategyVersion: session.config.version };
+    limitPrice, createdAt: now, strategyVersion: (action==='SELL'?holding(session)?.entryAnalysis?.version:undefined)??session.config.decisionEngine??session.config.version };
 }
 
 function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number) {
@@ -137,7 +140,8 @@ function recoveryHeadroomIssue(session: TennisSession, input: TennisInput, side:
   return null;
 }
 
-function stage(session: TennisSession, input: TennisInput, side: TradeSide, action: 'BUY' | 'SELL', now: number, source: 'MANUAL' | 'AUTOMATIC', reason: string, budget?: number, id?: string) {
+function stage(session: TennisSession, input: TennisInput, side: TradeSide, action: 'BUY' | 'SELL', now: number, source: 'MANUAL' | 'AUTOMATIC', reason: string, budget?: number, id?: string, analysis?:OpportunityAnalysis,exitAnalysis?:AdaptiveExitAssessment) {
+  const delay=action==='SELL'?(holding(session)?.exitPlan?.executionDelayMs??session.config.executionDelayMs):session.config.executionDelayMs;
   const quote = quotes(input, side);
   const limitPrice = action === 'BUY' ? quote.ask : quote.bid;
   if (limitPrice === undefined) {
@@ -148,12 +152,13 @@ function stage(session: TennisSession, input: TennisInput, side: TradeSide, acti
   session.pending = {
     id: id ?? `${session.id}:order:${session.revision}:${now}`, market: structuredClone(input.market), slug: input.market.slug, side, action,
     positionId: action === 'SELL' ? holding(session)?.id : undefined, budget,
-    limitPrice, createdAt: now, executeAfter: now + session.config.executionDelayMs, observedAt: input.receivedAt, source, reason,
+    limitPrice, createdAt: now, executeAfter: now + delay, observedAt: input.receivedAt, source, reason,
     ...(action==='BUY'?{signalConfig:structuredClone(session.config),signalSnapshot:structuredClone(session.signals[keyFor(input.market.slug,side)]),decisionMode:session.config.strategy,
       ...(session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(input.market)?{contextSnapshot:structuredClone(session.footballReports?.[input.market.slug]?.report)}:{})}:{}),
+    ...(analysis?{analysis:structuredClone(analysis)}:{}),
   };
   record(session, now, input.market.slug, side, 'SIGNAL', action === 'BUY' ? 'ENTRY_PENDING' : 'EXIT_PENDING',
-    `${reason} Waiting at least ${session.config.executionDelayMs / 1000}s and for a later fresh book before simulating a fill.`, input);
+    `${reason} Waiting at least ${delay / 1000}s and for a later fresh book before simulating a fill.`, input,{...(analysis?{analysis}:{}),...(exitAnalysis?{exitAnalysis}:{})});
 }
 
 function markPosition(session: TennisSession, position: TennisPosition, input: TennisInput | undefined, now: number) {
@@ -214,6 +219,14 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
         market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy,
         exitRules:{targetReturn:(intent.signalConfig??session.config).targetReturn,stopReturn:(intent.signalConfig??session.config).stopReturn,maxHoldMs:(intent.signalConfig??session.config).maxHoldMs,source:'entry'},
         ...(intent.contextSnapshot?{entryContext:structuredClone(intent.contextSnapshot)}:{}) });
+      if(intent.analysis?.entry){
+        const opened=session.positions.at(-1)!,entry=intent.analysis.entry,cfg=intent.signalConfig??session.config;
+        opened.entryAnalysis=structuredClone(intent.analysis);
+        opened.exitPlan=createExitPlan({openedAt:now,entryAllInUnitCost:-result.cashDelta/result.filledQty,
+          risk:{targetReturn:cfg.targetReturn,stopReturn:cfg.stopReturn,maxHoldMs:cfg.maxHoldMs},
+          thesis:{referenceBid:entry.referenceBid,riskPrice:entry.riskPrice,volatilityPerSqrtSecond:entry.volatilityPerSqrtSecond,horizonMs:entry.horizonMs,frictionPerShare:entry.frictionPerShare},
+          executionDelayMs:cfg.executionDelayMs,tickSize:input.market.execution!.priceIncrement});
+      }
     } else if (oldPosition) {
       const full = Math.abs(result.filledQty - oldPosition.quantity) < EPSILON;
       const allocated = full ? oldPosition.costBasis : exact(oldPosition.costBasis * result.filledQty / oldPosition.quantity);
@@ -233,7 +246,7 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
     cashDelta: result.cashDelta, realizedPnl: pnl, quotedPrice: intent.limitPrice, actualPrice: result.averagePrice || undefined,
     executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt });
   record(session, now, intent.slug, intent.side, result.apply ? intent.action : 'SKIP', result.apply ? result.status.toUpperCase() : 'FILL_FAILED',
-    `${intent.reason} ${result.reason}`, input);
+    `${intent.reason} ${result.reason}`, input,intent.analysis?{analysis:intent.analysis}:{});
   if (!result.apply && intent.action === 'BUY') setCooldown(session, intent.slug, now,true);
   // Paper exits are IOC: unfilled quantity stays in the position and is retried on later data.
   if (intent.action === 'SELL' && holding(session)) {
@@ -268,7 +281,8 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
     return false;
   }
   if (now < intent.executeAfter) { session.lastReason = 'Paper execution delay is still running.'; return true; }
-  if (now - intent.createdAt > Math.max(30_000, session.config.executionDelayMs * 3)) {
+  const delay=intent.action==='SELL'?(holding(session)?.exitPlan?.executionDelayMs??session.config.executionDelayMs):session.config.executionDelayMs;
+  if (now - intent.createdAt > Math.max(30_000, delay * 3)) {
     session.pending = null;
     if(intent.action==='BUY'&&intent.decisionMode==='auto')setCooldown(session,intent.slug,now,true);
     record(session, now, intent.slug, intent.side, 'SKIP', 'INTENT_EXPIRED', 'The paper order expired before a usable later book arrived.');
@@ -280,7 +294,9 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   }
   if (session.ledger.some(entry => entry.id === intent.id)) { session.pending = null; return false; }
   if (intent.action === 'BUY') {
-    const issue = entryIssue(session, input, intent.side, intent.budget ?? 0, now) ?? pendingSignalIssue(session, input, intent, now);
+    const quantitative=intent.signalConfig?.decisionEngine==='local-move-v1';
+    const recheck=quantitative?pendingSignalIssue(session,input,intent,now):null;
+    const issue = entryIssue(session, input, intent.side, intent.budget ?? 0, now) ?? recheck ?? (quantitative?null:pendingSignalIssue(session, input, intent, now));
     // Recheck the complete entry and its exit costs on the later book.
     if (issue) {
       session.pending = null;
@@ -296,7 +312,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   }
   const command: PaperCommand = { commandId: intent.id, marketSlug: intent.slug, positionId: intent.positionId,
     side: intent.side, action: intent.action, source: intent.source, limitPrice: intent.limitPrice,
-    createdAt: intent.createdAt, strategyVersion: session.config.version,
+    createdAt: intent.createdAt, strategyVersion: intent.signalConfig?.decisionEngine??position?.entryAnalysis?.version??session.config.decisionEngine??session.config.version,
     ...(intent.action === 'BUY' ? { budget: intent.budget } : { quantity: position!.quantity }) };
   const result = simulate(session, input, command, now);
   session.consumedBooks[intent.slug] = input.receivedAt;
@@ -313,6 +329,17 @@ function beginObservation(session:TennisSession,duration:number|undefined,now:nu
 }
 
 function pendingSignalIssue(session:TennisSession,input:TennisInput,intent:TennisIntent,now:number) {
+  if(intent.signalConfig?.decisionEngine==='local-move-v1'){
+    const analysis=localAnalysis(session,input,intent.side,now,intent.signalConfig);
+    if(!intent.analysis?.entry||!analysis)return {code:'ANALYSIS_MISSING',reason:'The delayed entry has no complete local analysis snapshot.'};
+    record(session,now,intent.slug,intent.side,analysis.decision==='enter'?'WAIT':'SKIP','ENTRY_RECHECK',`Later-book recheck: ${analysis.reason}`,input,{analysis});
+    if(analysis.decision!=='enter'||!analysis.entry)return {code:analysis.code,reason:analysis.reason};
+    // Freeze the original scenario; a later quote may invalidate it, never move it away.
+    if(analysis.entry.referenceBid>intent.analysis.entry.referenceBid+EPSILON||analysis.entry.riskPrice<intent.analysis.entry.riskPrice-EPSILON)
+      return {code:'THESIS_CHANGED',reason:'The delayed entry now needs a higher reference or lower invalidation price. A new setup is required.'};
+    intent.analysis=structuredClone(analysis);
+    return null;
+  }
   const signal=intent.signalSnapshot??session.signals[keyFor(intent.slug,intent.side)],quote=quotes(input,intent.side);
   const config=intent.signalConfig??session.config;
   const price=quote.bid!==undefined&&quote.ask!==undefined?(quote.bid+quote.ask)/2:NaN;
@@ -422,9 +449,45 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
 }
 
 type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;cost:number};
+type LocalCandidate={input:TennisInput;side:TradeSide;analysis:OpportunityAnalysis};
+
+function appendLocalHistory(session:TennisSession,input:TennisInput,side:TradeSide){
+  const key=keyFor(input.market.slug,side),quote=quotes(input,side),old=session.histories[key]??[];
+  if(quote.bid===undefined||quote.ask===undefined||quote.bid>quote.ask||input.receivedAt<=(old.at(-1)?.time??-1))return;
+  session.histories[key]=[...old.filter(p=>p.time>=input.receivedAt-session.config.baselineWindowMs),
+    {time:input.receivedAt,price:exact((quote.bid+quote.ask)/2),bid:quote.bid,ask:quote.ask,score:input.market.score,period:input.market.period,scoreUpdatedAt:input.market.contextUpdatedAt}].slice(-600);
+}
+
+function localAnalysis(session:TennisSession,input:TennisInput,side:TradeSide,now:number,config=session.config):OpportunityAnalysis|null{
+  if(!input.market.execution)return null;
+  return analyzeOpportunity({history:session.histories[keyFor(input.market.slug,side)]??[],book:input.book,market:input.market.execution,
+    side,now,bookReceivedAt:input.receivedAt,bookSource:input.source,budget:config.entryBudget,cash:session.cash,
+    executionDelayMs:config.executionDelayMs,maxBookAgeMs:config.maxBookAgeMs,maxSpreadPoints:config.maxSpreadPoints,
+    maxHoldMs:config.maxHoldMs,minimumHistoryMs:config.minimumHistoryMs,minSamples:config.minSamples,baselineWindowMs:config.baselineWindowMs,stopReturn:config.stopReturn});
+}
+
+function evaluateLocalSide(session:TennisSession,input:TennisInput,side:TradeSide,now:number):LocalCandidate|null{
+  const key=keyFor(input.market.slug,side),previous=session.signals[key];
+  if(input.receivedAt<=(previous?.lastObservedAt??-1))return null;
+  let analysis=localAnalysis(session,input,side,now);
+  if(!analysis){record(session,now,input.market.slug,side,'SKIP','ANALYSIS_MAPPING','Verified execution rules are required for local move analysis.',input);return null;}
+  const issue=entryIssue(session,input,side,session.config.entryBudget,now);
+  const cooldown=previous?.cooldownUntil&&now<previous.cooldownUntil;
+  if(issue||cooldown){
+    const code=issue?.code??'COOLDOWN',reason=issue?.reason??`Entry cooldown: ${Math.ceil((previous!.cooldownUntil!-now)/1000)}s; current move measurements are still recorded.`;
+    analysis={...analysis,decision:issue?'reject':'wait',code,reason,entry:undefined,reasons:[{code,reason,decision:issue?'reject':'wait'},...analysis.reasons]};
+  }
+  session.signals[key]={phase:cooldown?'COOLDOWN':analysis.code==='HISTORY_WARMUP'?'WARMING':analysis.decision==='enter'?'RECOVERING':'WATCHING',
+    confirmations:0,lastObservedAt:input.receivedAt,lastBid:analysis.metrics.bid??undefined,lastPrice:analysis.metrics.currentMid??undefined,
+    cooldownUntil:previous?.cooldownUntil,reason:analysis.reason,analysis};
+  session.evaluated++;
+  record(session,now,input.market.slug,side,analysis.decision==='reject'?'SKIP':'WAIT',analysis.code,analysis.reason,input,{analysis,price:analysis.metrics.currentMid??undefined});
+  return analysis.decision==='enter'&&analysis.entry?{input,side,analysis}:null;
+}
 function resetFootballSetup(session:TennisSession,slug:string,reason:string){
   for(const side of ['YES','NO'] as const){
     const key=keyFor(slug,side),old=session.signals[key];
+    if(session.config.decisionEngine==='local-move-v1'&&!holding(session))delete session.histories[key];
     session.signals[key]={phase:'WATCHING',confirmations:0,cooldownUntil:old?.cooldownUntil,reason};
     for(const strategy of ['recovery','momentum'])if(session.autoSignals){
       const track=`${key}:${strategy}`;
@@ -520,6 +583,11 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if(input.sourceTime!==undefined&&input.sourceTime!==null)session.bookSourceTimes[input.market.slug]=input.sourceTime;
     session.coverage[input.market.slug] = {league: input.market.league, time: input.receivedAt, live: freshLive(input,now)};
     session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source,sourceTime:input.sourceTime};
+    const held=holding(session);
+    const localActive=session.config.decisionEngine==='local-move-v1'&&(session.status==='running'||!!session.pending);
+    if((localActive&&(!session.config.focusSlug||session.config.focusSlug===input.market.slug)||held?.exitPlan&&held.slug===input.market.slug)&&now-input.receivedAt<=Math.min(5000,session.config.maxBookAgeMs)){
+      for(const side of ['YES','NO'] as const)appendLocalHistory(session,input,side);
+    }
   }
   if (session.testRun && !session.testRun.complete) {
     const run = session.testRun;
@@ -549,6 +617,23 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (!session.pending && input && !dataIssue(session, input, now) && input.receivedAt > (session.consumedBooks[position.slug] ?? -1)) {
       const availableReturn = position.netLiquidationValue !== null && position.liquidationQuantity > 0
         ? position.netLiquidationValue / (position.costBasis * position.liquidationQuantity / position.quantity) - 1 : null;
+      if(position.exitPlan){
+        const quote=quotes(input,position.side),band=Math.max(position.exitPlan.tickSize*2,(quote.ask??0)-(quote.bid??0));
+        const bids=quote.bids.filter(q=>q.price>=(quote.bid??0)-band-EPSILON).reduce((n,q)=>n+q.quantity,0);
+        const asks=quote.asks.filter(q=>q.price<=(quote.ask??0)+band+EPSILON).reduce((n,q)=>n+q.quantity,0);
+        const movement=measureExitMarket((session.histories[keyFor(position.slug,position.side)]??[]).filter(p=>p.time>=position.openedAt),now,Math.max(30000,position.exitPlan.thesis.horizonMs));
+        const forcedReason=session.exitRequested?.positionId===position.id?session.exitRequested.reason:session.status==='stopping'?'Session stopped: attempting to close remaining paper quantity.':
+          availableReturn!==null&&availableReturn<=-position.exitRules!.stopReturn+EPSILON?'Net loss threshold reached; attempting a price-bounded exit.':
+          now-position.openedAt>=position.exitRules!.maxHoldMs?'Maximum holding time reached.':undefined;
+        const assessment=assessAdaptiveExit({plan:position.exitPlan,priorState:position.exitState,now,maxBookAgeMs:Math.min(5000,session.config.maxBookAgeMs),
+          mark:{bookTime:position.markedAt,netLiquidationValue:position.netLiquidationValue,liquidationQuantity:position.liquidationQuantity,remainingQuantity:position.quantity,remainingCostBasis:position.costBasis},
+          market:{bid:quote.bid??NaN,ask:quote.ask??NaN,volatilityPerSqrtSecond:movement?.volatilityPerSqrtSecond??NaN,recoveryDriftLowerPerSecond:movement?.recoveryDriftLowerPerSecond??null,
+            imbalance:bids+asks>0?(bids-asks)/(bids+asks):NaN,feeCoefficient:input.market.execution!.feeCoefficient},forcedReason});
+        assessment.marketMeasurement=movement;
+        position.exitState=assessment.state;
+        if(forcedReason||assessment.action==='exit')stage(session,input,position.side,'SELL',now,session.exitRequested?.source??'AUTOMATIC',forcedReason??assessment.reason,undefined,undefined,undefined,assessment);
+        else if(!processed)record(session,now,position.slug,position.side,'WAIT',assessment.code,assessment.reason,input,{netReturn:availableReturn??undefined,exitAnalysis:assessment});
+      }else{
       // A profit target requires buyers for the entire position. Partial books can still reduce losses.
       const reason = session.exitRequested?.positionId === position.id ? session.exitRequested.reason : session.status === 'stopping' ? 'Session stopped: attempting to close remaining paper quantity.'
         : completeMark && availableReturn !== null && availableReturn >= position.exitRules!.targetReturn - EPSILON ? 'Net profit target reached after estimated exit fees.'
@@ -557,6 +642,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       if (reason) stage(session, input, position.side, 'SELL', now, session.exitRequested?.source ?? 'AUTOMATIC', reason);
       else if (!processed) record(session, now, position.slug, position.side, 'WAIT', availableReturn === null ? 'NO_EXIT_DEPTH' : 'HOLDING',
         availableReturn === null ? 'No executable exit price is currently available. The position remains open.' : 'Holding until net profit, loss, or time exit rules trigger.', input, { netReturn: availableReturn ?? undefined });
+      }
     }
   } else {
     const realised = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
@@ -565,10 +651,15 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   }
   if (session.status === 'running' && !holding(session) && !session.pending && !processed) {
     const candidates:AutoCandidate[]=[];
+    const localCandidates:LocalCandidate[]=[];
     const beforeSequence=session.decisionSequence??0;
     let autoChecked=0;
     for (const input of current.sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
       if(session.config.focusSlug && session.config.focusSlug!==input.market.slug) continue;
+      if(session.config.decisionEngine==='local-move-v1'){
+        for(const side of ['YES','NO'] as const){const candidate=evaluateLocalSide(session,input,side,now);if(candidate)localCandidates.push(candidate);autoChecked++;}
+        continue;
+      }
       const issue = dataIssue(session, input, now);
       if (issue) { record(session, now, input.market.slug, 'YES', 'SKIP', 'DATA', issue, input); continue; }
       if (!session.config.leagues.includes(input.market.league) || input.market.ended || !input.market.active || input.book.state !== 'MARKET_STATE_OPEN') {
@@ -585,7 +676,20 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       }
       if (session.pending) break;
     }
-    if(session.config.strategy==='auto'){
+    if(session.config.decisionEngine==='local-move-v1'){
+      localCandidates.sort((a,b)=>(b.analysis.metrics.netRewardRiskRatio??0)-(a.analysis.metrics.netRewardRiskRatio??0)||
+        (b.analysis.entry?.netHeadroom??0)-(a.analysis.entry?.netHeadroom??0)||a.input.market.slug.localeCompare(b.input.market.slug)||a.side.localeCompare(b.side));
+      const chosen=localCandidates[0];
+      if(chosen)stage(session,chosen.input,chosen.side,'BUY',now,'AUTOMATIC',chosen.analysis.reason,session.config.entryBudget,undefined,chosen.analysis);
+      if((session.decisionSequence??0)>beforeSequence){
+        if(!chosen){
+          const recent=session.decisions.filter(d=>Number(d.id.split(':').at(-1))>beforeSequence);
+          const best=recent.find(d=>d.analysis?.decision==='wait'&&d.analysis.metrics.recoveryDriftLowerPerSecond!==null&&d.analysis.metrics.recoveryDriftLowerPerSecond!>0)??recent[0];
+          if(best)session.lastReason=best.reason;
+        }
+        session.autoStatus={time:now,checked:autoChecked,qualified:localCandidates.length,reason:session.lastReason};
+      }
+    }else if(session.config.strategy==='auto'){
       candidates.sort((a,b)=>a.intent.createdAt-b.intent.createdAt||a.cost-b.cost||a.intent.slug.localeCompare(b.intent.slug)||a.intent.side.localeCompare(b.intent.side)||a.intent.signalConfig!.strategy.localeCompare(b.intent.signalConfig!.strategy));
       const chosen=candidates[0];
       if(chosen){
@@ -639,7 +743,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if (action.action === 'reset') {
     if (holding(session) || session.pending) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
-    session = createTennisSession({...defaultTennisConfig(action.bankroll),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug}, now);
+    session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug}, now);
     session.commandIds = [action.commandId];
     return session;
   }
