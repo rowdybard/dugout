@@ -32,16 +32,17 @@ Dip signals are barely better than random. Every version loses after costs; even
 - Buying when the model disagreed with the price by more than fees (2–10¢ thresholds, hold to settlement, about 130–170 trades each) lost −7% to −15% on average. The confidence intervals are wide but centered below zero.
 - The market already knows what nflfastR-style models know.
 
-### 4. Reaction to plays: an under-reaction signature, but timing is not yet measured
-- The price moves about **half as much as the nflfastR-implied change** by the next snap, and about two-thirds by a minute later.
-- After big plays (≥5 win-probability points), the price **keeps drifting the same way**: about 4.6¢ first move, then +1.3 to +1.8¢ more over the next 1–5 minutes. That is continuation, not reversal. It is the opposite of what Astra's dip-buying assumes.
-- The apparent 15–30 s lag came from the 1-minute sampling of 2025 data. **Now rerunning on dense 2026 games** to measure the real lag.
-- **Why it matters:** if the market really takes 20–60 s to absorb a play, a bot with a play feed faster than that could enter before the move. That is the one edge the data hints at, and it depends on data speed, not on a smarter model. The drift after the first move (about 1.5¢) is below the cost of holding to settlement (about 2.7¢ at 50¢), so trading it late doesn't pay.
+### 4. Reaction to plays: the NFL market is fast and complete
+Measured on the 32 densely sampled 2026 regular-season games (5,317 plays, 518 big plays of ≥5 win-probability points):
+- **Speed:** by **15 s after the snap** the market has made a median **75%** of its eventual move on big plays; by 30 s, **88%**. Plays last 5–8 s, so prices adjust within about 10 s of the play ending.
+- **Almost no continuation:** after a 6.6¢ first move there is only 0.4–0.8¢ more over the next 1–5 minutes. An earlier "1.5¢ continuation" was an artifact of the 1-minute 2025 sampling.
+- The market moves about 0.6–0.7× nflfastR's per-play change. Since the market is also more accurate (section 3), this is the model overreacting, not the market underreacting.
+- **Conclusion:** trading on public NFL play information is too slow. Winning on speed would need a feed reaching us within a few seconds of the play *and* faster order entry than professional market makers. A live test on Sep 27 records how late ESPN's free feed publishes each play (`research/market-history/live_lag_probe.py`).
 
 ## What this means (so far)
-1. Stop tuning in-game scalping. The data says it cannot beat taker costs.
-2. The plausible edges are:
-   - **(a) speed:** a fast play-by-play feed plus an immediate order after big plays; the reaction lag on dense 2026 data decides this
-   - **(b) specialised information** the public models lack: pitchers, bullpens and lineups in MLB; injuries and QB changes in the NFL
-   - **(c) resting (maker) orders**, which avoid taker fees and earn the spread. This cannot be backtested on price history and needs live recording.
-3. MLB (2026 season, dense data) and the pitcher- and bullpen-aware model are next.
+1. **NFL as a taker is efficient on every axis tested:** scalping, calibration, model disagreement and speed. There is no retail edge from public data.
+2. Stop tuning in-game scalping. The data says it cannot beat taker costs.
+3. Remaining candidate edges:
+   - **(a) MLB:** the 2026 season, about 2,000 densely priced games. MLB has an exact per-pitch operator timestamp and a free official live feed, so the speed test is sharper there, and pitcher, bullpen and lineup information is richer.
+   - **(b) resting (maker) orders:** avoid taker fees and earn the spread instead of paying it. This cannot be backtested on price history and needs live order-book recording.
+   - **(c) pregame mispricing:** a small sample hints at home overpricing. Needs the full catalog, all sports.

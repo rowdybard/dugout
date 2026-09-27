@@ -62,8 +62,8 @@ def main() -> None:
         folder = MLB / "extract" / str(season)
         if folder.exists():
             games[season] = pd.read_parquet(folder / "games.parquet")
-            pas[season] = pd.read_parquet(folder / "plate_appearances.parquet")
-            events[season] = pd.read_parquet(folder / "events.parquet")
+            pas[season] = dict(tuple(pd.read_parquet(folder / "plate_appearances.parquet").groupby("gamePk")))
+            events[season] = dict(tuple(pd.read_parquet(folder / "events.parquet").groupby("gamePk")))
     frames, unmatched = [], []
     for m in markets.itertuples():
         season = int(pd.to_datetime(m.start_ts, unit="s").year)
@@ -84,9 +84,13 @@ def main() -> None:
             unmatched.append({"market": m.market_slug, "reason": "empty history"})
             continue
         px = home_prices(prices, long_is_home=False).sort_values(["ts", "seq"])
-        px["ms"] = px.ts * 1000
-        p, e = pas[season], events[season]
-        tl = timeline(p[p.gamePk == game.gamePk], e[e.gamePk == game.gamePk])
+        px["ms"] = (px.ts * 1000).astype("float64")
+        p, e = pas[season].get(game.gamePk), events[season].get(game.gamePk)
+        if p is None or e is None:
+            unmatched.append({"market": m.market_slug, "reason": "no play-by-play"})
+            continue
+        tl = timeline(p, e)
+        tl["ms"] = tl.ms.astype("float64")
         if tl.empty:
             px["phase"] = "no_pbp"
         else:
