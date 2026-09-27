@@ -15,11 +15,14 @@ import drive_entry as d  # noqa: E402
 from common import round_trip_return, settle_return  # noqa: E402
 
 
-def game(rows: list[dict], name: str = "g1", yes_win: float = 0.0) -> pd.DataFrame:
-    """Rows 15 s apart; each dict overrides the defaults (YES trails 0-17 with the ball at the 25, Q2, 1st down)."""
+def game(rows: list[dict], name: str = "g1", yes_win: float = 0.0, start: float = 1_000_000.0) -> pd.DataFrame:
+    """Rows 15 s apart from `start`; each dict overrides the defaults (YES trails 0-17 with the ball at the 25, Q2, 1st down)."""
     base = {"yes_ask": 0.21, "yes_bid": 0.20, "fee": 0.0695, "poss": "yes", "yes_score": 0, "no_score": 17, "quarter": 2,
             "down": 1.0, "yards": 25.0, "secs_left": np.nan, "yes_win": yes_win}
-    return pd.DataFrame([{**base, **row, "game": name, "t": 1_000_000.0 + 15 * i} for i, row in enumerate(rows)], columns=d.COLUMNS)
+    return pd.DataFrame([{**base, **row, "game": name, "t": start + 15 * i} for i, row in enumerate(rows)], columns=d.COLUMNS)
+
+
+DAY = 86_400.0
 
 
 def only(trades: pd.DataFrame, variant: str = "drive") -> pd.DataFrame:
@@ -67,36 +70,75 @@ def test_settles_when_no_executable_book_follows() -> None:
 
 
 def test_controls_and_the_evidence_row() -> None:
-    winners = pd.concat([game([{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.31, "yes_bid": 0.30}], name=f"w{i}") for i in range(40)])
+    winners = pd.concat([game([{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.31, "yes_bid": 0.30}], name=f"w{i}", start=DAY * i) for i in range(40)])
     trades = d.study(winners)
     assert len(only(trades)) == 40 and len(only(trades, "opposite")) == 40 and len(only(trades, "random")) > 0
     opposite = only(trades, "opposite").iloc[0]
     assert opposite.side == "no" and math.isclose(opposite.entry, 0.80) and opposite.ret < 0, opposite
     summary = d.summarize(trades, "nfl", "test")
     row = summary["evidence"]
-    assert row["status"] == "lead" and row["strategies"] == ["comeback-drive"] and row["styles"] == ["taker-scalp"], row
+    assert row["status"] == "lead" and row["strategies"] == ["comeback-drive@1"] and row["styles"] == ["taker-scalp"], row
     assert row["estimate"]["mean"] > 0 and summary["variants"]["drive"]["n"] == 40
     assert set(summary["split"]["drive"]) == {"discovery", "holdout"}
-    losers = pd.concat([game([{}, {}, {"down": 2}, {"poss": "no", "yes_ask": 0.13, "yes_bid": 0.12}], name=f"l{i}") for i in range(40)])
+    losers = pd.concat([game([{}, {}, {"down": 2}, {"poss": "no", "yes_ask": 0.13, "yes_bid": 0.12}], name=f"l{i}", start=DAY * i) for i in range(40)])
     assert d.summarize(d.study(losers), "nfl", "test")["evidence"]["status"] == "dropped"
     few = d.summarize(d.study(game([{}, {}, {"down": 2}, {"poss": "no"}])), "nfl", "test")
     assert few["evidence"] is None and "30" in few["note"]
+    # Positive in the earlier games only: the holdout kills it.
+    early = [game([{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.31, "yes_bid": 0.30}], name=f"e{i}", start=DAY * i) for i in range(20)]
+    late = [game([{}, {}, {"down": 2}, {"poss": "no", "yes_ask": 0.13, "yes_bid": 0.12}], name=f"x{i}", start=DAY * (20 + i)) for i in range(20)]
+    split = d.summarize(d.study(pd.concat(early + late)), "nfl", "test")
+    assert split["split"]["drive"]["discovery"]["mean"] > 0 and split["split"]["drive"]["holdout"]["mean"] < 0
+    assert split["evidence"]["status"] == "dropped" and "holdout" in split["note"], split["note"]
 
 
 def test_hold_row_only_when_holding_makes_money_and_beats_selling() -> None:
     touchdown = [{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.31, "yes_bid": 0.30}]
-    won = d.summarize(d.study(pd.concat([game(touchdown, name=f"w{i}", yes_win=1.0) for i in range(40)])), "nfl", "test")
+    won = d.summarize(d.study(pd.concat([game(touchdown, name=f"w{i}", yes_win=1.0, start=DAY * i) for i in range(40)])), "nfl", "test")
     row = won["evidenceHold"]
-    assert row["status"] == "lead" and row["strategies"] == ["comeback-drive-hold"] and row["styles"] == ["taker-hold"], row
+    assert row["status"] == "lead" and row["strategies"] == ["comeback-drive-hold@1"] and row["styles"] == ["taker-hold"], row
     assert won["holdMinusSell"]["mean"] > 0
-    lost = d.summarize(d.study(pd.concat([game(touchdown, name=f"l{i}", yes_win=0.0) for i in range(40)])), "nfl", "test")
+    lost = d.summarize(d.study(pd.concat([game(touchdown, name=f"l{i}", yes_win=0.0, start=DAY * i) for i in range(40)])), "nfl", "test")
     assert lost["evidenceHold"]["status"] == "dropped"
     # Holding makes money on average but less than selling at a high price: no row, the bot keeps selling.
     rich = [{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.91, "yes_bid": 0.90}]
-    mixed = pd.concat([game(rich, name=f"m{i}", yes_win=float(i % 2)) for i in range(40)])
+    mixed = pd.concat([game(rich, name=f"m{i}", yes_win=float(i % 2), start=DAY * i) for i in range(40)])
     middle = d.summarize(d.study(mixed), "nfl", "test")
     assert middle["variants"]["hold"]["mean"] > 0 and middle["holdMinusSell"]["mean"] < 0
     assert middle["evidenceHold"] is None and "keeps selling" in middle["holdNote"]
+
+
+def test_drive_fade_buys_the_leader_once_per_drive_and_holds() -> None:
+    # YES (trailing 0-17, 21c) drives inside the 30: buy NO (the leader) at 1 - 0.20 = 80c after the lag, hold.
+    g = game([{}, {}, {"down": 2}, {"poss": "no", "down": 1, "yards": 70}], yes_win=0.0)
+    fade = only(d.study(g), "fade")
+    assert len(fade) == 1 and fade.side.iloc[0] == "no" and math.isclose(fade.entry.iloc[0], 0.80), fade
+    assert fade.t.iloc[0] == 1_000_015 and fade.exit.iloc[0] == "settled"
+    assert math.isclose(fade.ret.iloc[0], float(settle_return(0.80, 1.0)), rel_tol=1e-12)
+    # The alternative exit sells the leader at its bid (1 - yes_ask) once the drive ends.
+    assert math.isclose(fade.drive_end_ret.iloc[0], float(round_trip_return(0.80, 0.79)), rel_tol=1e-12)
+    # Not a longshot (31c), the leader too expensive (96c), the team with the ball leading, 4th down, overtime: no fade.
+    for override in [{"yes_ask": 0.32, "yes_bid": 0.31}, {"yes_ask": 0.05, "yes_bid": 0.04}, {"yes_score": 20}, {"down": 4}, {"quarter": 5}]:
+        assert only(d.study(game([override] * 4)), "fade").empty, override
+
+
+def test_leader_control_stays_outside_fade_setups() -> None:
+    # The leader (NO) has the ball at midfield: not a fade setup, but YES is a longshot, so the control may buy NO.
+    g = game([{"poss": "no", "yards": 50}] * 40, yes_win=0.0)
+    control = only(d.study(g), "leader-any")
+    assert len(control) >= 1 and set(control.side) == {"no"} and set(control.exit) == {"settled"}, control
+    assert only(d.study(g), "fade").empty
+    # Every row is a fade setup: the control never picks one.
+    assert only(d.study(game([{}] * 40)), "leader-any").empty
+
+
+def test_drive_fade_evidence_names_the_version() -> None:
+    rows = [{}, {}, {"down": 2}, {"poss": "no", "down": 1, "yards": 70}]
+    held = d.summarize(d.study(pd.concat([game(rows, name=f"f{i}", yes_win=0.0, start=DAY * i) for i in range(70)])), "nfl", "test")
+    row = held["evidenceFade"]
+    assert row["status"] == "lead" and row["strategies"] == ["drive-fade@1"] and row["styles"] == ["taker-hold"], row
+    few = d.summarize(d.study(pd.concat([game(rows, name=f"f{i}", yes_win=0.0, start=DAY * i) for i in range(40)])), "nfl", "test")
+    assert few["evidenceFade"] is None and "60" in few["fadeNote"]
 
 
 def test_live_book_records() -> None:

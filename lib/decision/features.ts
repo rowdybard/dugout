@@ -1,5 +1,5 @@
 import {otherSide,phaseOf,quoteOf,type DecisionContext,type FeatureValue,type SideKey} from './context.ts';
-import {latestEvent} from './events.ts';
+import {latestScore} from './events.ts';
 
 /**
  * Named features the evidence conditions, models and strategies read. Research plug: add a feature
@@ -83,17 +83,17 @@ export const BUILTIN_FEATURES:FeatureRegistry={
   pregamePrice:(ctx,side)=>sideOf(ctx.market.pregameYesMid,side),
   moveSincePregame:(ctx,side)=>{const now=mid(ctx,side),then=sideOf(ctx.market.pregameYesMid,side);return now===undefined||then===undefined?undefined:(now-then)*100;},
 
-  // The latest score event (lib/decision/events.ts), from this side's perspective.
-  'lastScore.secondsSince':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?(ctx.now-e.receivedAt)/1000:undefined;},
-  'lastScore.bySide':(ctx,side)=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?.side?e.side===side:undefined;},
-  'lastScore.points':ctx=>latestEvent(ctx.events,'score',ctx.now)?.points,
+  // The latest scoring play (lib/decision/events.ts latestScore: a touchdown and its try are one), from this side's perspective.
+  'lastScore.secondsSince':ctx=>{const e=latestScore(ctx.events,ctx.now);return e?(ctx.now-e.receivedAt)/1000:undefined;},
+  'lastScore.bySide':(ctx,side)=>{const e=latestScore(ctx.events,ctx.now);return e?.side?e.side===side:undefined;},
+  'lastScore.points':ctx=>latestScore(ctx.events,ctx.now)?.points,
   /** The scoring team's price before the market could have known: low means a surprising score. */
-  'lastScore.scorerPreEventPrice':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?.side?sideOf(e.preYesMid,e.side):undefined;},
+  'lastScore.scorerPreEventPrice':ctx=>{const e=latestScore(ctx.events,ctx.now);return e?.side?sideOf(e.preYesMid,e.side):undefined;},
   /** How far this side's midpoint has fallen since before the score, in probability units (negative if it rose). */
-  'lastScore.moveAgainst':(ctx,side)=>{const e=latestEvent(ctx.events,'score',ctx.now),before=e?sideOf(e.preYesMid,side):undefined,now=mid(ctx,side);return before===undefined||now===undefined?undefined:before-now;},
+  'lastScore.moveAgainst':(ctx,side)=>{const e=latestScore(ctx.events,ctx.now),before=e?sideOf(e.preYesMid,side):undefined,now=mid(ctx,side);return before===undefined||now===undefined?undefined:before-now;},
   /** How much of the scorer's move happened before the report reached Dugout, in probability units. */
-  'lastScore.movedBeforeReport':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);if(!e?.side)return undefined;const pre=sideOf(e.preYesMid,e.side),at=sideOf(e.atReportYesMid,e.side);return pre===undefined||at===undefined?undefined:at-pre;},
-  'lastScore.id':ctx=>latestEvent(ctx.events,'score',ctx.now)?.id,
+  'lastScore.movedBeforeReport':ctx=>{const e=latestScore(ctx.events,ctx.now);if(!e?.side)return undefined;const pre=sideOf(e.preYesMid,e.side),at=sideOf(e.atReportYesMid,e.side);return pre===undefined||at===undefined?undefined:at-pre;},
+  'lastScore.id':ctx=>latestScore(ctx.events,ctx.now)?.id,
   /** Drives so far: every score, change of possession or half ends one. */
   driveNumber:ctx=>(ctx.events??[]).filter(e=>e.type==='score'||e.type==='possession'||(e.type==='period'&&(e.period==='Q3'||/OT/.test(e.period)))).length,
 };

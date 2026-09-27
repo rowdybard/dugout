@@ -2,7 +2,7 @@ import type {DecisionContext,SideKey} from '../context.ts';
 import type {Feature} from '../features.ts';
 import type {Proposal,Strategy,StrategyTools} from '../strategies.ts';
 import {paramsOf,requireSpec} from '../catalog.ts';
-import {latestEvent} from '../events.ts';
+import {latestEvent,latestScore} from '../events.ts';
 
 /**
  * Football module: live game-state features and football strategy candidates (docs/STRATEGY-ARCHITECTURE.md).
@@ -128,7 +128,7 @@ export function surpriseFade():Strategy {
   return {id:'surprise-fade',version:'1',description:spec.title,hypothesis:spec.hypothesis,
     propose(ctx,tools){
       if(tools.phase!=='live'||!FOOTBALL.has(ctx.market.sport)){tools.note('PHASE','Live football only.');return [];}
-      const event=latestEvent(ctx.events,'score',ctx.now);
+      const event=latestScore(ctx.events,ctx.now);
       if(!event){tools.note('NO_SETUP','No score seen yet this game.');return [];}
       if(!event.side){tools.note('NO_SETUP','The last score change was not one team\'s score.');return [];}
       const since=(ctx.now-event.receivedAt)/1000;

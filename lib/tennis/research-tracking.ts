@@ -1,4 +1,4 @@
-import {detectFootballEvents,EVENT_TAPE_LIMIT,latestEvent,PRE_EVENT_LOOKBACK_MS,type FootballState} from '../decision/events.ts';
+import {detectFootballEvents,EVENT_TAPE_LIMIT,latestScore,PRE_EVENT_LOOKBACK_MS,type FootballState} from '../decision/events.ts';
 import {advanceShadow,compactShadow,openShadow,settleResult,settleShadow,shadowReadyToCompact} from '../decision/shadow.ts';
 import {specOf} from '../decision/catalog.ts';
 import {NO_TRADE,type NoTradeCode} from '../decision/why.ts';
@@ -102,7 +102,7 @@ export function openCandidateShadows(session:TennisSession,input:TennisInput,tra
     if(!spec)continue;
     const id=`${input.market.slug}|${proposal.strategy}@${proposal.strategyVersion}|${proposal.setupKey??proposal.side}`;
     if(known(session,id)||shadows.length>=SHADOW_OPEN_LIMIT)continue;
-    const maker=proposal.style==='maker',event=latestEvent(session.gameTape?.[input.market.slug],'score',now);
+    const maker=proposal.style==='maker',event=latestScore(session.gameTape?.[input.market.slug],now);
     const preEventSideMid=spec.family==='event-reaction'&&event?.preYesMid!=null?(proposal.side==='yes'?event.preYesMid:round(1-event.preYesMid)):null;
     const quietMs=typeof spec.entry.params.maxWindowSeconds==='number'?spec.entry.params.maxWindowSeconds*1000:undefined;
     shadows.push(openShadow({id,kind:'candidate',strategy:proposal.strategy,version:proposal.strategyVersion,slug:input.market.slug,sport:input.market.league,

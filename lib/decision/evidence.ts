@@ -30,7 +30,7 @@ export type Evidence={
   price?:{min:number;max:number};role?:Role;
   /** All must hold. An unknowable condition never permits a trade, and cannot rule out a losing row. */
   conditions?:Condition[];
-  /** Limit the row to proposals from these strategy ids (lib/decision/strategies.ts). */
+  /** Limit the row to proposals from these strategies: 'id' (every version) or 'id@version' (one version; study rows use this). */
   strategies?:string[];
   estimate:Estimate;
   /** Conservative bound for maker markouts (filled only when price trades through). */

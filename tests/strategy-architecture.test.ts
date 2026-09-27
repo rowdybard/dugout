@@ -7,7 +7,7 @@ import {createEngine,defaultEngine,namesStrategy} from '../lib/decision/engine.t
 import {BUNDLED_PACK} from '../lib/decision/pack.ts';
 import {fillForStake,holdEdge,roundTripHurdle} from '../lib/decision/edge.ts';
 import {compileModel} from '../lib/decision/models.ts';
-import {detectFootballEvents,latestEvent,type GameEvent} from '../lib/decision/events.ts';
+import {detectFootballEvents,latestEvent,latestScore,SCORING_PLAY_MS,type GameEvent} from '../lib/decision/events.ts';
 import {BUILTIN_FEATURES,featureRegistry,readFeature} from '../lib/decision/features.ts';
 import {SPORT_FEATURES} from '../lib/decision/sports/index.ts';
 import {noTradeCode,primaryReason} from '../lib/decision/why.ts';
@@ -92,6 +92,21 @@ test('events: scores, changes of possession, periods and dead balls are detected
   assert.deepEqual(detectFootballEvents({...base,previous:undefined,next:state()}),[],'the first state has no before');
   const home=detectFootballEvents({...base,yesOrdering:'home',previous:state(),next:state({reportTime:1100,score:'0-20'})});
   assert.equal(home[0].side,'yes','YES is the home team: the second number');
+});
+
+test('events: a touchdown and its try are one scoring play, timed and priced from the touchdown',()=>{
+  const td:GameEvent={id:'100000:score',type:'score',reportTime:100_000,receivedAt:100_000,side:'no',points:6,score:'0-6',period:'Q2',preYesMid:0.75,atReportYesMid:0.7};
+  const pat:GameEvent={...td,id:'160000:score',reportTime:160_000,receivedAt:160_000,points:1,score:'0-7',preYesMid:0.62,atReportYesMid:0.62};
+  const play=latestScore([td,pat],170_000)!;
+  assert.equal(play.id,td.id);assert.equal(play.receivedAt,100_000);assert.equal(play.preYesMid,0.75);assert.equal(play.points,7);assert.equal(play.score,'0-7');
+  assert.equal(latestScore([td,pat],150_000),td,'the try is not seen before it arrives');
+  const later={...pat,id:'x',receivedAt:100_000+SCORING_PLAY_MS+1};
+  assert.equal(latestScore([td,later],10**9),later,'too far apart: a separate score');
+  const other={...pat,side:'yes' as const};
+  assert.equal(latestScore([td,other],170_000),other,'the other team scoring is a separate score');
+  // surprise-fade keeps its window and its single entry through the try.
+  const ctx=eventCtx({events:[{...td,receivedAt:100_000},pat]});
+  assert.equal(byStrategy(plan(ctx),'surprise-fade')[0]?.proposal.setupKey,td.id);
 });
 
 function eventCtx(over:Partial<DecisionContext>={}):DecisionContext {

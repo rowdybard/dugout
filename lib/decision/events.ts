@@ -32,6 +32,13 @@ export type GameEvent={
 export const PRE_EVENT_LOOKBACK_MS=30_000;
 /** Events kept per market. */
 export const EVENT_TAPE_LIMIT=24;
+/**
+ * The feed reports a touchdown and its try (extra point or two-point attempt) as separate score changes, usually
+ * under a minute apart. Same-side score events this close together are one scoring play, timed and priced from
+ * its first report; otherwise the try would restart every "seconds since the score" clock with a post-touchdown
+ * "pre-event" price.
+ */
+export const SCORING_PLAY_MS=150_000;
 
 export type FootballState={reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean};
 
@@ -72,4 +79,22 @@ export function detectFootballEvents(input:{
 /** The latest event of a type at or before `now`. */
 export function latestEvent(events:readonly GameEvent[]|undefined,type:GameEventType,now:number):GameEvent|undefined {
   return [...(events??[])].reverse().find(event=>event.type===type&&event.receivedAt<=now);
+}
+
+/**
+ * The latest scoring play at or before `now` (see SCORING_PLAY_MS): the first report of a run of score events by
+ * the same side, each within SCORING_PLAY_MS of the one before, with the points summed and the latest score line.
+ * Its id, time and pre-event price are the first report's, so a strategy keyed on it enters once per scoring play.
+ */
+export function latestScore(events:readonly GameEvent[]|undefined,now:number):GameEvent|undefined {
+  const scores=(events??[]).filter(event=>event.type==='score'&&event.receivedAt<=now);
+  const last=scores.at(-1);
+  if(!last?.side)return last;
+  let first=last,points=last.points;
+  for(let i=scores.length-2;i>=0;i--){
+    const earlier=scores[i];
+    if(earlier.side!==last.side||first.receivedAt-earlier.receivedAt>SCORING_PLAY_MS)break;
+    first=earlier;points+=earlier.points;
+  }
+  return first===last?last:{...first,points,score:last.score};
 }

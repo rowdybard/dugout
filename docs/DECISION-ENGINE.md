@@ -1,6 +1,6 @@
 # Decision engine
 
-Added September 27, 2026. It turns the strategy lab's research into rules that every bot and person consults before a trade, with plugs where future research slots in. Code: [`lib/decision/`](../lib/decision). Evidence: [`research/studies/report.md`](../research/studies/report.md). Data and pack streaming: [DATA-PLATFORM.md](DATA-PLATFORM.md).
+Added September 27, 2026. It turns the strategy lab's research into rules that every bot and person consults before a trade, with plugs where future research slots in. Code: [`lib/decision/`](../lib/decision). Evidence: [`research/studies/report.md`](../research/studies/report.md). Data and pack streaming: [DATA-PLATFORM.md](DATA-PLATFORM.md). How strategies are specified, measured in shadow, scored and killed: [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md).
 
 ## The idea in one paragraph (for Chad)
 
@@ -24,11 +24,13 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
   - Unmeasured regimes are refused.
   - `proven` means real money may be used; `lead` means paper only. Resting-order leads may also run as a capped real-money `pilot`.
   - Once a row measured for a strategy itself applies, it replaces **blanket** regime averages (rows with no price band, role or conditions, which measured other entry rules). Findings about a narrower slice, such as "CFB underdogs" or "MLB sides under 10¢", still bind every strategy.
-- **Exploring (paper only):** a strategy with a written, pre-registered `hypothesis` may trade on paper where no study covers it yet, or where only a blanket average for other rules exists. The verdict is `EXPLORE_PAPER`.
+  - A row can name every version of a strategy (`"comeback-drive"`) or one version (`"comeback-drive@1"`). Studies name the version, so a new version never inherits an old one's result.
+- **Shadowing (the default for untested ideas):** every strategy version has a locked spec (`catalog.ts`). While it is `specified` or in research, its refused proposals are recorded with counterfactual entries and exits and scored, but never traded. See [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md#8-shadow-measurement-and-counterfactuals).
+- **Exploring (paper only, opt-in):** with `config.explore`, a strategy with a written `hypothesis` may trade on paper where no study covers it yet, or where only a blanket average for other rules exists. The verdict is `EXPLORE_PAPER`.
   - It is never pilot or real money.
   - It ranks below any measured result.
   - It stops as soon as a pack carries a row naming the strategy; that result then decides.
-  - Accounts opt in with `config.explore`.
+  - New accounts do not explore; the forward test is spent only on measured leads.
 - **Sizing:**
   - Real money stakes ¼ Kelly on the evidence's **lower** bound, so a result whose range touches zero stakes nothing.
   - Paper and pilot trades use a fixed small stake.
@@ -43,12 +45,16 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
 |---|---|
 | `engine.ts` | `createEngine()`, with `plan`, `gate`, `decide`, `quotePolicy` and `regime`, plus the compiled-in `defaultEngine` |
 | `context.ts` | `DecisionContext`: market, quotes, game state, price history, external signals |
-| `features.ts` | Named features: price, role, spread, depth, minutes to start, score difference, period, volatility, price changes, time of day, and `signal.*` / `game.*` pass-throughs |
+| `features.ts` | Named features: price, role, spread, depth, minutes to start, score difference, period, volatility, price changes, time of day, quote and report age, book imbalance and depth within 2¢, 30-s velocity, move since pregame, the last scoring play, and `signal.*` / `game.*` pass-throughs |
+| `spec.ts`, `catalog.ts`, `prereg.lock.json` | Every strategy version's spec (hypothesis, mechanism, evidence for and against, rules, exits, kill conditions, minimum sample) and the SHA-256 lock on its rules |
+| `edge.ts` | Edge after costs: the calibrated lower bound minus the book-walked fill, fee and latency allowance |
+| `events.ts` | Score, possession, period and dead-ball events with pre-event prices |
+| `shadow.ts`, `scorecard.ts`, `why.ts` | Counterfactual legs and exits, the per-version scorecard, and the "why no trade" vocabulary |
 | `evidence.ts` | The compiled-in evidence rows and the condition language |
 | `pack.ts` | Evidence-pack schema and validation, the bundled pack, and the untrusted-pack restriction |
-| `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`) and the market-implied baseline |
-| `strategies.ts` | Built-in strategies: `favourite-hold`, `model-edge-hold`, `maker-quote`, plus the `random-side-control` control |
-| `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features and `comeback-drive`. |
+| `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`, `calibration-v1` with intervals) and the market-implied baseline |
+| `strategies.ts` | Built-in strategies: `favourite-hold@1`, `model-edge-hold@2`, `maker-quote@1`, plus the `random-side-control@1` control |
+| `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features, `comeback-drive@1` and `comeback-drive-hold@1`, `drive-fade@1`, `surprise-fade@1` and `quiet-window-maker@1`. |
 | `sizing.ts`, `risk.ts`, `costs.ts` | Stakes, kill switches, fees and break-even |
 | `sources.ts`, `host.ts` | Streaming packs in: from a URL or an R2 binding, with a SHA-256 pin and fallback to the last good pack |
 | `forward.ts`, `polymarket.ts` | Forward test and read-only Polymarket US parsing |
@@ -62,8 +68,8 @@ Every research output has a place to plug in. None of them require engine code c
 | A measured result for a regime | an **evidence row** in a pack | `{"id":"cfb-live-late-favourite","status":"lead","sports":["CFB"],"phases":["live"],"styles":["taker-hold"],"price":{"min":0.9,"max":0.97},"conditions":[{"feature":"secondsRemaining","op":"lte","value":600},{"feature":"scoreDiff","op":"gte","value":14}],…}` |
 | A situation variable | a **feature** (`features.ts`, or `createEngine({features})`) | `twoMinuteWarning`, `bullpenInnings`, `lineMove60m` |
 | An outside fact (news, injuries, lineups, weather) | a **signal** in the context, read as `signal.<name>` | `signals: {starterScratched: true}` plus the row condition `{"feature":"signal.starterScratched","op":"eq","value":true}` |
-| A trained model | a **model spec** in the pack's `models` | `{"kind":"logistic-v1","id":"mlb-wp","sports":["MLB"],"phases":["live"],"intercept":…,"weights":{"scoreDiff":…}}`. `model-edge-hold` proposes when it beats break-even, and evidence still decides. |
-| A new way to trade | a **strategy** (`strategies.ts`, or a sport module in `sports/`) | propose-only; the gate, sizing and risk apply automatically. With a `hypothesis` it can be explored on paper before it is measured. |
+| A trained model | a **model spec** in the pack's `models` | `{"kind":"calibration-v1","id":"cfb-live-cal","version":"1","sports":["CFB"],"phases":["live"],"bins":[{"min":0.8,"max":0.9,"n":412,"rate":0.874,"lo":0.84,"hi":0.905}]}`. `model-edge-hold@2` proposes only when the interval's lower bound clears the break-even after fill, fee and latency, and evidence still decides. |
+| A new way to trade | a **strategy** with a **spec** (`catalog.ts`, then `strategies.ts` or a sport module in `sports/`) | propose-only; the gate, sizing and risk apply automatically. Until its study reports it is measured in shadow. See [how an idea becomes a strategy](STRATEGY-ARCHITECTURE.md#13-how-an-idea-becomes-a-strategy). |
 | Where resting orders are safe | **maker** evidence rows | read by `quotePolicy` and `maker-quote` |
 
 **Delivery:**
@@ -88,7 +94,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
 | **CFB pregame favourites** | **PAPER ONLY** | **+2.5% [−1.4%, +6.6%]** |
 | Resting orders: NFL/MLB live, NFL pregame | NO | negative markout |
 | **Resting orders: CFB live/pregame, MLB pregame** | **paper or capped pilot** | +0.12¢ to +0.48¢ per contract, before rewards (optimistic fills) |
-| **Comeback drives, NFL and CFB live** | **PAPER TEST** (exploring) | not measured yet; `research/studies/drive_entry.py` measures it on the PC |
+| Comeback drives, drive fade, surprise fade, dead-ball quotes (NFL and CFB live) | **SHADOW** (measured, never traded) | not measured yet; `drive_entry.py`, `event_reaction.py` and `maker_windows.py` measure them on the PC |
 
 "Favourites" here isn't the insight. Favourites win about as often as their price says everywhere except college, where **underdogs are overpriced** (people overpay for longshots). Even that lead isn't proven yet, and the forward test below will settle it.
 
@@ -116,30 +122,27 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
 - **The forward test.** It uses the engine's paper plan from `favourite-hold`, as described in the next section.
 - **Real money** ([`lib/live/`](../lib/live/README.md)) is built and tested against a simulated exchange, but **deliberately not connected**. Connecting the runner to real orders is the owner's decision. The coding agent's safety check stopped that step, and the README lists exactly what it needs.
 
-## Live football: comeback drives
+## Live football: comeback drives and the candidates around them
 
-This is the owner's idea: when a team is down 0-17 but about to score, buy it, hold for the drive, then take the profit or the loss.
+Specs, mechanisms and controls: [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md#7-the-candidates). All of them are shadowed until a study writes a row naming their version.
 
-- **Rule** (`comeback-drive`, fixed before any test; `COMEBACK_DRIVE` in `lib/decision/sports/football.ts`):
-  - **Entry:** the team with the ball trails by 3 to 24, is inside the opponent's 30, and is on 1st to 3rd down, with at least 5 minutes left.
-  - **Exit:** sell when the drive ends: a score, a change of possession, or the end of the half.
-  - **Backstops:** a 35% net-loss stop and a 12-minute limit.
-  - **Other rules:** one entry per drive. If the game feed goes silent for 2 minutes, sell rather than hold blind.
+- **`comeback-drive@1`** (reclassified as speculative): when the team with the ball trails by 3 to 24, is inside the opponent's 30 on 1st to 3rd down, with at least 5 minutes left, buy it and sell when the drive ends (a score, a change of possession, or the end of the half), with a 35% net-loss stop and a 12-minute limit. One entry per drive. It needs the market to underprice an imminent score, which conflicts with the longshot bias and the NFL reaction study, and it pays two fees.
+- **`comeback-drive-hold@1`:** the same setups held to the final. A separate claim with its own result.
+- **`drive-fade@1`:** the opposite claim on the same moments: when a trailing longshot (≤ 30¢) drives, buy the leader and hold. Proposed alongside the comeback versions, so the scorecard compares them on identical setups.
+- **`surprise-fade@1`:** after a surprising score (the scorer was ≤ 35¢ 30 s before the report) and a move of at least 8¢, buy the team scored on 45–180 s later and hold.
+- **`quiet-window-maker@1`:** rest orders only in the first 20 s of a dead-ball report, with a calm price and a spread of at most 3¢. It can replace `maker-quote@1` with `config.maker: 'quiet-window-v1'`.
 - **Game facts:**
-  - They come only from a **fresh, verified** game report: possession, down, distance, field position, score and quarter (`lib/tennis/football-context.ts`). Anything stale, between plays or conflicting means no entry.
+  - They come only from a **fresh, verified** game report: possession, down, distance, field position, score and quarter (`lib/tennis/football-context.ts`). Anything stale or conflicting means no entry. Between-plays reports mark a dead ball.
   - Scores map to YES and NO through the teams' away/home ordering.
-  - The game clock's direction is being verified on a live game. Until then the rule counts whole quarters left, so it doesn't enter in the 4th quarter.
-- **"Unless holding longer is ideal":** at each drive's end the bot asks the engine whether to hold that side to the final instead of selling.
-  - It checks the drive study's own hold result first (`comeback-drive-hold`), then any other measured live hold.
-  - `drive_entry.py` publishes that row as `lead` only when holding the same entries made money **and** beat selling at the drive's end, and as `dropped` when holding lost money.
-  - It holds only on a measured `lead` or `proven` result, never on an explored idea. A hold result for this rule replaces the blanket "NFL live holds lose" average.
-  - Each setup is also proposed as a hold-to-final entry (`comeback-drive-hold`). So if the study finds that holding wins and selling at the drive's end doesn't, the bot enters to hold. If both win, it takes the better one. The hold version is never explored on paper; it needs its own result.
-  - Until the study runs, nothing is published, so the bot sells.
-- **Why paper only:** NFL in-game scalping (dip and momentum entries, and random entries) lost about 10% a trade after fees and spread. That's the bar this rule has to clear. CFB in-game trading hasn't been studied.
+  - The game clock's direction is being verified on a live game. Until then the drive rules count whole quarters left, so they don't enter in the 4th quarter.
+- **"Unless holding longer is ideal":** at each drive trade's end the bot asks the engine whether to hold that side to the final instead of selling.
+  - It checks the hold result for `comeback-drive-hold` (a row naming `comeback-drive-hold` or `comeback-drive-hold@1`) first, then any other measured live hold for that side.
+  - `drive_entry.py` publishes that row as `lead` only when holding was positive in both the discovery and the holdout games **and** beat selling at the drive's end on the same trades, and as `dropped` when it was not positive.
+  - It holds only on a measured `lead` or `proven` result, never on an explored idea. Until a study publishes one, the bot sells.
+- **Why nothing trades yet:** NFL in-game scalping (dip and momentum entries, and random entries) lost about 10% a trade after fees and spread, and NFL live holds lose as a regime. CFB in-game trading hasn't been studied.
 - **Settling it:**
-  - Run `python research/studies/drive_entry.py nfl` on the PC. It uses NFL price history joined to play-by-play, with random and opposite-side controls and a hold-to-final comparison. It writes an evidence row, `dropped` or `lead`.
-  - Once the runner has recorded games with the drive state, run `drive_entry.py live --league cfb` (or `nfl`).
-  - Merge the rows (the drive trade and, when there is one, the hold) with `scripts/evidence-pack.ts add pack.json research/studies/results/drive-entry-nfl.json <new-version>`, then validate and publish. The rows' own results then replace exploring.
+  - On the PC: `python research/studies/drive_entry.py nfl`, `event_reaction.py nfl` and `maker_windows.py nfl` (NFL price history joined to play-by-play, with controls). Once the runner has recorded games with the drive state, run each with `live --league cfb` (or `nfl`).
+  - Merge the rows with `scripts/evidence-pack.ts add pack.json research/studies/results/<study>.json <new-version>`, then validate and publish. A `lead` row lets that version paper-trade; a `dropped` row keeps it out.
 
 ## Forward test: CFB pregame favourites
 

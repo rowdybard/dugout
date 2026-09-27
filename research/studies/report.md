@@ -92,3 +92,15 @@ Resting at the best price with the maker rebate (0.0125·p·(1−p)); markout in
    - **(a) MLB:** the 2026 season, about 2,000 densely priced games. MLB has an exact per-pitch operator timestamp and a free official live feed, so the speed test is sharper there, and pitcher, bullpen and lineup information is richer.
    - **(b) resting (maker) orders:** avoid taker fees and earn the spread instead of paying it. This cannot be backtested on price history and needs live order-book recording.
    - **(c) pregame mispricing:** a small sample hints at home overpricing. Needs the full catalog, all sports.
+
+## Next tests (pre-registered Sep 27, 2026; not run)
+Specs, mechanisms and the evidence for and against each: [docs/STRATEGY-ARCHITECTURE.md](../../docs/STRATEGY-ARCHITECTURE.md#7-the-candidates). Each study splits games by start time into discovery and holdout halves, and writes a row naming one strategy version only if the spec's minimum sample is reached (`lifecycle.py`): `lead` when both halves are positive after costs, `dropped` otherwise. The rules below are locked; changing one means a new version.
+
+| Study | Version | Question | Control that could expose a different mechanism |
+|---|---|---|---|
+| `event_reaction.py nfl` / `live --league cfb` | `surprise-fade@1` | After a surprising score (scorer ≤ 35¢, move ≥ 8¢), is the team scored on too cheap 45–180 s later? | The same fade after **expected** scores; following the scorer; random holds |
+| `drive_entry.py nfl` / `live` | `drive-fade@1` | When a trailing longshot (≤ 30¢) drives inside the 30, is the leader too cheap? | `leader-any`: leaders at random moments outside drives |
+| `drive_entry.py nfl` / `live` | `comeback-drive@1`, `comeback-drive-hold@1` | The opposite claim: is the trailing team too cheap as it nears a score? | Opposite side, random entries, hold vs sell (paired) |
+| `maker_windows.py nfl` / `live` | `quiet-window-maker@1` | Do resting orders placed only while the ball is dead avoid the toxic flow (NFL live −0.40¢)? | `maker-quote@1` and always-on quoting on the same games (paired) |
+
+Prior expectations, stated before the runs so they can't be revised afterwards: the NFL reaction study (follow-through, no reversal) and Croxson & Reade 2014 predict `surprise-fade@1` fails in NFL; the Polymarket-wide result that the longshot bias is absent in sports (arXiv 2609.12878) predicts `drive-fade@1` fails; `quiet-window-maker@1` is the most likely to show something, and the most likely failure is too few fills. CFB, being thinner, is where any of these has the best chance.

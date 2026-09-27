@@ -212,20 +212,23 @@ test('at the end of the drive the bot holds on instead of selling only when meas
 });
 
 test('NFL: the drive study\'s own hold result lets the bot hold to the final, over the general live-hold loser',()=>{
-  const row=(status:'lead'|'dropped')=>({id:`nfl-live-comeback-drive-hold-${status}`,title:'NFL comeback drives held to the final',status,sports:['NFL' as const],phases:['live' as const],
-    styles:['taker-hold' as const],strategies:['comeback-drive-hold'],estimate:{mean:status==='lead'?0.05:-0.05,lo:-0.02,hi:0.12,unit:'return' as const},sample:'test',source:'test',plain:'test'});
-  for(const status of ['lead','dropped'] as const){
-    assert.deepEqual(registerPack({...BUNDLED_PACK,version:`test-nfl-drive-hold-${status}`,evidence:[...BUNDLED_PACK.evidence,row(status)]},'bundled'),{ok:true});
+  const row=(status:'lead'|'dropped',name:string)=>({id:`nfl-live-comeback-drive-hold-${status}`,title:'NFL comeback drives held to the final',status,sports:['NFL' as const],phases:['live' as const],
+    styles:['taker-hold' as const],strategies:[name],estimate:{mean:status==='lead'?0.05:-0.05,lo:-0.02,hi:0.12,unit:'return' as const},sample:'test',source:'test',plain:'test'});
+  // drive_entry.py names the version; a row for another version is not this one's evidence.
+  const cases=[['lead','comeback-drive-hold','hold'],['lead','comeback-drive-hold@1','hold'],['lead','comeback-drive-hold@2','sell'],['dropped','comeback-drive-hold@1','sell']] as const;
+  for(const [status,name,expect] of cases){
+    const version=`test-nfl-drive-hold-${status}-${name.replace("@","-v")}`;
+    assert.deepEqual(registerPack({...BUNDLED_PACK,version,evidence:[...BUNDLED_PACK.evidence,row(status,name)]},'bundled'),{ok:true});
     let session=entered();
-    session={...session,config:{...session.config,evidencePack:`test-nfl-drive-hold-${status}`}};
+    session={...session,config:{...session.config,evidencePack:version}};
     session=stepTennisSession(session,[input(T0+60_000,0.3,{score:'6-17',down:0,yfd:0,field:{teamId:BILLS,yard:3}})],T0+60_000);
-    if(status==='lead'){
-      assert.equal(session.pending,null);assert.equal(lastCode(session),'DRIVE_END_HOLD');
+    if(expect==='hold'){
+      assert.equal(session.pending,null,name);assert.equal(lastCode(session),'DRIVE_END_HOLD',`${name}: ${session.lastReason}`);
       const held=open(session)!;
       assert.equal(held.exitPolicy,'hold-to-settlement');assert.equal(held.plan?.strategy,'comeback-drive-hold');assert.equal(held.plan?.code,'LEAD_PAPER');
       assert.equal(held.plan?.evidence,'nfl-live-comeback-drive-hold-lead');
     }else{
-      assert.equal(session.pending?.action,'SELL','a measured losing hold means sell');
+      assert.equal(session.pending?.action,'SELL',`${status} ${name}: sell`);
     }
   }
 });
