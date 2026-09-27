@@ -13,6 +13,34 @@ Added September 27, 2026. Moves the site from ChatGPT Sites to a Worker on the o
 
 **Nothing is deployed yet.** That needs a Cloudflare API token (step 1).
 
+## The short version
+
+**You do three things:**
+1. **Make a Cloudflare token.** Dashboard → My Profile → API Tokens → Create Token → Custom token. Tick these five account permissions:
+   - Workers Scripts: Edit
+   - D1: Edit
+   - Access: Apps and Policies: Edit
+   - Access: Organizations, Identity Providers, and Groups: Edit
+   - Account Settings: Read
+   Limit it to your account and set an expiry.
+2. **Add it to Claude's environment.** Open the environment menu in the session title bar, then Edit. Add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers overview page). Optionally also add `ANTHROPIC_API_KEY` and `POLYMARKET_KEY_ID` / `POLYMARKET_SECRET_KEY` if you want the Claude adviser and the live price stream on the new site.
+3. **Start a new session** and say: "Move Dugout to Cloudflare. Invite: me@…, friend@…"
+
+**Claude does the rest,** checking each step as it goes:
+1. Creates the database and deploys the site.
+2. Turns on sign-in by emailed code, restricted to your invite list, with the longest remembered-device session.
+3. Reconnects your background runner with a fresh shared password.
+4. Tests it and sends you the link.
+
+The old site keeps working until you're happy, then you switch it off.
+
+**Defaults already chosen for you:**
+- Everyone starts fresh with fake money. Your old history is still downloadable from the old site.
+- Sign-in is by emailed code. Google can be added later.
+- A new runner password is made, so you don't need to find the old one.
+
+The detailed steps below are for doing it by hand, or on your PC with `npx wrangler login`.
+
 ## How it works
 
 | Piece | What it does |
