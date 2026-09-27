@@ -50,4 +50,5 @@ next-env.d.ts
 __pycache__/
 # Strategy-lab data lake (large, re-fetchable) and local research secrets
 /research/data/
+/research/*.log
 .venv/
