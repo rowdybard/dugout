@@ -20,7 +20,11 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 
 Beginner mode is disabled in the active dashboard. A saved browser preference cannot re-enable it. The main view keeps bot controls, current decision, game selection/focus, live field/chart, quotes, balance and active-order/position information visible. Technical details and detailed history are expandable.
 
-New accounts use the versioned **local decision engine**. It measures a price drop against prior quote noise, checks independently recovering buyer prices and available depth, and subtracts spread, fees and a delay allowance before considering entry. Held positions use frozen entry evidence, a ratcheting volatility buffer and setup-invalidation checks within the original loss/time bounds. These are deterministic local calculations, not AI calls, a win probability or a proven profit forecast. **Decision details** exposes the measurements behind the plain-language reason.
+New accounts run on the **evidence-gated decision engine** ([docs/DECISION-ENGINE.md](docs/DECISION-ENGINE.md)).
+- **What it does:** the bot asks the engine for a plan for the focused game, whether pregame or live, in ATP, WTA, NFL, CFB or MLB. It buys only what the research permits and holds planned bets to the final result. Where resting orders are permitted, it paper-makes markets with conservative fills and maker rebates.
+- **What it refuses:** losing or untested bets. The older local scalping analysis still runs on live games, and the engine refuses it, because scalping measured about −10% per trade.
+- **Where to see it:** the Decision engine card shows every proposal and why it was taken or refused. **Decision details** exposes the measurements.
+- **Limits:** these are deterministic calculations, not AI calls or a profit forecast. Real money isn't connected (`lib/live/README.md`).
 
 Start/Resume explicitly saves the new policy for an older account before starting. It preserves stake, cash, journal, rest and loss/time settings, while requiring at least 30 seconds/10 quotes and retaining the 2¢/5-second entry limits. Historical configurations without the new version field keep their legacy reducer behavior for replay; existing positions retain their entry-time exit policy.
 

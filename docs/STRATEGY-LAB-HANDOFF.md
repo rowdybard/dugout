@@ -9,7 +9,18 @@ Last updated: 2026-09-27. **Resumed as a decision engine** after the owner's pau
 **Decision engine (Sep 27):**
 - `lib/decision/` is the full engine: strategies propose, evidence gates, then sizing (¼ Kelly on the lower bound), risk kill switches and a ranked plan. Research plugs in through evidence packs, features, signals, models and strategies ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)).
 - Data platform: Cloudflare R2 plus DuckDB for the 5 GB lake, searchable with `research/datastore/lake.py`. Evidence packs stream into engine hosts with SHA-256 pinning ([`docs/DATA-PLATFORM.md`](DATA-PLATFORM.md)). Built and tested on synthetic data; the first upload runs from the owner's PC.
-- The live bot consults it at the entry gate (`evidenceGate: 'evidence-v1'`). Today it refuses every live scalp, as the research says it should.
+- **The paper bot runs on the engine:**
+  - It plans the focused game every tick, whether pregame or live, in ATP, WTA, NFL, CFB or MLB.
+  - It holds planned taker bets to settlement.
+  - It paper-makes markets where resting orders are permitted, with conservative fills, rebates, pulls after plays and an inventory cap.
+  - It refuses every live scalp, as the research says it should.
+  - The dashboard's Decision engine card shows every proposal and why it was taken or refused.
+- **Checked in the production build (Sep 27):** on a real, upcoming MLB game, the bot rested paper quotes on both teams under the MLB pregame maker lead.
+- **Security (audit items):**
+  - no shared anonymous account;
+  - Origin is required for state-changing requests;
+  - signed streams are for the owner only.
+- **Real money:** `lib/live/` is built and tested against a simulated exchange but **not wired**. The coding agent's safety check stopped the runner wiring, so it's the owner's decision (`lib/live/README.md`).
 - `scripts/check-bet.ts` gives a GO / PAPER ONLY / NO verdict for any market.
 - `scripts/forward-test.ts` tracks the CFB pregame favourite lead on games from Sep 28 onward, under the 300-trade kill rule.
 
@@ -243,19 +254,26 @@ Last updated: 2026-09-27. **Resumed as a decision engine** after the owner's pau
   - `lib/strategy/` interface and plugins: `local-move-v1`, `never-trade`, `random-entry`, `fair-value-divergence`, `reaction-*`, `near-settlement`, `pregame-value`
   - `scripts/backtest.ts`: same decision code as the runner, taker fills with 1–2 observations of delay, `feeUnits` fees, walk-forward, held-out final block
   - `backtests/*.md`
-- [ ] **Step 8: Dynamic engine.** Engine built Sep 27 (`lib/decision/`: plan, gate, sizing, risk, packs, features, models, strategies; the bot consults the gate). Still open: the runner hosting `engine.plan` (pregame hold and settlement exits, pinned pack version in session state), the live book recorder into R2, the maker pilot and the dashboard card.
+- [x] **Step 8: Dynamic engine.** Built Sep 27.
+  - **Engine:** `lib/decision/`.
+  - **Bot:** plans every tick, with pregame and live entries, hold-to-settlement exits, pinned pack versions and paper market making. It's shared by the browser bot and the runner reducer.
+  - **Data and UI:** the runner book recorder feeds R2 (on when the `LAKE` binding exists), MLB is supported, and the dashboard has the engine card.
+  - **Not done:**
+    - redeploying the paused runner (the owner's call);
+    - verifying MLB's *live* event schema (live MLB is refused until then, and every MLB live strategy is a measured loser anyway).
   - `lib/strategy/regime.ts` and `selector.ts`, with ¼-Kelly stakes and caps
   - replace the single `local-move-v1` call in `stepTennisSession`
   - add MLB and NFL live feeds to the runner input adapter
   - one explanatory dashboard card
   - live paper trading during the MLB postseason and NFL/CFB weekends
-- [ ] **Step 9: Real money:**
-  - finish `live-adapter.ts` (transport, journal, lock, cancel, reconciliation)
-  - kill switches
-  - fix the security items above
-  - check Polymarket US terms for automated trading
-  - revisit repo visibility
-  - start with a small bankroll
+- [ ] **Step 9: Real money.** The library is done; wiring awaits the owner.
+  - [x] Transport, journal, no-retry rule, cancel and reconciliation (`lib/live/`, tested on a simulated exchange).
+  - [x] Kill switches (daily loss, exposure, unknown outcome, sync failures, stale data, orders the bot didn't place).
+  - [x] Security items above.
+  - [x] Polymarket US terms: automated API orders are supported, and must carry `MANUAL_ORDER_INDICATOR_AUTOMATIC` (docs.polymarket.us orders overview). The rate limit is 20 requests per second per key.
+  - [ ] Wire into the runner with trading keys as runner secrets. This was stopped by the agent's safety check and is the owner's decision (`lib/live/README.md`).
+  - [ ] Revisit repo visibility.
+  - [ ] Start with a small bankroll: a CFB or MLB pregame maker pilot at the smallest limits.
 
 ---
 

@@ -86,10 +86,17 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
 
 ## Who asks it
 
-- **The live paper bot.** Accounts with `evidenceGate: 'evidence-v1'` must get a permitted verdict at the entry gate (`entryIssue` in `lib/tennis/engine.ts`) before any entry.
-  - This covers new accounts and any account after Start/Resume.
-  - The bot's strategies are all live scalps, so today it records `EVIDENCE_*` refusals instead of trading.
-  - The bot uses the compiled-in pack, so its replays stay exact.
+- **The paper bot.** New accounts, and any account after Start/Resume, run on the engine (`evidenceGate: 'evidence-v1'`, `maker: 'paper-v1'`). The adapter is `lib/tennis/engine-plan.ts`.
+  - **Every tick, it asks `engine.plan()` for the focused game,** whether pregame or live, in any supported league: ATP, WTA, NFL, CFB, MLB.
+  - **Taker holds:** the best taker-hold action becomes a delayed paper entry, re-checked on a later book (phase, execution limits and evidence). It then **holds to settlement**, and only settlement, Stop or the account loss limit closes it.
+  - **Paper market making:** where resting orders are permitted, the bot rests a buy at each side's best bid, a two-sided quote (`lib/tennis/maker.ts`).
+    - **Fills are conservative:** a quote fills only when the price trades through it.
+    - **Rebates:** the rebate is credited on every fill, rounded to the cent like the exchange's.
+    - **Limits:** inventory is capped at twice the stake per side, and both quotes' cash is reserved.
+    - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
+  - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
+  - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
+- **The dashboard.** The Decision engine card shows the latest plan, every proposal with its result and reason, the maker quotes, fills and rebates, and any planned holds. The game picker lists upcoming games, so pregame strategies can be focused.
 - **The bet checker (for people).** The default mode is `real`. With `--slug` it reads the live book, gives a verdict per side, and prints the full engine plan: every strategy's proposal and why it was taken or refused.
 
   ```sh
@@ -98,7 +105,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
   ```
 
 - **The forward test.** It uses the engine's paper plan from `favourite-hold`, as described in the next section.
-- **Any future host** (the runner in Step 8, a dashboard card, a real-money executor) calls `engine.plan(context, {mode, risk})` and executes `plan.actions`.
+- **Real money** ([`lib/live/`](../lib/live/README.md)) is built and tested against a simulated exchange, but **deliberately not connected**. Connecting the runner to real orders is the owner's decision. The coding agent's safety check stopped that step, and the README lists exactly what it needs.
 
 ## Forward test: CFB pregame favourites
 

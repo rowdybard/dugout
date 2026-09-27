@@ -97,10 +97,17 @@ Engine hosts pick the pack up at run time:
 - Anyone who can write to storage cannot switch on real money. `proven` rows in an **unpinned** pack are treated as leads, and only a pack whose SHA-256 matches the configured pin keeps them. `put-pack` prints the hash, and the owner sets the pin.
 - The live paper bot keeps the compiled-in pack for now, so its replays stay exact. Pinning a pack version in the runner's session state is part of Step 8.
 
-## Keeping the lake live (next, once it's seeded)
+## Keeping the lake live
 
-This part isn't built yet, because the owner asked to hold research until the PC can store it:
+All three pieces are built. None of them collects anything until the lake exists.
 
-1. **Nightly sync:** a GitHub Actions job (free on a public repo) does two things. It runs the resumable fetchers for the last couple of days (`fetch_polymarket_us.py`, `fetch_mlb.py`, and so on). Then it runs `lake.py publish --append --only pmus_history …`. It needs the R2 keys as repository secrets.
-2. **Live book recorder:** the runner already receives order books every few seconds. Writing the accepted books, with depth, to R2 in hourly batches produces the data that resting-order (maker) research needs and price history lacks. This belongs to Step 8, together with un-pausing the runner.
-3. **Forward-test ledgers:** these already stream to the `forward-test-data` branch, and can also be published to the lake.
+1. **Nightly sync:** [`lake-sync.yml`](../.github/workflows/lake-sync.yml) and [`research/datastore/nightly.py`](../research/datastore/nightly.py).
+   - Each night it adds one settled day (two days ago, UTC) of Polymarket US full-game markets and their price history.
+   - It works in a staging folder, so it never touches the PC's full catalog, and it skips markets the lake already has. Files are named by day, so a re-run adds nothing twice.
+   - It does nothing until the repository secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` are set (optionally also `R2_PUBLIC_BASE` and `LAKE_PREFIX`).
+   - Run it by hand with the **Run workflow** button, or `python research/datastore/nightly.py --day YYYY-MM-DD`.
+   - Play-by-play for MLB and NFL still comes from the PC fetchers.
+2. **Live book recorder:** `lib/datastore/recorder.ts`, running in the runner.
+   - Every accepted order book (top 10 levels a side, plus game status) is written about once a minute to `live-books/date=…/league=…/<slug>/`, and appears in `lake.py` as the `live_books` table.
+   - It switches on when the runner gets an R2 binding named `LAKE` (see `services/runner/README.md`).
+3. **Forward-test ledgers:** these stream to the `forward-test-data` branch.
