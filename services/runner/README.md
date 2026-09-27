@@ -25,6 +25,10 @@ The checked-in Wrangler file leaves the owner blank and build ID as `pending-bui
 
 Sites checks `DUGOUT_OWNER_ID` before migration commands can pause or fence an account. Other authenticated visitors receive a disabled setup capability and keep their independent browser-mode session; they must keep the page open and visible. Missing owner configuration disables setup and adviser access. It does not change an existing writer fence or silently return a migrated account to browser trading.
 
+**Optional research recording.** If the Worker has an R2 binding named `LAKE`, every accepted order book (top 10 levels a side, plus game status) is written in batches, about once a minute, under `<LAKE_PREFIX>/live-books/date=YYYY-MM-DD/league=<league>/<slug>/` (`lib/datastore/recorder.ts`). This is the depth data that resting-order research needs, and price history doesn't have it.
+- **Turning it on:** the binding is deliberately not in `wrangler.jsonc`, because a deploy fails if the named bucket doesn't exist. After creating the bucket (see `docs/DATA-PLATFORM.md`), add `"r2_buckets": [{"binding": "LAKE", "bucket_name": "<your bucket>"}]`, and optionally the variable `LAKE_PREFIX` (default `dugout`).
+- **Safety:** recording is read-only and never delays the paper step. Without the binding, nothing is recorded.
+
 Provider stream credentials are transferred by the authenticated Sites server to `POST /v1/feed-credentials` after migration start. The body is `{keyId,secretKey}`. They are encrypted using AES-256-GCM with a random nonce; HKDF derives the encryption key from the signing secret using a distinct purpose and owner/epoch binding. Only ciphertext reaches SQL. Exports, responses and logs exclude credentials. Rotating the signing secret requires retransferring feed credentials. Missing credentials leaves the strict REST fallback available.
 
 ## Signed interface

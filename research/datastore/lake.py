@@ -137,7 +137,7 @@ class Store:
         if missing:
             sys.exit(f"Missing {', '.join(missing)} in research/.env (or pass --dest <folder>). See docs/DATA-PLATFORM.md.")
         self.bucket = os.environ["R2_BUCKET"]
-        self.prefix = os.environ.get("LAKE_PREFIX", "dugout").strip("/")
+        self.prefix = (os.environ.get("LAKE_PREFIX") or "dugout").strip("/") or "dugout"
         self.base = f"r2://{self.bucket}/{self.prefix}"
         self.public = os.environ.get("R2_PUBLIC_BASE", "").rstrip("/") or None
 
@@ -238,17 +238,22 @@ def cmd_publish(args) -> None:
             print(f"skip {ds.name}: no local files match {ds.glob}")
             continue
         rel = f"lake/{ds.name}"
+        tag = getattr(args, "tag", None)
+        if tag and (not args.append or not all(c.isalnum() or c in "-_" for c in tag)):
+            sys.exit("--tag needs --append and only letters, digits, - and _.")
         if not args.append:
             store.delete_prefix(rel)
         if store.local is not None:
             (store.local / rel).mkdir(parents=True, exist_ok=True)
         # Partitioned writes fill hive folders; unpartitioned ones are one file. Unique names make --append safe.
+        # A --tag names the files (e.g. day-2026-10-01), so re-running the same tag overwrites instead of duplicating.
         if ds.partition_by:
             target = f"{store.base}/{rel}"
+            pattern = f"{tag}_{{i}}" if tag else "part_{uuid}"
             opts = ["FORMAT parquet", "COMPRESSION zstd", f"PARTITION_BY ({', '.join(ds.partition_by)})",
-                    "FILENAME_PATTERN 'part_{uuid}'", "OVERWRITE_OR_IGNORE true"]
+                    f"FILENAME_PATTERN '{pattern}'", "OVERWRITE_OR_IGNORE true"]
         else:
-            target = f"{store.base}/{rel}/part_{uuid.uuid4().hex}.parquet"
+            target = f"{store.base}/{rel}/part_{tag or uuid.uuid4().hex}.parquet"
             opts = ["FORMAT parquet", "COMPRESSION zstd"]
         print(f"publish {ds.name}: {len(files)} local files -> {store.base}/{rel}", flush=True)
         if args.dry_run:
@@ -285,6 +290,10 @@ def connect_for_query(args) -> duckdb.DuckDBPyConnection:
     for d in catalog["datasets"]:
         files = ", ".join(repr(store.base + "/" + f) for f in d["files"])
         con.execute(f"CREATE VIEW {d['name']} AS SELECT * FROM read_parquet([{files}], hive_partitioning = true, union_by_name = true)")
+    # Order books the runner records live (lib/datastore/recorder.ts), newline-delimited JSON.
+    books = f"{store.base}/live-books/**/*.ndjson"
+    if con.execute(f"SELECT count(*) FROM glob('{books}')").fetchone()[0]:
+        con.execute(f"CREATE VIEW live_books AS SELECT * FROM read_json_auto('{books}', format = 'newline_delimited', hive_partitioning = true, union_by_name = true)")
     return con
 
 
@@ -341,6 +350,7 @@ def main() -> None:
     p.add_argument("--only", nargs="*")
     p.add_argument("--dest", help="r2 (default) or a local folder")
     p.add_argument("--append", action="store_true", help="add files instead of replacing each dataset")
+    p.add_argument("--tag", help="with --append: name the files (re-running a tag overwrites it)")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_publish)
     for name, func in (("tables", cmd_tables), ("query", cmd_query), ("find", cmd_find)):

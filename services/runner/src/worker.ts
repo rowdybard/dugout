@@ -7,6 +7,10 @@ import type {MigrationStart,MigrationChunk,RunnerCommand} from '../../../lib/run
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import type {TennisAction} from '../../../lib/tennis/types';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
+import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
+
+/** Optional research recording (docs/DATA-PLATFORM.md): add an R2 binding named LAKE to switch it on. */
+type LakeBindings={LAKE?:R2Put;LAKE_PREFIX?:string};
 const response=(value:unknown)=>Response.json(value,{headers:{'Cache-Control':'no-store'}});
 function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
@@ -19,8 +23,10 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
   private store:RunnerStore;
   private adapter:PolymarketInputAdapter;
   private tickInFlight:Promise<void>|null=null;
+  private recorder:BookRecorder;
   constructor(ctx:DurableObjectState,env:RunnerEnv){
-    super(ctx,env);this.store=new RunnerStore(ctx.storage,env.RUNNER_ENGINE_VERSION);this.adapter=new PolymarketInputAdapter(this.store,async()=>{
+    super(ctx,env);this.store=new RunnerStore(ctx.storage,env.RUNNER_ENGINE_VERSION);
+    this.recorder=new BookRecorder({prefix:(env as RunnerEnv&LakeBindings).LAKE_PREFIX||'dugout'});this.adapter=new PolymarketInputAdapter(this.store,async()=>{
       const value=this.store.get<EncryptedFeedCredentials>('feed-credentials'),identity=this.store.active();
       return value&&identity?decryptFeedCredentials(value,env.RUNNER_HMAC_SECRET,identity.ownerId,identity.epoch):null;
     },task=>ctx.waitUntil(task));
@@ -76,6 +82,9 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
         if(!runnable(current)){await this.schedule();return;}
         const {inputs,failures,endedMarket}=await this.adapter.gather(current);
         this.store.set('source',this.adapter.health());
+        // Read-only research capture of every accepted book; never delays or affects the paper step.
+        const lake=(this.env as RunnerEnv&LakeBindings).LAKE;
+        if(lake){this.recorder.add(inputs);this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
         await this.store.advance({action:'tick',sessionId:current.id},inputs,Date.now(),failures,current.revision);
         const after=this.store.session();
         const finalMarket=endedMarket??inputs.find(i=>i.market.slug===after?.config.focusSlug&&i.market.ended)?.market;
