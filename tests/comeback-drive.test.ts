@@ -106,7 +106,9 @@ test('measured leads outrank explored ideas for the one taker slot',()=>{
 });
 
 test('game clock and score helpers only report what is verified',()=>{
-  assert.equal(footballSecondsRemaining('Q4','5:00'),null,'direction unverified: unknown');
+  assert.equal(footballSecondsRemaining('Q4','5:00'),300,'the provider clock counts down (verified live)');
+  assert.equal(footballSecondsRemaining('Q2','00:33'),1833,'two-digit minutes');assert.equal(footballSecondsRemaining('End Q1',''),null,'quarter break: unknown');
+  assert.equal(footballSecondsRemaining('Q4','5:00',null),null,'direction unknown: unknown');
   assert.equal(footballSecondsRemaining('Q4','5:00','countdown'),300);assert.equal(footballSecondsRemaining('Q4','5:00','elapsed'),600);
   assert.equal(footballSecondsRemaining('Q1','15:00','countdown'),3600);assert.equal(footballSecondsRemaining('Q3','0:00','elapsed'),1800);
   assert.equal(footballSecondsRemaining('OT','5:00','countdown'),null);assert.equal(footballSecondsRemaining('Q2','16:00','countdown'),null);
@@ -164,7 +166,7 @@ test('the bot reads the verified game report into the engine context',()=>{
   assert.equal(marketPhase(input(T0,0.2),T0),'live');
   const context=decisionContext(fresh,input(T0,0.2),T0,'live').game!;
   assert.equal(context.status,'live');assert.equal(context.yesScore,0);assert.equal(context.noScore,17);assert.equal(context.period,2);
-  assert.equal(context.secondsRemaining,null,'clock direction not verified yet');
+  assert.equal(context.secondsRemaining,2280,'Q2 8:00 on a countdown clock: 30 + 8 minutes left');
   assert.deepEqual(context.extra,{possession:'yes',yardsToEndZone:25,down:1,distance:10,phase:'play'});
   // Without a fresh verified report there are no football facts.
   const unknown=decisionContext(createTennisSession(defaultLiveTennisConfig(),T0),input(T0,0.2),T0,'live').game!;

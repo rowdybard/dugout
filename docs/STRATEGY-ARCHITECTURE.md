@@ -10,7 +10,7 @@ The flow from raw data to a decision, before this work and now:
 
 | Stage | Before | Now | Still missing |
 |---|---|---|---|
-| Raw → sports state | Verified football report (possession, down, field, score, quarter), no events | The same, plus an **event tape**: score, possession, period and dead-ball events, each with the price before the market could have known (`events.ts`). A touchdown and its try count as one scoring play. | Play type (the feed does not say punt, interception or field goal); verified game clock direction |
+| Raw → sports state | Verified football report (possession, down, field, score, quarter), no events | The same, plus an **event tape**: score, possession, period and dead-ball events, each with the price before the market could have known (`events.ts`). A touchdown and its try count as one scoring play. | Play type (the feed does not say punt, interception or field goal) |
 | Market state | Best bid/ask, sizes, short history | Full ladders for both sides, pregame price kept, quote age | Trade prints; order-book events between polls; other venues |
 | Features | Price, role, spread, depth, time, score, period | Plus freshness, book imbalance, depth within 2¢, 30-s velocity, move since pregame, last scoring play (seconds since, scorer's pre-event price, move against each side, how much moved before our feed), drive number, game phase | Expected points, drive success models, injury and weather signals |
 | Hypothesis | A comment in the code | A **machine-readable spec** per `strategy@version` with mechanism, evidence for and against, invalidation and minimum sample (`spec.ts`, `catalog.ts`) | |
@@ -169,7 +169,6 @@ node --experimental-strip-types scripts/scorecard.ts history.json [research/stud
 | Gap | Blocks | How to close it |
 |---|---|---|
 | Play type (score kind, turnover, punt) | Separating touchdowns from field goals in `surprise-fade`; better dead-ball windows | A feed with play descriptions (ESPN's free play-by-play) joined by time |
-| Verified clock direction | 4th-quarter entries for drive strategies | The scheduled live check |
 | Feed latency per play | Knowing how late the bot's events are | `research/market-history/live_lag_probe.py` on live games |
 | Trade prints and queue position | Real maker fill rates | A small real-money pilot (owner's decision) |
 | Liquidity rewards | Maker economics | Reward-program data per market |
@@ -191,7 +190,7 @@ node --experimental-strip-types scripts/scorecard.ts history.json [research/stud
 ## 14. What to test next
 
 In order:
-1. **The scheduled live check:** football clock direction, score ordering, and MLB live fields.
+1. **MLB live fields:** on Sep 27 the provider showed no live state for MLB games in progress (no score, inning or outs), so a baseball module waits until a live check sees them. The football clock (counts down) and score order (away–home) are verified.
 2. **On the PC, NFL history** (no new data needed):
    ```sh
    python research/studies/event_reaction.py nfl      # surprise-fade@1 against expected-fade, follow and random

@@ -5,7 +5,7 @@ measures them in shadow (never traded) until a row from this study names their v
 
 Usage (on the PC, research venv active):
   python research/studies/drive_entry.py nfl                       # NFL history: aligned prices + nflverse play-by-play
-  python research/studies/drive_entry.py live --league cfb [--dest D:/lake] [--clock countdown|elapsed]
+  python research/studies/drive_entry.py live --league cfb [--dest D:/lake] [--clock countdown|elapsed]  (default countdown, verified Sep 27)
                                                                    # books the runner recorded with the feed's drive state
 Writes research/studies/results/drive-entry-<source>.json, including the evidence row to add to a pack
 (scripts/evidence-pack.ts add <pack.json> <results.json>).
@@ -384,7 +384,7 @@ def main() -> None:
     parser.add_argument("source", choices=["nfl", "live"])
     parser.add_argument("--league", choices=["nfl", "cfb"], default="nfl", help="live source only")
     parser.add_argument("--dest", help="lake folder instead of R2 (live source)")
-    parser.add_argument("--clock", choices=["countdown", "elapsed"], help="how the feed's football clock runs, once verified (live source)")
+    parser.add_argument("--clock", choices=["countdown", "elapsed"], default="countdown", help="how the feed's football clock runs (live source; verified countdown on Sep 27, 2026)")
     args = parser.parse_args()
     league = "nfl" if args.source == "nfl" else args.league
     frame = nfl_history() if args.source == "nfl" else live_books(league, args.dest, args.clock)

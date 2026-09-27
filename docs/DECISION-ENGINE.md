@@ -134,7 +134,7 @@ Specs, mechanisms and controls: [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE
 - **Game facts:**
   - They come only from a **fresh, verified** game report: possession, down, distance, field position, score and quarter (`lib/tennis/football-context.ts`). Anything stale or conflicting means no entry. Between-plays reports mark a dead ball.
   - Scores map to YES and NO through the teams' away/home ordering.
-  - The game clock's direction is being verified on a live game. Until then the drive rules count whole quarters left, so they don't enter in the 4th quarter.
+  - The provider's clock counts down (verified on live NFL games, Sep 27). The drive rules use it for time left, including in the 4th quarter; during quarter breaks ("End Q1") time left is unknown, so they wait.
 - **"Unless holding longer is ideal":** at each drive trade's end the bot asks the engine whether to hold that side to the final instead of selling.
   - It checks the hold result for `comeback-drive-hold` (a row naming `comeback-drive-hold` or `comeback-drive-hold@1`) first, then any other measured live hold for that side.
   - `drive_entry.py` publishes that row as `lead` only when holding was positive in both the discovery and the holdout games **and** beat selling at the drive's end on the same trades, and as `dropped` when it was not positive.

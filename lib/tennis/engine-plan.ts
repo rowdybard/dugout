@@ -65,10 +65,11 @@ function periodNumber(period:string|null):number|null {
 }
 
 /**
- * How the provider's football clock (eventState.elapsed) runs. Null until checked on a live game: game seconds
- * remaining then stay unknown, and strategies fall back to whole quarters left.
+ * How the provider's football clock (eventState.elapsed) runs. Verified Sep 27, 2026 on live NFL games read ~30 s
+ * apart: it counts DOWN (Q2 15:00 -> 14:52, Q1 3:22 -> 2:44), despite the field's name. Between quarters it is empty
+ * and the period reads "End Q1", which is not a playable quarter, so time left is unknown then.
  */
-export const FOOTBALL_CLOCK:'countdown'|'elapsed'|null=null;
+export const FOOTBALL_CLOCK:'countdown'|'elapsed'|null='countdown';
 
 /** Game seconds left in regulation, or null when the quarter or clock direction is unknown. */
 export function footballSecondsRemaining(period:string,clock:string,direction:'countdown'|'elapsed'|null=FOOTBALL_CLOCK):number|null {
