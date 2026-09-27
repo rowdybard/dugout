@@ -36,6 +36,12 @@ export type ShadowExit={
   fills:{id:string;time:number;signalBookTime:number;executionBookTime:number;execution:PaperExecution}[];
   lastBookTime?:number;closedAt?:number;
 };
+/**
+ * Verified Sep 27, 2026 on live MLB games against the official MLB Stats API: eventState.period reads "Top 3rd",
+ * "Bot 3rd", "Mid 6th" (between halves) or "End 2nd"; eventState.baseballState carries balls, strikes, outs,
+ * onFirst/onSecond/onThird and inningHalf (T, B, M, E). Scores read "away-home".
+ */
+export type BaseballContext={inning:number;half:'top'|'bottom'|'middle'|'end';outs:number;balls:number;strikes:number;onFirst:boolean;onSecond:boolean;onThird:boolean};
 export type TennisPricePoint=Point & {bid?:number;ask?:number;score?:string|null;period?:string|null;scoreUpdatedAt?:number|null};
 export type TennisMarket={
   slug:string;eventId:string;eventSlug:string;title:string;league:TennisLeague;
@@ -43,6 +49,8 @@ export type TennisMarket={
   live:boolean;ended:boolean;score:string|null;period:string|null;tournament:string|null;clock?:string|null;
   football?:FootballContext|null;
   footballIdentity?:{yesTeamId:string;noTeamId:string};
+  /** MLB live state (lib/tennis/normalize.ts baseballContext); null when the report is incomplete. */
+  baseball?:BaseballContext|null;
   /**
    * Team sports: whether YES is the away or home team. Scores read "away-home" (verified Sep 27, 2026 on
    * finished CFB and NFL games), so this maps the score string to the YES and NO sides.

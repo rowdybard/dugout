@@ -190,7 +190,7 @@ node --experimental-strip-types scripts/scorecard.ts history.json [research/stud
 ## 14. What to test next
 
 In order:
-1. **MLB live fields:** on Sep 27 the provider showed no live state for MLB games in progress (no score, inning or outs), so a baseball module waits until a live check sees them. The football clock (counts down) and score order (away–home) are verified.
+1. **Verified live on Sep 27:** the football clock counts down; scores read away–home in NFL and MLB; MLB live state (inning, half, count, outs, runners) matches the official MLB Stats API on all 14 games in progress. `lib/decision/sports/baseball.ts` exposes it as features (base-out state and so on). No MLB strategy is registered: the MLB studies found the market ahead of the model and the free feed.
 2. **On the PC, NFL history** (no new data needed):
    ```sh
    python research/studies/event_reaction.py nfl      # surprise-fade@1 against expected-fade, follow and random

@@ -1,4 +1,4 @@
-import type {TennisInput} from '../tennis/types';
+import type {BaseballContext,TennisInput} from '../tennis/types';
 
 /**
  * Live order-book recorder for the runner. Price history has no depth or queue information, which is exactly
@@ -21,6 +21,8 @@ export type BookRecord={
   football?:{possession:string|null;down:number|null;yardsToGo:number|null;fieldTeam:string|null;yard:number|null;
     /** Team ids for YES and NO, so possession and field side map to a side. */
     yesTeamId?:string;noTeamId?:string;betweenPlays?:boolean};
+  /** MLB: the verified inning, half, count, outs and runners at recording time. */
+  baseball?:BaseballContext;
 };
 
 export const RECORDER_DEPTH=10;
@@ -36,7 +38,8 @@ export function bookRecord(input:TennisInput):BookRecord {
     ...(market.yesOrdering!==undefined?{yesOrdering:market.yesOrdering}:{}),
     ...(football?{football:{possession:football.possessionTeamId??null,down:football.down,yardsToGo:football.yardsToGo,fieldTeam:football.fieldPosition?.teamId??null,yard:football.fieldPosition?.yard??null,
       ...(market.footballIdentity?{yesTeamId:market.footballIdentity.yesTeamId,noTeamId:market.footballIdentity.noTeamId}:{}),
-      ...(football.phase==='between-plays'?{betweenPlays:true}:{})}}:{})};
+      ...(football.phase==='between-plays'?{betweenPlays:true}:{})}}:{}),
+    ...(market.baseball?{baseball:market.baseball}:{})};
 }
 
 export class BookRecorder {

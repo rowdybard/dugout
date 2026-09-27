@@ -1,6 +1,6 @@
 import type {Book} from '../market/types';
 import type {ExecutionMarket} from '../trading/types';
-import type {FootballContext,TennisLeague,TennisMarket} from './types';
+import type {BaseballContext,FootballContext,TennisLeague,TennisMarket} from './types';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
 
 /** Only fields verified against the Polymarket US retail schema are consumed. */
@@ -23,6 +23,20 @@ const winnerType=(league:TennisLeague)=>isFootball(league)?'football_team_full_g
 /** YES is away or home only when the two sides say so consistently. */
 function orderingOf(yes:unknown,no:unknown):'away'|'home'|null{
   return yes==='away'&&no==='home'?'away':yes==='home'&&no==='away'?'home':null;
+}
+
+const HALF:Record<string,BaseballContext['half']>={top:'top',bot:'bottom',mid:'middle',end:'end'};
+const HALF_CODE:Record<string,BaseballContext['half']>={T:'top',B:'bottom',M:'middle',E:'end'};
+/** MLB live state from the period ("Top 3rd") and baseballState; both must agree on the half, or nothing is reported. */
+export function baseballContext(period:string|null,raw:unknown):BaseballContext|null{
+  const match=/^(Top|Bot|Mid|End)\s+(\d{1,2})(?:st|nd|rd|th)$/i.exec(period?.trim()??''),state=object(raw);
+  if(!match)return null;
+  const half=HALF[match[1].toLowerCase()],inning=Number(match[2]);
+  const count=(value:unknown,max:number)=>typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<=max?value:null;
+  const outs=count(state.outs,3),balls=count(state.balls,3),strikes=count(state.strikes,2);
+  const bases=[state.onFirst,state.onSecond,state.onThird];
+  if(inning<1||outs===null||balls===null||strikes===null||bases.some(base=>typeof base!=='boolean')||HALF_CODE[string(state.inningHalf)]!==half)return null;
+  return {inning,half,outs,balls,strikes,onFirst:bases[0] as boolean,onSecond:bases[1] as boolean,onThird:bases[2] as boolean};
 }
 
 /** Drive IDs identify possession and field territory separately; never infer from title order. */
@@ -106,6 +120,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
       yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
       ...(football?{clock:string(state.elapsed)||null,football:footballContext(state.footballState,sides),footballIdentity:{yesTeamId:String(object(yes[0].team).id),noTeamId:String(object(no[0].team).id)}}:{}),
+      ...(baseball&&live?{baseball:baseballContext(period,state.baseballState)}:{}),
       ...(team?{yesOrdering:orderingOf(object(yes[0].team).ordering,object(no[0].team).ordering)}:{}),
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
       observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});

@@ -111,6 +111,22 @@ function footballGame(session:TennisSession,market:TennisMarket,now:number):{per
     extra:{possession,yardsToEndZone:own?100-report.fieldPosition.yard:report.fieldPosition.yard,down:report.down,distance:report.yardsToGo,phase:'play'}};
 }
 
+/** Baseball facts older than this are not used (the feed updates every pitch). */
+export const BASEBALL_CONTEXT_MAX_AGE_MS=45_000;
+
+/** MLB live state for the engine: only from a fresh, complete report with a verified away/home mapping. */
+function baseballGame(market:TennisMarket,now:number):{period:number;yesScore:number;noScore:number;extra:Record<string,FeatureValue|null>}|null {
+  const state=market.baseball,updated=market.contextUpdatedAt;
+  if(!state||updated==null||now-updated>BASEBALL_CONTEXT_MAX_AGE_MS||updated>now)return null;
+  const scores=sideScores(market.score,market.yesOrdering);
+  if(!scores)return null;
+  // The away team bats in the top half. Between halves nobody is batting.
+  const away=market.yesOrdering==='away'?'yes':'no',home=away==='yes'?'no':'yes';
+  const batting=state.half==='top'?away:state.half==='bottom'?home:null;
+  return {period:state.inning,...scores,extra:{half:state.half,outs:state.outs,balls:state.balls,strikes:state.strikes,
+    onFirst:state.onFirst,onSecond:state.onSecond,onThird:state.onThird,battingSide:batting}};
+}
+
 /** Each side's ladder, best first. The book lists YES only; NO asks are 1 − YES bids. */
 function ladders(input:TennisInput){
   const levels=(side:TennisInput['book']['bids'])=>side.filter(level=>level.quantity>0&&level.price>0&&level.price<1);
@@ -133,7 +149,8 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
       no:{name:market.noName,ask:bid?round(1-bid.price):null,bid:ask?round(1-ask.price):null,askSize:bid?.quantity??null,bidSize:ask?.quantity??null,...depth.no},
       pregameYesMid:session.pregame?.[market.slug]?.mid??null},
     game:{status:market.ended?'final':phase==='live'?'live':'scheduled',period:periodNumber(market.period),observedAt:market.contextUpdatedAt,
-      ...(phase==='live'&&(market.league==='NFL'||market.league==='CFB')?footballGame(session,market,now)??{}:{})},
+      ...(phase==='live'&&(market.league==='NFL'||market.league==='CFB')?footballGame(session,market,now)??{}:{}),
+      ...(phase==='live'&&market.league==='MLB'?baseballGame(market,now)??{}:{})},
     history,events:session.gameTape?.[market.slug]??[]};
 }
 

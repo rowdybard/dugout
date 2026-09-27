@@ -54,7 +54,7 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
 | `pack.ts` | Evidence-pack schema and validation, the bundled pack, and the untrusted-pack restriction |
 | `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`, `calibration-v1` with intervals) and the market-implied baseline |
 | `strategies.ts` | Built-in strategies: `favourite-hold@1`, `model-edge-hold@2`, `maker-quote@1`, plus the `random-side-control@1` control |
-| `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features, `comeback-drive@1` and `comeback-drive-hold@1`, `drive-fade@1`, `surprise-fade@1` and `quiet-window-maker@1`. |
+| `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features, `comeback-drive@1` and `comeback-drive-hold@1`, `drive-fade@1`, `surprise-fade@1` and `quiet-window-maker@1`. `baseball.ts` holds live MLB features (inning, half, count, outs, runners, base-out state, who is batting), from fresh reports only. |
 | `sizing.ts`, `risk.ts`, `costs.ts` | Stakes, kill switches, fees and break-even |
 | `sources.ts`, `host.ts` | Streaming packs in: from a URL or an R2 binding, with a SHA-256 pin and fallback to the last good pack |
 | `forward.ts`, `polymarket.ts` | Forward test and read-only Polymarket US parsing |

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeTennisEvent,normalizeTennisExecution} from '../lib/tennis/normalize.ts';
+import {baseballContext,normalizeTennisEvent,normalizeTennisExecution} from '../lib/tennis/normalize.ts';
+import {decisionContext} from '../lib/tennis/engine-plan.ts';
+import {featureRegistry,readFeature} from '../lib/decision/features.ts';
+import {SPORT_FEATURES} from '../lib/decision/sports/index.ts';
 import {applyTennisAction,createTennisSession,stepTennisSession} from '../lib/tennis/engine.ts';
 import {defaultLiveTennisConfig,validateTennisConfig} from '../lib/tennis/rules.ts';
 import type {TennisInput,TennisMarket} from '../lib/tennis/types';
@@ -68,4 +71,51 @@ test('large real book sizes are valid six-decimal quantities (regression: 271789
   assert.equal(toUnits(271789.34),BigInt(271789340000));assert.equal(toUnits(1101149.58),BigInt(1101149580000));
   for(const value of [0.1234567,271789.3400001,12.3456789])assert.throws(()=>toUnits(value),/six-place/);
   assert.throws(()=>normalizeTennisBook({marketData:{marketSlug:SLUG,state:'MARKET_STATE_OPEN',transactTime:'',bids:[{px:{value:'0.4750'},qty:'1.1234567'}],offers:[]}},SLUG),/malformed/);
+});
+
+// ---- Live MLB state (verified Sep 27, 2026 against the official MLB Stats API) --------------------------------
+
+/** Live shape copied from /v2/leagues/mlb/events during NYM @ WSH (Mets 4, Nationals 5), with a count and runners. */
+function liveEvent(period:string,baseballState:Record<string,unknown>,over:Record<string,unknown>={}){
+  return rawEvent({live:true,period,score:'4-5',eventState:{type:'baseball',live:true,ended:false,score:'4-5',period,updatedAt:'2026-09-27T19:45:38Z',
+    baseballState,periodScores:[]},...over});
+}
+const LIVE_AT=Date.parse('2026-09-27T19:45:40Z');
+const RUNNERS={balls:3,strikes:2,outs:1,onFirst:true,onSecond:true,onThird:false,inningHalf:'T'};
+
+test('MLB live state: inning, half, count, outs and runners are read only when the period and the state agree',()=>{
+  const [market]=normalizeTennisEvent(liveEvent('Top 6th',RUNNERS),'MLB',LIVE_AT);
+  assert.equal(market.live,true);assert.equal(market.yesOrdering,'away');
+  assert.deepEqual(market.baseball,{inning:6,half:'top',outs:1,balls:3,strikes:2,onFirst:true,onSecond:true,onThird:false});
+  assert.equal(baseballContext('Bot 10th',{...RUNNERS,inningHalf:'B'})?.inning,10,'extra innings');
+  assert.equal(baseballContext('Mid 6th',{...RUNNERS,outs:0,balls:0,strikes:0,inningHalf:'M'})?.half,'middle');
+  assert.equal(baseballContext('End 2nd',{...RUNNERS,inningHalf:'E'})?.half,'end');
+  assert.equal(baseballContext('Top 6th',{...RUNNERS,inningHalf:'B'}),null,'period and state disagree');
+  assert.equal(baseballContext('Top 6th',{...RUNNERS,balls:4}),null,'impossible count');
+  assert.equal(baseballContext('Top 6th',{...RUNNERS,onThird:undefined}),null,'missing base');
+  assert.equal(baseballContext('T6',RUNNERS),null,'unverified period format');
+  assert.equal(normalizeTennisEvent(rawEvent(),'MLB',START-3_600_000)[0].baseball,undefined,'no live state pregame');
+});
+
+test('MLB live state reaches the engine only while fresh, from each side\'s point of view',()=>{
+  const market={...normalizeTennisEvent(liveEvent('Top 6th',RUNNERS),'MLB',LIVE_AT)[0]};
+  const session=createTennisSession({...defaultLiveTennisConfig(100),leagues:['MLB'],focusSlug:SLUG},LIVE_AT);
+  const fresh=input(LIVE_AT,.4,.41,market);
+  const ctx=decisionContext(session,fresh,LIVE_AT,'live');
+  assert.equal(ctx.game!.period,6);assert.equal(ctx.game!.yesScore,4);assert.equal(ctx.game!.noScore,5);
+  const f=(name:string,side:'yes'|'no'='yes')=>readFeature(featureRegistry(SPORT_FEATURES),name,ctx,side);
+  assert.equal(f('inning'),6);assert.equal(f('baseball.half'),'top');assert.equal(f('outs'),1);assert.equal(f('balls'),3);assert.equal(f('strikes'),2);
+  assert.equal(f('baseball.batting','yes'),true,'the Mets (away, YES) bat in the top half');assert.equal(f('baseball.batting','no'),false);
+  assert.equal(f('runnersOn'),2);assert.equal(f('runnerInScoringPosition'),true);assert.equal(f('baseOutState'),'12-|1');
+  // A report older than 45 s gives no game facts at all.
+  const stale={...fresh,market:{...fresh.market,contextUpdatedAt:LIVE_AT-60_000}};
+  const old=decisionContext(session,stale,LIVE_AT,'live');
+  assert.equal(old.game!.yesScore,undefined);assert.equal(readFeature(featureRegistry(SPORT_FEATURES),'outs',old,'yes'),undefined);
+  // Between halves nobody bats, and the base-out state is not reported.
+  const mid={...market,baseball:baseballContext('Mid 6th',{...RUNNERS,outs:0,balls:0,strikes:0,onFirst:false,onSecond:false,inningHalf:'M'})};
+  const between=decisionContext(session,input(LIVE_AT,.4,.41,mid),LIVE_AT,'live');
+  assert.equal(readFeature(featureRegistry(SPORT_FEATURES),'baseball.batting',between,'yes'),undefined);
+  assert.equal(readFeature(featureRegistry(SPORT_FEATURES),'baseOutState',between,'yes'),undefined);
+  // Football features never read baseball facts.
+  assert.equal(readFeature(featureRegistry(SPORT_FEATURES),'hasBall',ctx,'yes'),undefined);
 });
