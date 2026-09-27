@@ -202,3 +202,8 @@ body:has(.tennis-app){background:#0d1117}
 .tennis-engine p small{display:inline;font-size:var(--fs-xs)}
 .tennis-visually-hidden{font-size:var(--fs-md)}
 .tennis-rule-summary small{font-size:var(--fs-xs)}
+.tennis-engine .tennis-muted{color:var(--dg-muted)}
+.tennis-scorecard{width:100%;border-collapse:collapse;margin:8px 0;font-size:var(--fs-xs)}
+.tennis-scorecard th,.tennis-scorecard td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--dg-line);white-space:nowrap}
+.tennis-scorecard th{color:var(--dg-muted);font-weight:600}
+.tennis-engine details{overflow-x:auto}

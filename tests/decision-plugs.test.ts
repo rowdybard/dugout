@@ -91,12 +91,23 @@ test('model plug: JSON specs compile; a model edge is proposed but evidence stil
   const table=compileModel({kind:'table-v1',id:'cfb-table',version:'1',sports:['CFB'],phases:['pregame'],feature:'mid',bins:[{min:0,max:.5,p:.4},{min:.5,max:1,p:.9}]});
   assert.equal(table.predict(ctx(),'yes'),.9);assert.equal(table.predict(ctx(),'no'),.4);
   assert.ok(Math.abs(MARKET_IMPLIED.predict(ctx(),'yes')!-.775)<1e-9);
-  const engine=createEngine({models:[table]});
-  const plan=engine.plan(ctx(),{mode:'real'});
+  // model-edge-hold@2 trades on an interval, never a point: a model without measured uncertainty proposes nothing.
+  const deep={...ctx(),market:{...ctx().market,yes:{...ctx().market.yes,askSize:1000,bidSize:1000}}};
+  const pointOnly=createEngine({models:[table]}).plan(deep,{mode:'real'});
+  assert.equal(pointOnly.considered.find(t=>t.proposal.strategy==='model-edge-hold'),undefined);
+  assert.ok(pointOnly.notes.some(note=>note.strategy==='model-edge-hold'&&note.code==='NO_ESTIMATE'));
+  const measured=compileModel({kind:'table-v1',id:'cfb-table',version:'1',sports:['CFB'],phases:['pregame'],feature:'mid',bins:[{min:0,max:.5,p:.4},{min:.5,max:1,p:.9}],uncertainty:.03});
+  assert.deepEqual(measured.estimate(deep,'yes'),{p:.9,lo:.87,hi:.93,source:'cfb-table@1'});
+  const plan=createEngine({models:[measured]}).plan(deep,{mode:'real'});
   const edge=plan.considered.find(t=>t.proposal.strategy==='model-edge-hold');
-  assert.ok(edge,'a 90% model on a 78¢ favourite proposes');assert.equal(edge.proposal.modelId,'cfb-table');
+  assert.ok(edge,'87% lower bound on a 78¢ favourite clears fee and latency');assert.equal(edge.proposal.modelId,'cfb-table@1');assert.equal(edge.proposal.strategyVersion,'2');
   assert.equal(edge.blocked,'UNPROVEN_REAL');
   assert.ok(edge.verdict.modelEdge!>0.1);
+  // A wide interval whose lower bound does not clear the all-in price is refused, with the reason.
+  const wide=compileModel({kind:'table-v1',id:'cfb-wide',version:'1',sports:['CFB'],phases:['pregame'],feature:'mid',bins:[{min:0,max:.5,p:.4},{min:.5,max:1,p:.9}],uncertainty:.2});
+  const refused=createEngine({models:[wide]}).plan(deep,{mode:'real'});
+  assert.equal(refused.considered.find(t=>t.proposal.strategy==='model-edge-hold'),undefined);
+  assert.ok(refused.notes.some(note=>note.code==='EDGE_TOO_SMALL'&&/lower bound 70\.0%/.test(note.detail)),JSON.stringify(refused.notes));
 });
 
 test('packs: schema validated, duplicates refused, unpinned proven rows downgraded',()=>{

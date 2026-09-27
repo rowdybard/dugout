@@ -4,6 +4,10 @@ import {featureRegistry,readFeature,type Feature,type FeatureRegistry} from './f
 import {compileModel,type ModelSpec,type ProbabilityModel} from './models.ts';
 import {DEFAULT_STRATEGIES,type Proposal,type Strategy,type StrategyTools} from './strategies.ts';
 import {SPORT_FEATURES,SPORT_STRATEGIES} from './sports/index.ts';
+import {specOf} from './catalog.ts';
+import {RETIRED_STATUS,SHADOW_STATUS} from './spec.ts';
+import {primaryReason,type StrategyNote} from './why.ts';
+import type {FairEstimate} from './edge.ts';
 import {DEFAULT_SIZING,stakeFor,type SizingLimits} from './sizing.ts';
 import {checkRisk,DEFAULT_RISK,EMPTY_RISK,type RiskLimits,type RiskState} from './risk.ts';
 import {DEFAULT_FEE_COEFFICIENT,estimateCosts,MAX_EXECUTABLE_SPREAD,roleOf,type Costs} from './costs.ts';
@@ -65,6 +69,15 @@ export type Plan={
   /** What should happen now, best first. At most one taker entry per market. */
   actions:PlannedTrade[];
   considered:PlannedTrade[];errors:string[];summary:string;
+  /** Why strategies that did not propose declined (lib/decision/why.ts). */
+  notes:StrategyNote[];
+  /** The primary reason when there is no action; null when there is one. */
+  why:StrategyNote|null;
+  /**
+   * Proposals from strategies still before forward paper testing (spec research status idea…holdout) that did not
+   * become actions: measured in shadow (lib/decision/shadow.ts), never traded.
+   */
+  shadow:PlannedTrade[];
 };
 
 export type EngineOptions={
@@ -107,13 +120,18 @@ const specificity=(item:Evidence)=>(item.price?2:0)+(item.role?1:0)+(item.condit
 const mostSpecific=(items:Evidence[])=>[...items].sort((a,b)=>specificity(b)-specificity(a))[0]??null;
 /** A regime-wide average: no price band, role, conditions or strategy restriction. */
 const blanket=(row:Evidence)=>!row.price&&!row.role&&!row.conditions?.length&&!row.strategies;
+const SHADOW_BLOCKS=new Set(['NO_EVIDENCE','DROPPED','UNPROVEN_REAL','NO_STAKE']);
 /** Descending order that treats equal infinities as ties. */
 const descending=(a:number,b:number)=>a===b?0:a>b?-1:1;
 
-type MatchInput={sport:Sport;phase:Phase;style:Style;strategy?:string;price?:number;role?:Role;read?:(feature:string)=>FeatureValue|undefined};
+type MatchInput={sport:Sport;phase:Phase;style:Style;strategy?:string;strategyVersion?:string;price?:number;role?:Role;read?:(feature:string)=>FeatureValue|undefined};
+/** Evidence names a strategy as `id` (every version) or `id@version` (that version only). Studies write id@version. */
+export function namesStrategy(row:Evidence,strategy:string|undefined,version:string|undefined):boolean {
+  return !!strategy&&!!row.strategies?.some(entry=>entry===strategy||(version!==undefined&&entry===`${strategy}@${version}`));
+}
 function matchRow(row:Evidence,input:MatchInput):'match'|'no'|'unknown' {
   if(!row.sports.includes(input.sport)||!row.phases.includes(input.phase)||!row.styles.includes(input.style))return 'no';
-  if(row.strategies&&(!input.strategy||!row.strategies.includes(input.strategy)))return 'no';
+  if(row.strategies&&!namesStrategy(row,input.strategy,input.strategyVersion))return 'no';
   if(row.price&&(input.price===undefined||!inBand(input.price,row.price)))return 'no';
   if(row.role&&row.role!==input.role)return 'no';
   let unknown=false;
@@ -143,7 +161,7 @@ export function createEngine(options:EngineOptions={}):Engine {
   function explored(verdict:Verdict,proposal:Proposal,mode:Mode,{explore,use}:ExploreOptions):Verdict {
     if(mode!=='paper'||!explore?.includes(proposal.strategy)||(verdict.code!=='NO_EVIDENCE'&&verdict.code!=='DROPPED'))return verdict;
     const strategy=[...(use??[]),...strategies].find(item=>item.id===proposal.strategy);
-    if(!strategy?.hypothesis||verdict.evidence.some(row=>row.strategies?.includes(proposal.strategy)))return verdict;
+    if(!strategy?.hypothesis||verdict.evidence.some(row=>namesStrategy(row,proposal.strategy,proposal.strategyVersion)))return verdict;
     const general=verdict.deciding;
     return {...verdict,action:'paper-only',permitted:true,code:'EXPLORE_PAPER',deciding:null,
       reason:`Paper test of an unmeasured idea. ${strategy.hypothesis}`+
@@ -166,14 +184,14 @@ export function createEngine(options:EngineOptions={}):Engine {
     const extra={role,costs,modelEdge};
     if(taker&&costs!.spread!==null&&costs!.spread>MAX_EXECUTABLE_SPREAD+EPSILON)
       return verdict('block','NOT_EXECUTABLE',`The ${Math.round(costs!.spread*100)}¢ spread is wider than the 5¢ the research counts as a real price.`,extra);
-    const input:MatchInput={sport:ctx.market.sport,phase,style:proposal.style,strategy:proposal.strategy,price,role,
+    const input:MatchInput={sport:ctx.market.sport,phase,style:proposal.style,strategy:proposal.strategy,strategyVersion:proposal.strategyVersion,price,role,
       read:name=>readFeature(features,name,ctx,proposal.side)};
     const found=evidence.map(row=>({row,result:matchRow(row,input)})).filter(m=>m.result!=='no');
     const all=found.map(m=>m.row),full={...extra,evidence:all};
     // Once a row measured for this strategy certainly applies, it replaces BLANKET regime averages (no price band,
     // role or conditions), which measured other entry rules. Findings about a narrower slice (a price band, a role, a
     // game situation) still apply to every strategy that trades in it.
-    const own=found.some(m=>m.result==='match'&&m.row.strategies?.includes(proposal.strategy));
+    const own=found.some(m=>m.result==='match'&&namesStrategy(m.row,proposal.strategy,proposal.strategyVersion));
     const matched=own?found.filter(m=>!blanket(m.row)):found;
     // Losers win ties, and a losing row that cannot be ruled out still blocks.
     const dropped=matched.filter(m=>m.row.status==='dropped').map(m=>m.row);
@@ -217,21 +235,34 @@ export function createEngine(options:EngineOptions={}):Engine {
   function plan(ctx:DecisionContext,planOptions:PlanOptions):Plan {
     const mode=planOptions.mode,phase=phaseOf(ctx),sport=ctx.market.sport;
     const shared={...base,trust,time:ctx.now,slug:ctx.market.slug,sport,phase,mode};
-    if(!phase)return {...shared,actions:[],considered:[],errors:[],summary:'The game is final or has no scheduled start.'};
+    if(!phase){
+      const why:StrategyNote={strategy:'engine',code:'CLOSED',detail:'The game is final or has no scheduled start.'};
+      return {...shared,actions:[],considered:[],errors:[],summary:why.detail,notes:[],why,shadow:[]};
+    }
     const coefficient=ctx.market.feeCoefficient??DEFAULT_FEE_COEFFICIENT;
     const research=models.filter(model=>model.id!=='market-implied'&&model.applies(sport,phase));
+    const notes:StrategyNote[]=[];let current='engine';
+    const stake=planOptions.mode==='real'?Math.min(sizing.maxStake,sizing.bankroll*sizing.maxBankrollFraction):Math.min(sizing.paperStake,Math.max(0,Math.min(sizing.maxStake,sizing.bankroll*sizing.maxBankrollFraction)));
     const tools:StrategyTools={phase,
       feature:(name,side)=>readFeature(features,name,ctx,side),
       quote:side=>quoteOf(ctx,side),
       costs:side=>{const q=quoteOf(ctx,side);return q.ask===null?null:estimateCosts(q.ask,q.bid,coefficient);},
       model:side=>{for(const model of research){const p=model.predict(ctx,side,features);if(p!==null)return {id:model.id,p};}return null;},
+      fair:side=>{for(const model of research){const estimate:FairEstimate|null=model.estimate(ctx,side,features);if(estimate)return estimate;}return null;},
+      levels:side=>{const q=quoteOf(ctx,side);return q.asks??(q.ask!==null&&q.askSize?[{price:q.ask,quantity:q.askSize}]:[]);},
+      stake,
+      note:(code,detail)=>{notes.push({strategy:current,code,detail});},
       pullAfterEventMs:phase==='live'?PULL_AFTER_EVENT_MS[sport]??null:null};
     const errors:string[]=[],proposals:Proposal[]=[];
     for(const strategy of planOptions.use??strategies){
       if(planOptions.strategies&&!planOptions.strategies.includes(strategy.id))continue;
+      // Killed or replaced versions never propose again.
+      if(RETIRED_STATUS.has(specOf(strategy.id,strategy.version)?.research.status??''))continue;
+      current=strategy.id;
       try{proposals.push(...strategy.propose(ctx,tools));}
       catch(error){errors.push(`${strategy.id}: ${(error as Error).message}`);}
     }
+    current='engine';
     const dataAge=typeof ctx.market.observedAt==='number'&&Number.isFinite(ctx.market.observedAt)&&ctx.market.observedAt<=ctx.now?ctx.now-ctx.market.observedAt:null;
     const risk={...(planOptions.risk??EMPTY_RISK)};
     const considered:PlannedTrade[]=proposals.map(proposal=>{
@@ -256,7 +287,11 @@ export function createEngine(options:EngineOptions={}):Engine {
     }
     const summary=actions.length?actions.map(a=>`${a.proposal.strategy} ${a.proposal.side.toUpperCase()} $${a.stake.toFixed(2)} at ${(a.proposal.price*100).toFixed(1)}¢ (${a.verdict.code})`).join('; ')
       :considered.length?`No action. ${considered[0].reason}`:errors.length?`No action. ${errors[0]}`:'No strategy proposed a trade here.';
-    return {...shared,actions,considered,errors,summary};
+    const why=actions.length?null:primaryReason(considered.filter(trade=>trade.blocked&&trade.blocked!=='ONE_TAKER_PER_MARKET')
+      .map(trade=>({strategy:trade.proposal.strategy,code:trade.blocked!,detail:trade.reason})),notes);
+    // Shadow only what evidence withheld: a proposal the book could not execute is not a would-be trade.
+    const shadow=considered.filter(trade=>trade.blocked!==null&&SHADOW_BLOCKS.has(trade.blocked)&&SHADOW_STATUS.has(specOf(trade.proposal.strategy,trade.proposal.strategyVersion)?.research.status??''));
+    return {...shared,actions,considered,errors,summary,notes,why,shadow};
   }
 
   function regime(ctx:DecisionContext,side:SideKey){

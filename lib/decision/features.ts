@@ -1,4 +1,5 @@
 import {otherSide,phaseOf,quoteOf,type DecisionContext,type FeatureValue,type SideKey} from './context.ts';
+import {latestEvent} from './events.ts';
 
 /**
  * Named features the evidence conditions, models and strategies read. Research plug: add a feature
@@ -30,6 +31,16 @@ function change(ctx:DecisionContext,side:SideKey,windowMs:number){
   return now===undefined||then===null?undefined:(now-sideMid(then,side))*100;
 }
 
+/** This side's midpoint `windowMs` ago from the price history (the latest point at or before then). */
+function midAt(ctx:DecisionContext,side:SideKey,time:number){
+  const point=(ctx.history??[]).filter(p=>p.time<=time).at(-1);
+  const yes=point?yesMid(point):null;
+  return yes===null?undefined:sideMid(yes,side);
+}
+const sideOf=(yesMid:number|null|undefined,side:SideKey)=>typeof yesMid==='number'&&Number.isFinite(yesMid)?sideMid(yesMid,side):undefined;
+const depthWithin=(levels:readonly {price:number;quantity:number}[]|undefined,best:number|null,cents:number)=>
+  levels&&best!==null?levels.filter(level=>Math.abs(level.price-best)<=cents/100+1e-9).reduce((sum,level)=>sum+level.quantity,0):undefined;
+
 export const BUILTIN_FEATURES:FeatureRegistry={
   sport:ctx=>ctx.market.sport,
   phase:ctx=>phaseOf(ctx)??undefined,
@@ -56,6 +67,35 @@ export const BUILTIN_FEATURES:FeatureRegistry={
   change5m:(ctx,side)=>change(ctx,side,300_000),
   change60m:(ctx,side)=>change(ctx,side,3_600_000),
   otherPrice:(ctx,side)=>finite(quoteOf(ctx,otherSide(side)).ask),
+
+  // Data freshness: a decision is only as good as its oldest input.
+  quoteAgeMs:ctx=>typeof ctx.market.observedAt==='number'&&ctx.market.observedAt<=ctx.now?ctx.now-ctx.market.observedAt:undefined,
+  gameReportAgeMs:ctx=>typeof ctx.game?.observedAt==='number'&&ctx.game.observedAt<=ctx.now?ctx.now-ctx.game.observedAt:undefined,
+
+  // Book shape (top of book and within 2¢ of it). Imbalance > 0: more resting size to buy this side than to sell it.
+  imbalance:(ctx,side)=>{const q=quoteOf(ctx,side),b=finite(q.bidSize),a=finite(q.askSize);return b===undefined||a===undefined||b+a<=0?undefined:(b-a)/(b+a);},
+  askDepth2c:(ctx,side)=>{const q=quoteOf(ctx,side);return depthWithin(q.asks,q.ask,2);},
+  bidDepth2c:(ctx,side)=>{const q=quoteOf(ctx,side);return depthWithin(q.bids,q.bid,2);},
+  /** Midpoint change over the last 30 s, in cents, this side's perspective. */
+  velocity30s:(ctx,side)=>{const now=mid(ctx,side),then=midAt(ctx,side,ctx.now-30_000);return now===undefined||then===undefined?undefined:(now-then)*100;},
+
+  // Where the market started.
+  pregamePrice:(ctx,side)=>sideOf(ctx.market.pregameYesMid,side),
+  moveSincePregame:(ctx,side)=>{const now=mid(ctx,side),then=sideOf(ctx.market.pregameYesMid,side);return now===undefined||then===undefined?undefined:(now-then)*100;},
+
+  // The latest score event (lib/decision/events.ts), from this side's perspective.
+  'lastScore.secondsSince':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?(ctx.now-e.receivedAt)/1000:undefined;},
+  'lastScore.bySide':(ctx,side)=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?.side?e.side===side:undefined;},
+  'lastScore.points':ctx=>latestEvent(ctx.events,'score',ctx.now)?.points,
+  /** The scoring team's price before the market could have known: low means a surprising score. */
+  'lastScore.scorerPreEventPrice':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);return e?.side?sideOf(e.preYesMid,e.side):undefined;},
+  /** How far this side's midpoint has fallen since before the score, in probability units (negative if it rose). */
+  'lastScore.moveAgainst':(ctx,side)=>{const e=latestEvent(ctx.events,'score',ctx.now),before=e?sideOf(e.preYesMid,side):undefined,now=mid(ctx,side);return before===undefined||now===undefined?undefined:before-now;},
+  /** How much of the scorer's move happened before the report reached Dugout, in probability units. */
+  'lastScore.movedBeforeReport':ctx=>{const e=latestEvent(ctx.events,'score',ctx.now);if(!e?.side)return undefined;const pre=sideOf(e.preYesMid,e.side),at=sideOf(e.atReportYesMid,e.side);return pre===undefined||at===undefined?undefined:at-pre;},
+  'lastScore.id':ctx=>latestEvent(ctx.events,'score',ctx.now)?.id,
+  /** Drives so far: every score, change of possession or half ends one. */
+  driveNumber:ctx=>(ctx.events??[]).filter(e=>e.type==='score'||e.type==='possession'||(e.type==='period'&&(e.period==='Q3'||/OT/.test(e.period)))).length,
 };
 
 export function featureRegistry(...extra:Record<string,Feature>[]):FeatureRegistry {

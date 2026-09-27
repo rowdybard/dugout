@@ -7,7 +7,7 @@ export const tennisRulesSchema=z.object({
   decisionEngine:z.literal('local-move-v1').optional(),
   evidenceGate:z.literal('evidence-v1').optional(),
   evidencePack:z.string().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
-  maker:z.literal('paper-v1').optional(),
+  maker:z.enum(['paper-v1','quiet-window-v1']).optional(),
   explore:z.array(z.enum(['comeback-drive'])).max(5).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
@@ -35,7 +35,8 @@ export function defaultTennisConfig(startingCash=100):TennisConfig {
 
 /** Current product defaults. The older factory is retained for historical resets/replay. */
 export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
-  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1',maker:'paper-v1',explore:['comeback-drive']};
+  // Unmeasured candidates are measured in shadow (docs/STRATEGY-ARCHITECTURE.md), not paper-traded: config.explore is an explicit opt-in.
+  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1',maker:'paper-v1'};
 }
 
 /** Add newly introduced fields without rewriting saved balances or historical rules. */

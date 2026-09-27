@@ -135,7 +135,9 @@ function input(at:number,yesBid:number,report:Report={},league:'NFL'|'CFB'='NFL'
   return {receivedAt:at,source:'REST',sourceTime:at,market,
     book:{bids:[{price:yesBid,quantity:500}],asks:[{price:Math.round((yesBid+0.01)*100)/100,quantity:500}],state:'MARKET_STATE_OPEN',time:new Date(at).toISOString()}};
 }
-function started(config=defaultLiveTennisConfig(100),league:'NFL'|'CFB'='NFL'):TennisSession {
+/** These bot tests exercise explicit paper exploration (config.explore); new accounts only shadow comeback-drive. */
+const EXPLORING={...defaultLiveTennisConfig(100),explore:['comeback-drive' as const]};
+function started(config:ReturnType<typeof defaultLiveTennisConfig>=EXPLORING,league:'NFL'|'CFB'='NFL'):TennisSession {
   const session=createTennisSession({...config,leagues:[league],focusSlug:SLUG},T0-60_000);
   return applyTennisAction(session,{action:'start',commandId:'drive-start'},[],T0-60_000);
 }
@@ -163,7 +165,7 @@ test('the bot reads the verified game report into the engine context',()=>{
   const context=decisionContext(fresh,input(T0,0.2),T0,'live').game!;
   assert.equal(context.status,'live');assert.equal(context.yesScore,0);assert.equal(context.noScore,17);assert.equal(context.period,2);
   assert.equal(context.secondsRemaining,null,'clock direction not verified yet');
-  assert.deepEqual(context.extra,{possession:'yes',yardsToEndZone:25,down:1,distance:10});
+  assert.deepEqual(context.extra,{possession:'yes',yardsToEndZone:25,down:1,distance:10,phase:'play'});
   // Without a fresh verified report there are no football facts.
   const unknown=decisionContext(createTennisSession(defaultLiveTennisConfig(),T0),input(T0,0.2),T0,'live').game!;
   assert.equal(unknown.extra,undefined);assert.equal(unknown.yesScore,undefined);
@@ -192,9 +194,9 @@ test('at the end of the drive the bot holds on instead of selling only when meas
   const pack={...BUNDLED_PACK,version:'test-drive-hold',
     evidence:[...BUNDLED_PACK.evidence,{id:'cfb-live-model-hold-test',title:'Test college live model hold',status:'lead' as const,sports:['CFB' as const],phases:['live' as const],
       styles:['taker-hold' as const],strategies:['model-edge-hold'],estimate:{mean:0.03,lo:-0.01,hi:0.07,unit:'return' as const},sample:'test',source:'test',plain:'test'}],
-    models:[{kind:'logistic-v1' as const,id:'test-cfb-live',version:'1',sports:['CFB' as const],phases:['live' as const],intercept:3,weights:{}}]};
+    models:[{kind:'logistic-v1' as const,id:'test-cfb-live',version:'1',sports:['CFB' as const],phases:['live' as const],intercept:3,weights:{},uncertainty:0.02}]};
   assert.deepEqual(registerPack(pack,'bundled'),{ok:true});
-  let session=started(defaultLiveTennisConfig(100),'CFB');
+  let session=started(EXPLORING,'CFB');
   session=stepTennisSession(session,[input(T0,0.2,{},'CFB')],T0);
   assert.equal(session.pending?.plan?.exit,'drive',session.lastReason);
   session=stepTennisSession(session,[input(T0+1500,0.2,{down:2,yfd:6,field:{teamId:BILLS,yard:21}},'CFB')],T0+1500);
@@ -264,7 +266,8 @@ test('the stop, the time limit and a silent feed each close the trade; one drive
   session=stepTennisSession(session,[input(late+1500,0.2,{down:3,yfd:3,field:{teamId:BILLS,yard:18}})],late+1500);
   assert.equal(session.positions.at(-1)!.status,'closed');
   session=stepTennisSession(session,[input(late+60_000,0.2,{down:1,yfd:10,field:{teamId:BILLS,yard:15}})],late+60_000);
-  assert.equal(session.pending,null);assert.ok(session.decisions.some(row=>row.code==='DRIVE_TRADED'),session.lastReason);
+  assert.equal(session.pending,null);assert.ok(session.decisions.some(row=>row.code==='DRIVE_TRADED'||row.code==='SETUP_TRADED'),session.lastReason);
+  assert.equal(session.whyNot?.code,'DUPLICATE');
   // The Bills get the ball, then the Chiefs drive again at the same score: a new drive may be traded.
   session=stepTennisSession(session,[input(late+120_000,0.2,{possession:BILLS,field:{teamId:BILLS,yard:30}})],late+120_000);
   session=stepTennisSession(session,[input(late+180_000,0.2,{field:{teamId:BILLS,yard:28}})],late+180_000);
@@ -287,8 +290,8 @@ test('a planned entry is cancelled if possession changes before the fill; explor
   assert.equal(off.enginePlan?.considered.find(trade=>trade.strategy==='comeback-drive')?.result,'DROPPED');
 });
 
-test('explore config: validated, needs the gate, and new accounts explore the comeback drive on paper',()=>{
-  assert.deepEqual(defaultLiveTennisConfig().explore,['comeback-drive']);
+test('explore config: validated, needs the gate, and is an explicit opt-in (new accounts measure candidates in shadow)',()=>{
+  assert.equal(defaultLiveTennisConfig().explore,undefined);
   assert.equal(validateTennisConfig({...defaultLiveTennisConfig(),explore:['comeback-drive']}),null);
   assert.match(validateTennisConfig({...defaultLiveTennisConfig(),evidenceGate:undefined,maker:undefined,explore:['comeback-drive']})!,/evidence gate/);
   assert.match(validateTennisConfig({...defaultLiveTennisConfig(),explore:['favourite-hold' as 'comeback-drive']})!,/explore/);

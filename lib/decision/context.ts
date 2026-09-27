@@ -1,4 +1,5 @@
 import type {Phase,Sport} from './evidence.ts';
+import type {GameEvent} from './events.ts';
 
 /**
  * What the engine knows about one market at one moment. Everything is optional except the market,
@@ -8,7 +9,9 @@ import type {Phase,Sport} from './evidence.ts';
 export type SideKey='yes'|'no';
 export type FeatureValue=number|string|boolean;
 
-export type Quote={ask:number|null;bid:number|null;askSize?:number|null;bidSize?:number|null};
+export type Quote={ask:number|null;bid:number|null;askSize?:number|null;bidSize?:number|null;
+  /** This side's ask ladder, best first, when the book is known: used for depth and slippage. */
+  asks?:readonly {price:number;quantity:number}[];bids?:readonly {price:number;quantity:number}[]};
 export type MarketSnapshot={
   slug:string;sport:Sport;title?:string;
   /** Scheduled start, epoch ms. */
@@ -17,6 +20,8 @@ export type MarketSnapshot={
   feeCoefficient?:number|null;
   open?:boolean;observedAt?:number|null;
   yes:Quote&{name?:string};no:Quote&{name?:string};
+  /** YES midpoint at the last pregame book Dugout saw, when it saw one. */
+  pregameYesMid?:number|null;
 };
 export type GameState={
   status:'scheduled'|'live'|'final';
@@ -37,6 +42,8 @@ export type DecisionContext={
   history?:readonly PricePoint[];
   /** Research plug: externally computed facts (news, injuries, lineups, model outputs), readable as `signal.<name>`. */
   signals?:Record<string,FeatureValue|null>;
+  /** Game events so far (lib/decision/events.ts), oldest first. */
+  events?:readonly GameEvent[];
 };
 
 export function phaseOf(ctx:DecisionContext):Phase|null {

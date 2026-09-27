@@ -5,6 +5,9 @@ import type {OpportunityAnalysis} from './opportunity';
 import type {AdaptiveExitPlan,AdaptiveExitState,AdaptiveExitAssessment} from './exit-analysis';
 import type {CompactPlan,PlanEntry} from './engine-plan';
 import type {MakerState} from './maker';
+import type {GameEvent} from '../decision/events';
+import type {ShadowResult,ShadowTrade} from '../decision/shadow';
+import type {NoTradeCode} from '../decision/why';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
@@ -67,8 +70,11 @@ export type TennisConfig={
    * (verdict EXPLORE_PAPER). Absent means none.
    */
   explore?:ExplorableStrategy[];
-  /** Paper market making where the evidence permits resting orders (lib/tennis/maker.ts). Absent means off. */
-  maker?:'paper-v1';
+  /**
+   * Paper market making where the evidence permits resting orders (lib/tennis/maker.ts). Absent means off.
+   * paper-v1: maker-quote@1 (always on, pulled after events). quiet-window-v1: quiet-window-maker@1 (dead-ball windows only).
+   */
+  maker?:'paper-v1'|'quiet-window-v1';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
@@ -95,6 +101,8 @@ export type TennisPosition={
    * drive: engine-planned football trade; sold when the drive ends, at its stop or time limit (plan.drive).
    */
   exitPolicy?:'hold-to-settlement'|'maker'|'drive';plan?:PlanEntry;
+  /** Worst and best net return seen while open (for the scorecard), and the spread paid at entry. */
+  mae?:number;mfe?:number;entrySpread?:number;
 };
 export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
 export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
@@ -113,6 +121,22 @@ export type TennisSession={
   maker?:MakerState;
   /** The football drive each market last entered, so one drive is traded once. Cleared when the drive ends. */
   drives?:Record<string,{possessionTeamId:string;score:string;period:string}>;
+  /** Last setup each strategy entered per market (`slug|strategy` → setup key): one entry per setup. */
+  setups?:Record<string,string>;
+  /** Game events per market (lib/decision/events.ts), and the last game state they were detected from. */
+  gameTape?:Record<string,GameEvent[]>;
+  tapeState?:Record<string,{reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean}>;
+  /** YES midpoint at the last pregame book seen, per market. */
+  pregame?:Record<string,{mid:number;time:number}>;
+  /** Shadow and counterfactual trades (lib/decision/shadow.ts): candidates never traded, and alternatives to real paper trades. */
+  shadows?:ShadowTrade[];
+  /** Finished shadows, compacted (lib/decision/shadow.ts ShadowResult): the scorecard's forward-shadow sample. */
+  shadowResults?:ShadowResult[];
+  /** Why the latest evaluation did not trade, and how often each reason occurred (lib/decision/why.ts). */
+  whyNot?:{time:number;slug:string;strategy:string;code:NoTradeCode;detail:string}|null;
+  whyCounts?:Partial<Record<NoTradeCode,number>>;
+  /** The last book the engine evaluated per market: each book is evaluated (and counted) once. */
+  evaluatedBooks?:Record<string,number>;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;

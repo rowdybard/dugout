@@ -19,6 +19,10 @@ import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalize
 import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
 import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
+import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,recordPregame,recordWhyNot} from './research-tracking.ts';
+import {specOf} from '../decision/catalog.ts';
+import {SHADOW_STATUS} from '../decision/spec.ts';
+import {noTradeCode} from '../decision/why.ts';
 import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
@@ -239,44 +243,83 @@ function enginePendingIssue(session: TennisSession, input: TennisInput, intent: 
   return null;
 }
 
+/** The maker strategy this account runs: maker-quote@1 (paper-v1) or quiet-window-maker@1 (quiet-window-v1). */
+const selectedMaker = (session: TennisSession) => session.config.maker === 'quiet-window-v1' ? 'quiet-window-maker' : 'maker-quote';
+
+type Evaluated = { input: TennisInput; phase: Phase | null; plan: Plan };
+
 /**
- * Ask the engine for a plan on each eligible book. The best taker-hold action takes the position slot; otherwise,
- * with market making on, the plan's permitted resting orders are quoted. Maker inventory also occupies the slot.
+ * Ask the engine for a plan on each new book of the focused game, whether or not the account slot is free: every
+ * evaluation feeds the shadow measurements and the why-no-trade record (lib/tennis/research-tracking.ts).
  */
-function stageEnginePlan(session: TennisSession, current: TennisInput[], now: number) {
-  const resolved = sessionEngine(session);
+function evaluateEngine(session: TennisSession, current: TennisInput[], now: number): Evaluated[] {
+  const resolved = sessionEngine(session), out: Evaluated[] = [];
   for (const input of [...current].sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
     if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) continue;
-    if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
-    if ('error' in resolved) { record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); cancelMakerQuotes(session, resolved.error, now); continue; }
+    if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || input.receivedAt <= (session.evaluatedBooks?.[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
+    (session.evaluatedBooks ??= {})[input.market.slug] = input.receivedAt;
+    if ('error' in resolved) {
+      record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); cancelMakerQuotes(session, resolved.error, now);
+      recordWhyNot(session, input.market.slug, { strategy: 'engine', code: 'INSUFFICIENT_EVIDENCE', detail: resolved.error }, now); continue;
+    }
     const phase = marketPhase(input, now);
     const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now), explore: session.config.explore });
     session.enginePlan = compactPlan(plan);
+    // Shadow: proposals evidence withheld, plus actions of a shadow-stage maker strategy this account does not run.
+    const maker = selectedMaker(session);
+    const unused = plan.actions.filter(action => action.proposal.style === 'maker' && action.proposal.strategy !== maker
+      && SHADOW_STATUS.has(specOf(action.proposal.strategy, action.proposal.strategyVersion)?.research.status ?? ''));
+    openCandidateShadows(session, input, [...plan.shadow, ...unused], now);
+    out.push({ input, phase, plan });
+  }
+  return out;
+}
+
+/**
+ * Stage the plan: the best taker-hold (or drive) action takes the position slot; otherwise, with market making on,
+ * the selected maker strategy's permitted resting orders are quoted. Maker inventory also occupies the slot.
+ * Every evaluation that does not trade records why.
+ */
+function stageEnginePlan(session: TennisSession, evaluated: Evaluated[], now: number) {
+  for (const { input, phase, plan } of evaluated) {
+    const slug = input.market.slug, maker = selectedMaker(session);
+    const why = (code: string, detail: string, strategy = 'bot') => recordWhyNot(session, slug, { strategy, code: noTradeCode(code), detail }, now);
     const action = makerPositions(session).length ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
       || (item.proposal.style === 'taker-scalp' && item.proposal.exit.kind === 'drive'));
     if (!action || !phase) {
-      if (session.config.maker === 'paper-v1' && session.config.focusSlug === input.market.slug) updateMakerQuotes(session, input, plan, phase, now);
+      if (session.config.maker && session.config.focusSlug === slug)
+        updateMakerQuotes(session, input, { ...plan, actions: plan.actions.filter(item => item.proposal.style !== 'maker' || item.proposal.strategy === maker) }, phase, now);
+      const quoting = session.maker?.slug === slug && (!!session.maker.quotes.YES || !!session.maker.quotes.NO);
+      recordWhyNot(session, slug, quoting ? null : action ? { strategy: 'bot', code: 'POSITION_OPEN', detail: 'Market-making inventory holds the account slot.' }
+        : plan.why ?? { strategy: 'engine', code: 'PHASE', detail: 'The game phase is not confirmed.' }, now);
       continue;
     }
     const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO', exit = action.proposal.exit;
-    const report = exit.kind === 'drive' ? freshFootball(session, input.market.slug) : undefined;
+    const setupId = `${slug}|${action.proposal.strategy}`;
+    if (action.proposal.setupKey && session.setups?.[setupId] === action.proposal.setupKey) {
+      record(session, now, slug, side, 'WAIT', 'SETUP_TRADED', `${action.proposal.strategy} already traded this setup. Waiting for the next one.`, input);
+      why('SETUP_TRADED', `${action.proposal.strategy} already traded this setup.`, action.proposal.strategy); continue;
+    }
+    const report = exit.kind === 'drive' ? freshFootball(session, slug) : undefined;
     if (exit.kind === 'drive') {
-      const traded = session.drives?.[input.market.slug];
-      if (!report) { record(session, now, input.market.slug, side, 'SKIP', 'CONTEXT_UNKNOWN', 'Engine plan not executable: the drive needs a fresh verified game report.', input); continue; }
+      const traded = session.drives?.[slug];
+      if (!report) { record(session, now, slug, side, 'SKIP', 'CONTEXT_UNKNOWN', 'Engine plan not executable: the drive needs a fresh verified game report.', input); why('CONTEXT_UNKNOWN', 'The drive needs a fresh verified game report.'); continue; }
       if (traded && traded.possessionTeamId === report.possessionTeamId && traded.score === report.score) {
-        record(session, now, input.market.slug, side, 'WAIT', 'DRIVE_TRADED', 'This drive was already traded once. Waiting for the next one.', input); continue;
+        record(session, now, slug, side, 'WAIT', 'DRIVE_TRADED', 'This drive was already traded once. Waiting for the next one.', input); why('DRIVE_TRADED', 'This drive was already traded once.'); continue;
       }
     }
     const issue = planEntryIssue(session, input, side, action.stake, now, phase, exit.kind === 'drive' ? 'drive' : 'hold-to-settlement');
-    if (issue) { record(session, now, input.market.slug, side, 'SKIP', issue.code, `Engine plan not executable: ${issue.reason}`, input); continue; }
+    if (issue) { record(session, now, slug, side, 'SKIP', issue.code, `Engine plan not executable: ${issue.reason}`, input); why(issue.code, issue.reason); continue; }
     const entry: PlanEntry = { strategy: action.proposal.strategy, strategyVersion: action.proposal.strategyVersion, style: action.proposal.style, phase,
       exit: exit.kind === 'drive' ? 'drive' : 'hold-to-settlement', ...(exit.kind === 'drive' ? { drive: { stopReturn: exit.stopReturn, maxHoldMs: exit.maxHoldMs } } : {}),
+      ...(action.proposal.setupKey ? { setupKey: action.proposal.setupKey } : {}),
       code: action.verdict.code, evidence: action.verdict.deciding?.id ?? null, pack: action.verdict.pack, stake: action.stake, reason: action.verdict.reason };
     stage(session, input, side, 'BUY', now, 'AUTOMATIC', `Decision engine: ${action.proposal.rationale} ${action.verdict.reason}`, action.stake);
     if (session.pending?.action === 'BUY') {
       session.pending.plan = entry;
       if (report) session.pending.contextSnapshot = structuredClone(report);
       cancelMakerQuotes(session, 'A planned entry takes the account slot.', now);
+      recordWhyNot(session, slug, null, now);
     }
     return;
   }
@@ -411,9 +454,12 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   if (phase === 'live' && state.eventKey !== null && key !== state.eventKey && pullMs) state.pulledUntil = now + pullMs;
   state.eventKey = key;
   if (now < state.pulledUntil) return cancel(`Pulled for ${Math.ceil((state.pulledUntil - now) / 1000)}s after a play; prices move most right after events.`);
-  if (phase === 'live' && isFootballMarket(input.market) && session.config.decisionPolicy === 'football-context-v1' && session.footballReports?.[slug]?.assessment.status !== 'fresh')
+  // Window-only makers quote precisely while the ball is dead: a fresh between-plays report is their context.
+  const windowOnly = exit?.kind === 'maker' && !!exit.windowOnly, context = session.footballReports?.[slug]?.assessment.status;
+  if (phase === 'live' && isFootballMarket(input.market) && session.config.decisionPolicy === 'football-context-v1' && context !== 'fresh' && !(windowOnly && context === 'transition'))
     return cancel('Waiting for fresh game context before quoting live.');
-  if (!actions.length) return cancel(plan.considered.find(trade => trade.proposal.style === 'maker')?.reason ?? 'The engine does not permit resting orders here.');
+  if (!actions.length) return cancel(plan.notes.find(note => note.strategy === selectedMaker(session))?.detail
+    ?? plan.considered.find(trade => trade.proposal.style === 'maker' && trade.proposal.strategy === selectedMaker(session))?.reason ?? 'The engine does not permit resting orders here.');
   const execution = input.market.execution!;
   const targets: Partial<Record<TradeSide, { price: number; quantity: number; stake: number }>> = {};
   for (const action of actions) {
@@ -501,6 +547,10 @@ function markPosition(session: TennisSession, position: TennisPosition, input: T
   position.netLiquidationValue = result.cashDelta;
   position.liquidationQuantity = result.filledQty;
   position.markedAt = input.receivedAt;
+  if (position.plan && result.filledQty >= position.quantity - EPSILON && position.costBasis > 0) {
+    const ret = exact(result.cashDelta / position.costBasis - 1);
+    position.mae = Math.min(position.mae ?? ret, ret); position.mfe = Math.max(position.mfe ?? ret, ret);
+  }
 }
 
 function settle(session: TennisSession, position: TennisPosition, input: TennisInput | undefined, now: number, clearPending = true): boolean {
@@ -552,6 +602,10 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
           const report=intent.contextSnapshot;
           (session.drives??={})[intent.slug]={possessionTeamId:report.possessionTeamId,score:report.score,period:report.period};
         }
+        if(intent.plan.setupKey)(session.setups??={})[`${intent.slug}|${intent.plan.strategy}`]=intent.plan.setupKey;
+        const book=quotes(input,intent.side);
+        if(book.ask!==undefined&&book.bid!==undefined)opened.entrySpread=exact(book.ask-book.bid);
+        openExecutedShadow(session,opened,input,{price:result.averagePrice,feePerContract:result.fees/result.filledQty},now);
       }
       if(intent.analysis?.entry){
         const opened=session.positions.at(-1)!,entry=intent.analysis.entry,cfg=intent.signalConfig??session.config;
@@ -899,6 +953,8 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if(!isFootballMarket(input.market)||input.source==='REPLAY')continue;
     const prior=session.footballReports[input.market.slug],next=assessFootballContext(input.market,now,prior);
     session.footballReports[input.market.slug]=next;
+    // Research bookkeeping is for evidence-engine accounts only: legacy sessions must replay byte for byte.
+    if(session.config.evidenceGate==='evidence-v1')recordGameEvents(session,input,next,now);
     // A traded drive is over once possession or the score changes; the next drive may be traded.
     const traded=session.drives?.[input.market.slug];
     if(traded&&((next.report&&(next.report.possessionTeamId!==traded.possessionTeamId||next.report.score!==traded.score))||(next.transition&&next.transition.score!==traded.score)))
@@ -922,6 +978,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if(dataIssue(session,input,now))continue;
     if(input.sourceTime!==undefined&&input.sourceTime!==null)session.bookSourceTimes[input.market.slug]=input.sourceTime;
     session.coverage[input.market.slug] = {league: input.market.league, time: input.receivedAt, live: freshLive(input,now)};
+    if(session.config.evidenceGate==='evidence-v1')recordPregame(session,input,now,marketPhase(input,now)==='pregame');
     session.quotes[input.market.slug] = {time:input.receivedAt,bid:input.book.bids[0]?.price??null,ask:input.book.asks[0]?.price??null,source:input.source,sourceTime:input.sourceTime};
     const held=holding(session);
     const localActive=session.config.decisionEngine==='local-move-v1'&&(session.status==='running'||!!session.pending);
@@ -946,6 +1003,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   if (open) settle(session, open, current.find(input => input.market.slug === open.slug), now);
   const processed = processPending(session, current, now);
   advanceMaker(session, current, now);
+  advanceShadows(session, current, now, input => !dataIssue(session, input, now));
   const position = holding(session);
   if (position) {
     const input = current.find(item => item.market.slug === position.slug);
@@ -1012,6 +1070,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (realised <= -lossLimit || (inventoryMarked && tennisEquity(session) <= session.config.startingCash - lossLimit)) session.status = inventory.length ? 'stopping' : 'stopped';
     if (session.status === 'stopping' && !inventory.length) session.status = 'stopped';
   }
+  const evaluated = session.config.evidenceGate === 'evidence-v1' && session.status === 'running' && !processed ? evaluateEngine(session, current, now) : [];
+  if (evaluated.length && (holding(session) || session.pending)) for (const { input, plan } of evaluated)
+    recordWhyNot(session, input.market.slug, plan.actions.length ? { strategy: 'bot', code: 'POSITION_OPEN', detail: 'One open position at a time.' } : plan.why, now);
   if (session.status === 'running' && !holding(session) && !session.pending && !processed) {
     const candidates:AutoCandidate[]=[];
     const localCandidates:LocalCandidate[]=[];
@@ -1071,7 +1132,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       if((session.decisionSequence??0)>beforeSequence)session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
     }
     if(session.config.evidenceGate==='evidence-v1'&&!session.pending){
-      stageEnginePlan(session,current,now);
+      stageEnginePlan(session,evaluated,now);
       // The engine's plan explains the bot's state better than a refused legacy scalp.
       if(!session.pending&&session.enginePlan&&session.enginePlan.time===now)session.lastReason=`Decision engine: ${session.enginePlan.summary}`;
     }
