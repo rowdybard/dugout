@@ -2,7 +2,17 @@
 
 Started September 27, 2026. **Read this first** if you are picking the project up cold (a new Claude session, Astra, or a human engineer). It records the goal, what the audit found, the decisions already made, the verified data sources, and a live checklist. Update the checklist and the "Last updated" line whenever a step changes status.
 
-Last updated: 2026-09-27 (evening). Steps 1–2 are done. Step 3 (data lake) is in progress. The NFL win-probability model v1 is trained. Study scripts are written in `research/studies/`.
+Last updated: 2026-09-27. **PROJECT PAUSED by the owner** after the Step 4–5 findings. Nothing is running: the Cloudflare paper runner stays paused as before, and no background jobs remain.
+
+**Where it stopped:**
+- **Taking the posted price with public data loses on NFL and MLB on every axis tested.** See [`research/studies/report.md`](../research/studies/report.md).
+- **The recommended next direction, if revived, is a market-making pilot:** maker rebate plus liquidity rewards, starting with college football and pregame windows, paper first, then a small funded account with Polymarket US API keys.
+- **Not finished:**
+  - Tennis price history (paused about 1,000 of 11,503 markets in; rerun `fetch_polymarket_us.py history --leagues atp,wta` to resume).
+  - MLB/NFL/CFB history for games after Aug 25 (rerun `history --leagues mlb,nfl,cfb`).
+  - CFB play-by-play (needs `CFBD_API_KEY`).
+  - The Sep 27 live feed-latency probe (stopped before games started, so no data).
+- **To resume:** re-read this doc and the report. The data lake in `research/data/` is local to the owner's PC and can be re-fetched with the resumable scripts.
 
 ---
 
