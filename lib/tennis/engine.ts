@@ -20,7 +20,8 @@ import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
 import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
 import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
-import type {Plan} from '../decision/engine.ts';
+import type {Plan,PlannedTrade} from '../decision/engine.ts';
+import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
@@ -183,16 +184,29 @@ function driveExit(session: TennisSession, position: TennisPosition, now: number
   return null;
 }
 
+/** The drive study's hold variant: the same entries, held to the final instead of sold at the drive's end. */
+export const DRIVE_HOLD_STRATEGY = 'comeback-drive-hold'; // proposed by comeback-drive (lib/decision/sports/football.ts)
+
 /**
- * At a drive trade's planned exit: does the evidence support holding this side to the final instead? Only a
- * measured result counts (lead or proven, never an explored idea). Today no live hold is supported, so it sells.
+ * At a drive trade's planned exit: does the evidence support holding this side to the final instead? First the drive
+ * study's own hold result (`comeback-drive-hold`, published by research/studies/drive_entry.py only when holding made
+ * money AND beat selling), then any other measured live hold. Only a measured result counts (lead or proven, never an
+ * explored idea). Until one is published, the bot sells.
  */
-function holdAfterDrive(session: TennisSession, position: TennisPosition, input: TennisInput, now: number) {
+function holdAfterDrive(session: TennisSession, position: TennisPosition, input: TennisInput, now: number): Pick<PlannedTrade, 'proposal' | 'verdict'> | undefined {
   const resolved = sessionEngine(session), phase = marketPhase(input, now);
   if ('error' in resolved || phase !== 'live') return undefined;
-  const side = position.side === 'YES' ? 'yes' : 'no';
-  return resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode }).considered.find(trade => trade.proposal.side === side
-    && trade.proposal.style === 'taker-hold' && trade.proposal.exit.kind === 'hold-to-settlement' && trade.verdict.permitted && trade.verdict.code !== 'EXPLORE_PAPER');
+  const side = position.side === 'YES' ? 'yes' : 'no', ctx = decisionContext(session, input, now, phase);
+  const measured = (verdict: Plan['considered'][number]['verdict']) => verdict.permitted && verdict.code !== 'EXPLORE_PAPER';
+  // Priced as a new purchase at the ask: holding is at least as good, since it skips the spread and fees.
+  const ask = quotes(input, position.side).ask;
+  if (ask !== undefined) {
+    const proposal: Proposal = { strategy: DRIVE_HOLD_STRATEGY, strategyVersion: '1', side, style: 'taker-hold', price: ask, exit: { kind: 'hold-to-settlement' }, rationale: 'Hold the drive trade to the final.' };
+    const verdict = resolved.engine.gate(ctx, proposal, session.mode);
+    if (measured(verdict)) return { proposal, verdict };
+  }
+  return resolved.engine.plan(ctx, { mode: session.mode }).considered.find(trade => trade.proposal.side === side
+    && trade.proposal.style === 'taker-hold' && trade.proposal.exit.kind === 'hold-to-settlement' && measured(trade.verdict));
 }
 
 /** The fresh verified football report for a market, if any. */

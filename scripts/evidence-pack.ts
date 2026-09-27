@@ -39,9 +39,9 @@ if(command==='export'){
 }else if(command==='add'&&path&&extra&&newVersion){
   const parsed=parsePack(JSON.parse(readFileSync(path,'utf8')));
   if(!parsed.ok){console.error(`INVALID pack: ${parsed.error}`);process.exit(1);}
-  // A study's results file carries its row under `evidence`; a bare row or a list of rows also works.
   const input=JSON.parse(readFileSync(extra,'utf8'));
-  const rows=(Array.isArray(input)?input:input&&typeof input==='object'&&'evidence' in input&&!('status' in input)?[input.evidence]:[input]).filter(Boolean);
+  // A study's results carry rows under `evidence` (and `evidenceHold` for the drive study's hold variant).
+  const rows=(Array.isArray(input)?input:input&&typeof input==='object'&&'evidence' in input&&!('status' in input)?[input.evidence,input.evidenceHold]:[input]).filter(Boolean);
   if(!rows.length){console.error(`No evidence row in ${extra}${input?.note?`: ${input.note}`:''}.`);process.exit(1);}
   if(!/^[A-Za-z0-9._-]{1,80}$/.test(newVersion)||newVersion===parsed.pack.version){console.error('Give a new version (letters, digits, . _ -), different from the current one: a version always means the same rules.');process.exit(2);}
   const ids=new Set(rows.map((row:{id:string})=>row.id));

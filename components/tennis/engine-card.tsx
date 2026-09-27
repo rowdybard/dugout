@@ -2,7 +2,7 @@ import type {TennisMarket,TennisSession} from '@/lib/tennis/types';
 
 const cents=(value:number)=>`${(value*100).toFixed(value*100%1<.01?0:1)}¢`;
 const money=(value:number)=>`$${value.toFixed(2)}`;
-const STRATEGY:Record<string,string>={'favourite-hold':'Favourite hold','model-edge-hold':'Model edge','maker-quote':'Resting quote','comeback-drive':'Comeback drive','random-side-control':'Control'};
+const STRATEGY:Record<string,string>={'favourite-hold':'Favourite hold','model-edge-hold':'Model edge','maker-quote':'Resting quote','comeback-drive':'Comeback drive','comeback-drive-hold':'Comeback drive, hold to final','random-side-control':'Control'};
 /** Short labels: what happened to each proposal. */
 const RESULT:Record<string,string>={ACTION:'Planned',DROPPED:'Loser',NO_EVIDENCE:'Untested',UNPROVEN_REAL:'Paper only',NOT_EXECUTABLE:'Book too wide',NO_STAKE:'No stake',
   ONE_TAKER_PER_MARKET:'Ranked lower',STALE_DATA:'Stale data',HALTED:'Bot not running',CLOSED:'Closed',INVALID:'Bad price',EXPOSURE:'Exposure cap',TRADE_COUNT:'Trade cap',DAILY_LOSS:'Loss cap',SESSION_LOSS:'Loss cap'};

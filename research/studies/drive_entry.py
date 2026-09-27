@@ -21,7 +21,10 @@ Controls, on the same games with the same exits:
   opposite : the other side (the leader, without the ball) at the drive entries' moments.
   hold     : the drive entries held to settlement instead of sold (is holding longer better?).
 Kill rule: status "lead" only if the drive entries' mean return is positive, otherwise "dropped". A study alone never
-makes a row "proven"; that takes the forward paper test. Do not change the rule after seeing results. A changed
+makes a row "proven"; that takes the forward paper test.
+Holding (strategy `comeback-drive-hold`, which the bot checks at every drive's end): a "lead" row only if holding the
+same entries to the final made money AND beat selling at the drive's end (paired, same trades); "dropped" if holding
+lost money; no row when it made money but less than selling (the bot keeps selling). Do not change the rule after seeing results. A changed
 rule is a new strategy version with its own run.
 History caveat: the NFL table knows the game state as of the last snap (pre-snap), so a play's result shows up at the
 next snap. Setups and drive ends are seen later than the live feed shows them.
@@ -179,10 +182,32 @@ def summarize(trades: pd.DataFrame, league: str, source: str) -> dict:
         out["variants"][variant] = ci(subset)
         out["split"][variant] = {"discovery": ci(subset[subset.game.isin(early)]), "holdout": ci(subset[~subset.game.isin(early)])}
     out["variants"]["hold"] = ci(drive, "hold_ret")
+    paired = drive[np.isfinite(drive.ret) & np.isfinite(drive.hold_ret)]
+    out["holdMinusSell"] = mean_ci((paired.hold_ret - paired.ret).to_numpy(), paired.game.to_numpy())
     result = out["variants"]["drive"]
     out["evidence"] = evidence_row(result, league, source, out["games"], trades) if result["n"] >= 30 else None
     out["note"] = None if out["evidence"] else f"Only {result['n']} drive trades; at least 30 are needed before writing an evidence row."
+    out["evidenceHold"], out["holdNote"] = hold_row(out["variants"]["hold"], out["holdMinusSell"], league, source, out["games"], trades)
     return out
+
+
+def hold_row(hold: dict, gain: dict, league: str, source: str, games: int, trades: pd.DataFrame) -> tuple[dict | None, str | None]:
+    """The evidence the bot reads at a drive's end (strategy comeback-drive-hold). See the module docstring."""
+    if hold["n"] < 30:
+        return None, f"Only {hold['n']} held trades; at least 30 are needed."
+    if hold["mean"] > 0 and not (gain["n"] and gain["mean"] > 0):
+        return None, "Holding to the final made money but less than selling at the drive's end, so the bot keeps selling."
+    sport, positive = league.upper(), hold["mean"] > 0
+    first, last = (pd.to_datetime(trades.t.min(), unit="s").date(), pd.to_datetime(trades.t.max(), unit="s").date())
+    return {"id": f"{league.lower()}-live-comeback-drive-hold", "title": f"{sport} comeback drives held to the final",
+            "status": "lead" if positive else "dropped", "sports": [sport], "phases": ["live"], "styles": ["taker-hold"],
+            "strategies": ["comeback-drive-hold"],
+            "estimate": {"mean": round(hold["mean"], 4), "lo": round(hold["lo"], 4), "hi": round(hold["hi"], 4), "unit": "return"},
+            "sample": f"{hold['n']} trades over {games} {sport} games, {first} to {last}",
+            "source": f"research/studies/results/drive-entry-{source}.json",
+            "plain": (f"Holding the drive entries to the final made {hold['mean'] * 100:+.1f}% per trade, {gain['mean'] * 100:+.1f} points better "
+                      "than selling at the drive's end. Unproven until the forward paper test agrees."
+                      if positive else f"Holding the drive entries to the final lost {hold['mean'] * 100:.1f}% per trade.")}, None
 
 
 def evidence_row(result: dict, league: str, source: str, games: int, trades: pd.DataFrame) -> dict:
@@ -292,7 +317,9 @@ def main() -> None:
     for variant, split in summary["split"].items():
         print(f"{variant:9s} discovery {fmt(split['discovery'])} | holdout {fmt(split['holdout'])}")
     print(f"exits: {summary['exits']}; median hold {summary['medianHeldMinutes']} min")
+    print(f"hold - sell (paired): {fmt(summary['holdMinusSell'])}")
     print(f"evidence: {summary['evidence']['status'] if summary['evidence'] else summary['note']}")
+    print(f"evidence (hold): {summary['evidenceHold']['status'] if summary['evidenceHold'] else summary['holdNote']}")
     print(f"wrote {path}")
 
 

@@ -81,8 +81,22 @@ test('exploring is paper-only, needs a pre-registered hypothesis, and stops once
   assert.equal(drive(cfb.plan(ctx({sport:'CFB'}),{mode:'paper',explore:['comeback-drive']}))!.verdict.code,'LEAD_PAPER');
 });
 
+test('if holding the drive entries to the final is the measured winner, the bot enters to hold (selling is dropped)',()=>{
+  const hold:Evidence={id:'nfl-drive-hold-test',title:'NFL comeback drives held',status:'lead',sports:['NFL'],phases:['live'],styles:['taker-hold'],strategies:['comeback-drive-hold'],
+    estimate:{mean:0.06,lo:-0.01,hi:0.13,unit:'return'},sample:'test',source:'test',plain:'test'};
+  const sell:Evidence={...hold,id:'nfl-drive-sell-test',status:'dropped',styles:['taker-scalp'],strategies:['comeback-drive'],estimate:{mean:-0.04,lo:-0.08,hi:0,unit:'return'}};
+  const engine=createEngine({pack:{...BUNDLED_PACK,version:'t-hold-wins',evidence:[...BUNDLED_PACK.evidence,hold,sell]},trust:'bundled'});
+  const plan=engine.plan(ctx(),{mode:'paper',explore:['comeback-drive']});
+  assert.equal(plan.actions.length,1);assert.equal(plan.actions[0].proposal.strategy,'comeback-drive-hold');assert.equal(plan.actions[0].verdict.code,'LEAD_PAPER');
+  assert.equal(drive(plan)!.blocked,'DROPPED');
+  // With nothing measured, the hold version is never explored: only the sell-at-drive-end rule trades (on paper).
+  const bundled=defaultEngine.plan(ctx(),{mode:'paper',explore:['comeback-drive']});
+  assert.deepEqual(bundled.actions.map(action=>action.proposal.strategy),['comeback-drive']);
+  assert.equal(bundled.considered.find(trade=>trade.proposal.strategy==='comeback-drive-hold')!.blocked,'DROPPED');
+});
+
 test('measured leads outrank explored ideas for the one taker slot',()=>{
-  const lead:Evidence={id:'cfb-live-hold-test',title:'Test live hold',status:'lead',sports:['CFB'],phases:['live'],styles:['taker-hold'],
+  const lead:Evidence={id:'cfb-live-hold-test',title:'Test live hold',status:'lead',sports:['CFB'],phases:['live'],styles:['taker-hold'],strategies:['test-hold'],
     estimate:{mean:0.01,lo:-0.02,hi:0.04,unit:'return'},sample:'test',source:'test',plain:'test'};
   const holder={id:'test-hold',version:'1',description:'test',propose:()=>[{strategy:'test-hold',strategyVersion:'1',side:'no' as const,style:'taker-hold' as const,price:0.8,exit:{kind:'hold-to-settlement' as const},rationale:'test'}]};
   const engine=createEngine({pack:{...BUNDLED_PACK,version:'t-rank',evidence:[...BUNDLED_PACK.evidence,lead]},trust:'bundled',strategies:[comebackDrive(),holder]});
@@ -193,6 +207,40 @@ test('at the end of the drive the bot holds on instead of selling only when meas
   assert.equal(held.plan?.drive,undefined);
   session=stepTennisSession(session,[input(T0+60_000,0.18,{possession:BILLS,field:{teamId:BILLS,yard:20}},'CFB')],T0+60_000);
   assert.equal(lastCode(session),'HOLD_TO_SETTLEMENT');
+});
+
+test('NFL: the drive study\'s own hold result lets the bot hold to the final, over the general live-hold loser',()=>{
+  const row=(status:'lead'|'dropped')=>({id:`nfl-live-comeback-drive-hold-${status}`,title:'NFL comeback drives held to the final',status,sports:['NFL' as const],phases:['live' as const],
+    styles:['taker-hold' as const],strategies:['comeback-drive-hold'],estimate:{mean:status==='lead'?0.05:-0.05,lo:-0.02,hi:0.12,unit:'return' as const},sample:'test',source:'test',plain:'test'});
+  for(const status of ['lead','dropped'] as const){
+    assert.deepEqual(registerPack({...BUNDLED_PACK,version:`test-nfl-drive-hold-${status}`,evidence:[...BUNDLED_PACK.evidence,row(status)]},'bundled'),{ok:true});
+    let session=entered();
+    session={...session,config:{...session.config,evidencePack:`test-nfl-drive-hold-${status}`}};
+    session=stepTennisSession(session,[input(T0+60_000,0.3,{score:'6-17',down:0,yfd:0,field:{teamId:BILLS,yard:3}})],T0+60_000);
+    if(status==='lead'){
+      assert.equal(session.pending,null);assert.equal(lastCode(session),'DRIVE_END_HOLD');
+      const held=open(session)!;
+      assert.equal(held.exitPolicy,'hold-to-settlement');assert.equal(held.plan?.strategy,'comeback-drive-hold');assert.equal(held.plan?.code,'LEAD_PAPER');
+      assert.equal(held.plan?.evidence,'nfl-live-comeback-drive-hold-lead');
+    }else{
+      assert.equal(session.pending?.action,'SELL','a measured losing hold means sell');
+    }
+  }
+});
+
+test('the bot enters to hold when holding is the measured winner and selling at the drive end is not',()=>{
+  const base={title:'t',sports:['NFL' as const],phases:['live' as const],sample:'t',source:'t',plain:'t'};
+  assert.deepEqual(registerPack({...BUNDLED_PACK,version:'test-nfl-enter-to-hold',evidence:[...BUNDLED_PACK.evidence,
+    {...base,id:'hold-wins',status:'lead',styles:['taker-hold'],strategies:['comeback-drive-hold'],estimate:{mean:0.06,lo:-0.01,hi:0.13,unit:'return'}},
+    {...base,id:'sell-loses',status:'dropped',styles:['taker-scalp'],strategies:['comeback-drive'],estimate:{mean:-0.04,lo:-0.08,hi:0,unit:'return'}}]},'bundled'),{ok:true});
+  let session=started({...defaultLiveTennisConfig(100),evidencePack:'test-nfl-enter-to-hold'});
+  session=stepTennisSession(session,[input(T0,0.2)],T0);
+  assert.equal(session.pending?.plan?.strategy,'comeback-drive-hold',session.lastReason);assert.equal(session.pending!.plan!.exit,'hold-to-settlement');
+  session=stepTennisSession(session,[input(T0+1500,0.2,{down:2,yfd:6,field:{teamId:BILLS,yard:21}})],T0+1500);
+  assert.equal(open(session)?.exitPolicy,'hold-to-settlement',session.lastReason);
+  // The drive ending does not sell a hold-to-final position.
+  session=stepTennisSession(session,[input(T0+60_000,0.3,{score:'6-17',down:0,yfd:0,field:{teamId:BILLS,yard:3}})],T0+60_000);
+  assert.equal(session.pending,null);assert.equal(lastCode(session),'HOLD_TO_SETTLEMENT');
 });
 
 test('a turnover ends the drive: the bot takes the loss',()=>{

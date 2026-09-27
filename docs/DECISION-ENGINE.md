@@ -129,12 +129,17 @@ This is the owner's idea: when a team is down 0-17 but about to score, buy it, h
   - They come only from a **fresh, verified** game report: possession, down, distance, field position, score and quarter (`lib/tennis/football-context.ts`). Anything stale, between plays or conflicting means no entry.
   - Scores map to YES and NO through the teams' away/home ordering.
   - The game clock's direction is being verified on a live game. Until then the rule counts whole quarters left, so it doesn't enter in the 4th quarter.
-- **"Unless holding longer is ideal":** at the drive's end the bot asks the engine whether the evidence supports holding that side to the final. It holds only on a measured `lead` or `proven` hold, never on an explored idea. Today there is none, so it sells.
+- **"Unless holding longer is ideal":** at each drive's end the bot asks the engine whether to hold that side to the final instead of selling.
+  - It checks the drive study's own hold result first (`comeback-drive-hold`), then any other measured live hold.
+  - `drive_entry.py` publishes that row as `lead` only when holding the same entries made money **and** beat selling at the drive's end, and as `dropped` when holding lost money.
+  - It holds only on a measured `lead` or `proven` result, never on an explored idea. A hold result for this rule replaces the blanket "NFL live holds lose" average.
+  - Each setup is also proposed as a hold-to-final entry (`comeback-drive-hold`). So if the study finds that holding wins and selling at the drive's end doesn't, the bot enters to hold. If both win, it takes the better one. The hold version is never explored on paper; it needs its own result.
+  - Until the study runs, nothing is published, so the bot sells.
 - **Why paper only:** NFL in-game scalping (dip and momentum entries, and random entries) lost about 10% a trade after fees and spread. That's the bar this rule has to clear. CFB in-game trading hasn't been studied.
 - **Settling it:**
   - Run `python research/studies/drive_entry.py nfl` on the PC. It uses NFL price history joined to play-by-play, with random and opposite-side controls and a hold-to-final comparison. It writes an evidence row, `dropped` or `lead`.
   - Once the runner has recorded games with the drive state, run `drive_entry.py live --league cfb` (or `nfl`).
-  - Merge the row with `scripts/evidence-pack.ts add pack.json research/studies/results/drive-entry-nfl.json <new-version>`, then validate and publish. The row's own result then replaces exploring.
+  - Merge the rows (the drive trade and, when there is one, the hold) with `scripts/evidence-pack.ts add pack.json research/studies/results/drive-entry-nfl.json <new-version>`, then validate and publish. The rows' own results then replace exploring.
 
 ## Forward test: CFB pregame favourites
 

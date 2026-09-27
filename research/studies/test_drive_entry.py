@@ -83,6 +83,22 @@ def test_controls_and_the_evidence_row() -> None:
     assert few["evidence"] is None and "30" in few["note"]
 
 
+def test_hold_row_only_when_holding_makes_money_and_beats_selling() -> None:
+    touchdown = [{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.31, "yes_bid": 0.30}]
+    won = d.summarize(d.study(pd.concat([game(touchdown, name=f"w{i}", yes_win=1.0) for i in range(40)])), "nfl", "test")
+    row = won["evidenceHold"]
+    assert row["status"] == "lead" and row["strategies"] == ["comeback-drive-hold"] and row["styles"] == ["taker-hold"], row
+    assert won["holdMinusSell"]["mean"] > 0
+    lost = d.summarize(d.study(pd.concat([game(touchdown, name=f"l{i}", yes_win=0.0) for i in range(40)])), "nfl", "test")
+    assert lost["evidenceHold"]["status"] == "dropped"
+    # Holding makes money on average but less than selling at a high price: no row, the bot keeps selling.
+    rich = [{}, {}, {"down": 2}, {"yes_score": 6, "yes_ask": 0.91, "yes_bid": 0.90}]
+    mixed = pd.concat([game(rich, name=f"m{i}", yes_win=float(i % 2)) for i in range(40)])
+    middle = d.summarize(d.study(mixed), "nfl", "test")
+    assert middle["variants"]["hold"]["mean"] > 0 and middle["holdMinusSell"]["mean"] < 0
+    assert middle["evidenceHold"] is None and "keeps selling" in middle["holdNote"]
+
+
 def test_live_book_records() -> None:
     assert d.clock_seconds("Q4", "5:00", None) != d.clock_seconds("Q4", "5:00", None)  # NaN: direction unverified
     assert d.clock_seconds("Q4", "5:00", "countdown") == 300 and d.clock_seconds("Q4", "5:00", "elapsed") == 600

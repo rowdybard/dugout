@@ -59,8 +59,12 @@ export function comebackDrive(rule:ComebackDriveRule=COMEBACK_DRIVE):Strategy {
       // Before the fourth quarter at least (4 - quarter) full quarters remain, whatever the clock shows.
       const enoughTime=(4-quarter)*QUARTER_SECONDS>=rule.minSecondsRemaining||(typeof left==='number'&&left>=rule.minSecondsRemaining);
       if(behind<rule.minDeficit||behind>rule.maxDeficit||yards>rule.maxYardsToEndZone||down<1||down>rule.maxDown||!enoughTime)return [];
+      const why=`Down ${behind}, ball on the opponent's ${yards}, ${ORDINAL[down-1]}${typeof distance==='number'?` and ${distance}`:''}, Q${quarter}.`;
+      // Two ways to trade the same setup: sell when the drive ends (explored on paper until measured), or hold to the
+      // final (`comeback-drive-hold`: only with its own measured result, never explored). The engine takes the one the
+      // evidence supports, the better one if both are.
       return [{strategy:'comeback-drive',strategyVersion:'1',side,style:'taker-scalp' as const,price:ask,
-        exit:{kind:'drive' as const,stopReturn:rule.stopReturn,maxHoldMs:rule.maxHoldMs},
-        rationale:`Down ${behind}, ball on the opponent's ${yards}, ${ORDINAL[down-1]}${typeof distance==='number'?` and ${distance}`:''}, Q${quarter}.`}];
+        exit:{kind:'drive' as const,stopReturn:rule.stopReturn,maxHoldMs:rule.maxHoldMs},rationale:why},
+      {strategy:'comeback-drive-hold',strategyVersion:'1',side,style:'taker-hold' as const,price:ask,exit:{kind:'hold-to-settlement' as const},rationale:`${why} Hold to the final.`}];
     }};
 }
