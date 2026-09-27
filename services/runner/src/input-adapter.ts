@@ -8,7 +8,7 @@ import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normal
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
 import {advanceLeagueDiscovery,visibleLeagueMarkets,type LeagueDiscoveryState} from '../../../lib/tennis/catalog-discovery.ts';
 import {loadPriorityContext,joinBookWithPriorityContext,type PriorityContextRecord,type PriorityContextResult} from '../../../lib/tennis/priority-context.ts';
-import type {TennisInput,TennisMarket,TennisSession} from '../../../lib/tennis/types';
+import type {TennisInput,TennisLeague,TennisMarket,TennisSession} from '../../../lib/tennis/types';
 import type {SourceHealth} from '../../../lib/runner/contracts';
 import type {RunnerStore} from './store';
 import type {FeedCredentials} from './feed-credentials';
@@ -56,11 +56,11 @@ export class PolymarketInputAdapter implements InputAdapter {
     try{return (await fetchFreshFootballEvent(eventId,signal)).data;}
     catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000)));throw error;}
   }
-  private async catalog(session:TennisSession,signal:AbortSignal){
+  private async catalog(session:TennisSession,signal:AbortSignal,leagues:readonly TennisLeague[]=session.config.leagues){
     const markets:TennisMarket[]=[];
     const deadlineAt=now()+3000;
     // Persist the page cursor. A large slate must not strand the selected game.
-    for(const league of session.config.leagues){
+    for(const league of leagues){
       const key='discovery:'+league,previous=this.store.get<LeagueDiscoveryState<TennisMarket>>(key)??undefined;
       const state=await advanceLeagueDiscovery(previous,league,{
         fetchPage:async (name,page)=>{const raw=await this.publicGet('/v2/leagues/'+name.toLowerCase()+'/events?type=sport&limit='+page.limit+'&offset='+page.offset,page.signal);if(!Array.isArray(raw.events))throw new Error('Market catalog has no events.');return raw.events;},
@@ -138,6 +138,13 @@ export class PolymarketInputAdapter implements InputAdapter {
       if(settlement!==null)return {market:verified,book:{bids:[],asks:[],state:'MARKET_STATE_EXPIRED',time:''},receivedAt:now(),source:'REST',settlement,settlementReceivedAt:now()};
       throw error;
     }
+  }
+  /** The games list for the all-games sweep (lib/tennis/sweep.ts): prices and game state, no order books. */
+  async sweepList(leagues:readonly TennisLeague[],session:TennisSession,signal:AbortSignal):Promise<TennisMarket[]>{return this.catalog(session,signal,leagues);}
+  /** A finished market's result (1 = YES won), or null while unsettled. */
+  async settlementOf(slug:string,signal:AbortSignal):Promise<number|null>{
+    try{return normalizeTennisSettlement(await this.publicGet('/v1/markets/'+encodeURIComponent(slug)+'/settlement',signal),slug);}
+    catch(error){if((error as {status?:number}).status===404)return null;throw error;}
   }
   private async focused(market:TennisMarket):Promise<TennisMarket>{
     const key='context:'+market.slug,saved=this.store.get<{at:number;market:TennisMarket}>(key);

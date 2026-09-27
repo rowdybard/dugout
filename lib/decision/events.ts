@@ -26,6 +26,11 @@ export type GameEvent={
   preYesMid:number|null;
   /** YES midpoint on the last book before the report reached Dugout: how much the market moved before our feed. */
   atReportYesMid:number|null;
+  /**
+   * Drives completed in this game including this event (scores, changes of possession, halves), counted when the
+   * event was recorded. The kept tape is trimmed, so a count taken from the tape alone would stop rising.
+   */
+  drive?:number;
 };
 
 /** The market often moves before the feed reports; use prices from before that window as "pre-event". */
@@ -74,6 +79,11 @@ export function detectFootballEvents(input:{
   if(previous.period!==next.period)events.push({...base,id:`${next.reportTime}:period`,type:'period',side:null,points:0});
   if(next.deadBall&&!previous.deadBall)events.push({...base,id:`${next.reportTime}:dead-ball`,type:'dead-ball',side:null,points:0});
   return events;
+}
+
+/** Does this event end a drive? */
+export function endsDrive(event:Pick<GameEvent,'type'|'period'>):boolean {
+  return event.type==='score'||event.type==='possession'||(event.type==='period'&&(event.period==='Q3'||/OT/.test(event.period)));
 }
 
 /** The latest event of a type at or before `now`. */

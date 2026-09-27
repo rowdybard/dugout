@@ -61,7 +61,7 @@ export async function runnerRequest<T>(env:RunnerBindings,owner:string,epoch:str
   return await boundedJson(response) as T;
 }
 function sessionResponse(state:RunnerState,env:RunnerBindings){
-  return Response.json({...state,runtime:{mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:state.runner.lastEngineCheck,quoteAgeMs:state.runner.quoteAgeMs,gameReportAgeMs:state.runner.contextAgeMs,failureReason:state.runner.source.state==='error'?state.runner.source.message:null,usage:state.runner.usage}},{headers:{'Cache-Control':'no-store'}});
+  return Response.json({...state,runtime:{mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:state.runner.lastEngineCheck,quoteAgeMs:state.runner.quoteAgeMs,gameReportAgeMs:state.runner.contextAgeMs,failureReason:state.runner.source.state==='error'?state.runner.source.message:null,usage:state.runner.usage,sweep:state.sweep??null}},{headers:{'Cache-Control':'no-store'}});
 }
 type ExportPage={schemaVersion:3;exportId:string;capturedAt:number;session:TennisSession;records:unknown[];observations:{id:string;value:unknown}[];nextCursor:number;complete:boolean;pageEvidenceComplete:boolean;missingObservationIds:string[];exactReplayStartsAt:'migration-checkpoint'};
 async function runnerExport(env:RunnerBindings,fence:OwnerFence):Promise<Response>{

@@ -1,4 +1,4 @@
-import {detectFootballEvents,EVENT_TAPE_LIMIT,latestScore,PRE_EVENT_LOOKBACK_MS,type FootballState} from '../decision/events.ts';
+import {detectFootballEvents,endsDrive,EVENT_TAPE_LIMIT,latestScore,PRE_EVENT_LOOKBACK_MS,type FootballState} from '../decision/events.ts';
 import {advanceShadow,compactShadow,openShadow,settleResult,settleShadow,shadowReadyToCompact} from '../decision/shadow.ts';
 import {specOf} from '../decision/catalog.ts';
 import {NO_TRADE,type NoTradeCode} from '../decision/why.ts';
@@ -12,7 +12,7 @@ import type {FootballReportState,TennisInput,TennisPosition,TennisSession} from 
  */
 
 /** Bounded, so stored sessions stay small: open shadows keep full state (~2 KB); finished ones are compacted (~0.6 KB). */
-export const SHADOW_OPEN_LIMIT=30,SHADOW_KEEP_CLOSED=120,PREGAME_KEEP=30;
+export const SHADOW_OPEN_LIMIT=30,SHADOW_KEEP_CLOSED=120,PREGAME_KEEP=150;
 const round=(x:number)=>Math.round(x*1e6)/1e6;
 
 function best(input:TennisInput){
@@ -45,11 +45,13 @@ export function recordGameEvents(session:TennisSession,input:TennisInput,next:Fo
   const events=detectFootballEvents({previous,next:current,receivedAt:now,yesOrdering:input.market.yesOrdering,teams:{yes:identity.yesTeamId,no:identity.noTeamId},
     preYesMid:yesMidAt(session,slug,current.reportTime-PRE_EVENT_LOOKBACK_MS),
     atReportYesMid:stored&&stored.bid!==null&&stored.ask!==null?round((stored.bid+stored.ask)/2):null});
-  (session.tapeState??={})[slug]=current;
-  if(!events.length)return;
-  const tape=(session.gameTape??={})[slug]??[];
-  for(const event of events)if(!tape.some(item=>item.id===event.id))tape.push(event);
-  session.gameTape[slug]=tape.slice(-EVENT_TAPE_LIMIT);
+  const known=session.gameTape?.[slug]??[];
+  const fresh=events.filter(event=>!known.some(item=>item.id===event.id));
+  let drives=previous?.drives??known.filter(endsDrive).length;
+  const counted=fresh.map(event=>{if(endsDrive(event))drives++;return {...event,drive:drives};});
+  (session.tapeState??={})[slug]={...current,drives};
+  if(!counted.length)return;
+  (session.gameTape??={})[slug]=[...known,...counted].slice(-EVENT_TAPE_LIMIT);
 }
 
 export function recordPregame(session:TennisSession,input:TennisInput,now:number,pregame:boolean){
@@ -80,11 +82,11 @@ function depth2c(input:TennisInput,side:'yes'|'no'):number|null {
  * Compact shadows once only the final result is pending (settled later in advanceShadows), so shadows stay open only
  * while in-game exits run and late-game setups are not crowded out. Keeps the most recent results only.
  */
-function prune(session:TennisSession,now:number){
+function prune(session:TennisSession,now:number,limits:ShadowLimits){
   const shadows=session.shadows??[],finished=shadows.filter(shadowReadyToCompact);
   if(finished.length){
     session.shadows=shadows.filter(s=>!finished.includes(s));
-    session.shadowResults=[...(session.shadowResults??[]),...finished.map(s=>compactShadow(s,now))].slice(-SHADOW_KEEP_CLOSED);
+    session.shadowResults=[...(session.shadowResults??[]),...finished.map(s=>compactShadow(s,now))].slice(-limits.closed);
   }
 }
 const known=(session:TennisSession,id:string)=>(session.shadows??[]).some(s=>s.id===id)||(session.shadowResults??[]).some(s=>s.id===id);
@@ -93,7 +95,11 @@ const known=(session:TennisSession,id:string)=>(session.shadows??[]).some(s=>s.i
  * Would-be trades from strategies still before forward paper testing: measured forward from the books seen, never
  * traded. One per setup (strategy version + setup key, else per side per game).
  */
-export function openCandidateShadows(session:TennisSession,input:TennisInput,trades:readonly PlannedTrade[],now:number){
+/** Storage bounds for shadow bookkeeping; the all-games sweep (lib/tennis/sweep.ts) keeps more. */
+export type ShadowLimits={open:number;closed:number};
+const DEFAULT_LIMITS:ShadowLimits={open:SHADOW_OPEN_LIMIT,closed:SHADOW_KEEP_CLOSED};
+
+export function openCandidateShadows(session:TennisSession,input:TennisInput,trades:readonly PlannedTrade[],now:number,limits:ShadowLimits=DEFAULT_LIMITS){
   const {bid,ask}=best(input);
   if(bid===null||ask===null)return;
   const shadows=session.shadows??=[];
@@ -101,7 +107,7 @@ export function openCandidateShadows(session:TennisSession,input:TennisInput,tra
     const proposal=trade.proposal,spec=specOf(proposal.strategy,proposal.strategyVersion);
     if(!spec)continue;
     const id=`${input.market.slug}|${proposal.strategy}@${proposal.strategyVersion}|${proposal.setupKey??proposal.side}`;
-    if(known(session,id)||shadows.length>=SHADOW_OPEN_LIMIT)continue;
+    if(known(session,id)||shadows.length>=limits.open)continue;
     const maker=proposal.style==='maker',event=latestScore(session.gameTape?.[input.market.slug],now);
     const preEventSideMid=spec.family==='event-reaction'&&event?.preYesMid!=null?(proposal.side==='yes'?event.preYesMid:round(1-event.preYesMid)):null;
     const quietMs=typeof spec.entry.params.maxWindowSeconds==='number'?spec.entry.params.maxWindowSeconds*1000:undefined;
@@ -125,7 +131,7 @@ export function openExecutedShadow(session:TennisSession,position:TennisPosition
 }
 
 /** Advance open shadows on this step's fresh books, and settle them on final results. */
-export function advanceShadows(session:TennisSession,current:readonly TennisInput[],now:number,usable:(input:TennisInput)=>boolean){
+export function advanceShadows(session:TennisSession,current:readonly TennisInput[],now:number,usable:(input:TennisInput)=>boolean,limits:ShadowLimits=DEFAULT_LIMITS){
   const settled=(input:TennisInput|undefined)=>!!input&&typeof input.settlement==='number'&&input.settlement>=0&&input.settlement<=1&&(input.source==='REST'||input.source==='WEBSOCKET');
   for(const result of session.shadowResults??[]){
     if(!result.awaiting.length)continue;
@@ -143,7 +149,7 @@ export function advanceShadows(session:TennisSession,current:readonly TennisInpu
       driveEnded:after.some(event=>event.type==='score'||event.type==='possession'||(event.type==='period'&&/^(Q3|OT\d*|\d+OT)$/.test(event.period))),
       possessionChanged:after.some(event=>event.type==='possession')},'BOOK',input.market.execution?.feeCoefficient??0.0695);
   }
-  prune(session,now);
+  prune(session,now,limits);
 }
 
 /** Record why an evaluated market did not trade; counts once per new book. */

@@ -13,6 +13,7 @@ import {Activity,ArrowUpRight,Clock3,FlaskConical,LoaderCircle,Pause,Play,Radio,
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
 
 import type {TennisLeague,TennisMarket,TennisSession} from '@/lib/tennis/types';
+import {VISIBLE_LEAGUES} from '@/lib/tennis/leagues';
 
 import {useTennis} from './use-tennis';
 
@@ -113,12 +114,14 @@ export function TennisDashboard() {
 
   const entryBudget=session?.config.entryBudget??5;
   const leagues=session?.config.leagues??[];
-  const hasFootball=leagues.some(l=>l==='NFL'||l==='CFB'),hasTennis=leagues.some(l=>l==='ATP'||l==='WTA'),hasBaseball=leagues.includes('MLB');
-  const focus=[hasTennis,hasFootball,hasBaseball].filter(Boolean).length>1?'all':hasBaseball?'baseball':hasFootball?'football':'tennis';
-  const chooseSport=async(value:'tennis'|'football'|'baseball'|'all')=>{
+  // The view shows only VISIBLE_LEAGUES; an account still set to watch other leagues gets one button to narrow it.
+  const onlyVisible=leagues.length>0&&leagues.every(l=>VISIBLE_LEAGUES.includes(l));
+  const focus=leagues.some(l=>l==='ATP'||l==='WTA')?'tennis':'football';
+  const chooseVisible=async()=>{
     if(!session)return;
-    const leagues:TennisLeague[]=value==='football'?['NFL','CFB']:value==='tennis'?['ATP','WTA']:value==='baseball'?['MLB']:['ATP','WTA','NFL','CFB','MLB'];
-    const ok=await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{leagues,focusSlug:null}});
+    const leagues:TennisLeague[]=[...VISIBLE_LEAGUES];
+    const keepFocus=catalog?.markets.find(m=>m.slug===session.config.focusSlug)?.league==='CFB';
+    const ok=await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{leagues,...(keepFocus?{}:{focusSlug:null})}});
     if(ok){setFilter('ALL');setFollowed(null);setSelected(null);void bot.refresh();}
   };
 
@@ -134,7 +137,7 @@ export function TennisDashboard() {
 
   const feedUnavailable=!!bot.feedError||!!catalog?.errors.length;
 
-  const availableMarkets=[...new Map([...(catalog?.markets??[]).filter(m=>!session||session.config.leagues.includes(m.league)),...open.map(p=>catalog?.markets.find(m=>m.slug===p.slug)??p.lastContext??p.market)].map(m=>[m.slug,m])).values()];
+  const availableMarkets=[...new Map([...(catalog?.markets??[]).filter(m=>VISIBLE_LEAGUES.includes(m.league)&&(!session||session.config.leagues.includes(m.league))),...open.map(p=>catalog?.markets.find(m=>m.slug===p.slug)??p.lastContext??p.market)].map(m=>[m.slug,m])).values()];
   const markets=availableMarkets.filter(market=>filter==='ALL'||market.league===filter);
 
   const selectedMarket=catalog?.markets.find(market=>market.slug===selected)??session?.positions.find(position=>position.slug===selected)?.market??null;
@@ -186,7 +189,7 @@ export function TennisDashboard() {
     <main className="tennis-main">
 
       <h1 className="tennis-visually-hidden">Dugout paper bot</h1>
-      <div className="tennis-tour-choice tennis-sport-choice" role="group" aria-label="Sports the bot watches">{(['tennis','football','baseball','all'] as const).map(value=><button key={value} aria-pressed={focus===value} disabled={!session||bot.busy||focus===value} onClick={()=>void chooseSport(value)}>{value==='tennis'?'Tennis':value==='football'?'Football':value==='baseball'?'Baseball':'All'}</button>)}</div>
+      {session&&!onlyVisible&&<div className="tennis-tour-choice tennis-sport-choice" role="group" aria-label="Sports the bot watches"><button disabled={bot.busy} onClick={()=>void chooseVisible()}>Watch college football only</button></div>}
       {bot.error&&!selected&&<div className="tennis-error" role="alert"><TriangleAlert size={16}/><span>{bot.error}</span><button aria-label="Dismiss error" onClick={bot.clearError}><X size={15}/></button></div>}
       {bot.connectionIssue&&<div className="tennis-error" role="status"><RefreshCw size={16}/><span>{bot.connectionIssue} Last check {session?age(session.lastTickAt,now):'connecting'}.</span></div>}
 
@@ -223,7 +226,7 @@ export function TennisDashboard() {
         {bot.watchedBookError&&(!followedMarket?.quoteObservedAt||Math.abs(now-followedMarket.quoteObservedAt)>5000)&&<p className="tennis-order-help" role="status">{bot.watchedBookError}</p>}
         {bot.watchedContextError&&<p className="tennis-order-help" role="status">Game report: {bot.watchedContextError}</p>}
 
-        {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} now={now}/>}
+        {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} sweep={bot.runtime?.sweep??null} now={now}/>}
         <div className="tennis-runtime"><Clock3 size={13}/>{background?'Runs in the cloud, even with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still checked':''}</div>
       </section>
 
@@ -239,7 +242,7 @@ export function TennisDashboard() {
       <section className="tennis-activity" aria-label="Paper session results"><div className="tennis-activity-head"><div><h2>History</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a><div className="tennis-subtabs" role="group" aria-label="Experiment view">{([{id:'decisions',label:'Bot activity'},{id:'trades',label:`Bot orders · ${session?.ledger.length??0}`}] as const).map(tab=><button key={tab.id} aria-pressed={activityTab===tab.id} onClick={()=>setActivityTab(tab.id)}>{tab.label}</button>)}</div></div><button className="tennis-link" onClick={()=>setShowAll(!showAll)}>{showAll?'Show less':'Show all'}</button></div>
 
       {activityTab==='decisions'&&<div className="tennis-rule-summary"><b>What is happening now</b><p>{reason}</p><small>{Object.values(session?.coverage??{}).filter(c=>c.live&&now-c.time<15000).length} live matches with recent usable quotes · Rules revision {session?.rulesRevision??0}</small></div>}{activityTab==='decisions'?unique.length?<div className="tennis-activity-list">{unique.map(decision=><div className="tennis-activity-row" key={decision.id}><span className={`tennis-action-badge ${decision.action==='BUY'?'is-buy':decision.action==='SELL'?'is-sell':''}`}>{decision.action}</span><div><strong>{labelFor(decision.slug,decision.side)}</strong><p>{decision.reason}</p></div><time>{time(decision.time)}</time></div>)}</div>:<div className="tennis-empty-activity">{isRunning?'No entry or exit has qualified yet. The current status above explains the wait.':'Start a paper run to see exactly what the bot accepts and skips.'}</div>:ledger.length?<div className="tennis-activity-list">{ledger.map(entry=><div className="tennis-activity-row" key={entry.id}><span className={`tennis-action-badge ${entry.action==='BUY'?'is-buy':'is-sell'}`}>{entry.action}</span><div><strong>{labelFor(entry.slug,entry.side)} · {signed(entry.cashDelta)} cash</strong><p>{entry.source==='MANUAL'?'Earlier activity':'Bot'} · {entry.execution?`${entry.execution.filledQty.toFixed(2)} contracts at ${cents(entry.execution.averagePrice)} · ${money(entry.execution.fees)} fees · ${entry.execution.status}`:'Settlement recorded'}{entry.action!=='BUY'?` · realized ${signed(entry.realizedPnl)}`:''}</p>{entry.quotedPrice!==undefined&&<p>Quoted {cents(entry.quotedPrice)} → filled {cents(entry.actualPrice??null)} · {((entry.executionDelayMs??0)/1000).toFixed(1)}s delay</p>}</div><time>{time(entry.time)}</time></div>)}</div>:<div className="tennis-empty-activity">No fills yet. The bot is waiting for a match and a setup that meet your rules.</div>}</section>
-      <div className="tennis-feed-heading"><h2>{focus==='tennis'?'On the court':'Live game markets'}<span className="tennis-count">{catalog?`${markets.length} ${markets.length===1?'market':'markets'}`:'Loading matches'}</span></h2><div className="tennis-feed-tools"><div className="tennis-filter" role="group" aria-label="Filter league">{([{value:'ALL',label:'All selected'},{value:'ATP',label:'Men · ATP'},{value:'WTA',label:'Women · WTA'},{value:'NFL',label:'NFL'},{value:'CFB',label:'College'},{value:'MLB',label:'MLB'}] as const).filter(item=>item.value==='ALL'||session?.config.leagues.includes(item.value)).map(item=><button key={item.value} aria-pressed={filter===item.value} onClick={()=>setFilter(item.value)}>{item.label}</button>)}</div><button className="tennis-refresh" aria-label="Refresh game markets" title="Refresh game markets" disabled={bot.refreshing} onClick={()=>void bot.refresh()}><RefreshCw size={16} className={bot.refreshing?'spin':''}/></button></div></div>
+      <div className="tennis-feed-heading"><h2>{focus==='tennis'?'On the court':'Live game markets'}<span className="tennis-count">{catalog?`${markets.length} ${markets.length===1?'market':'markets'}`:'Loading matches'}</span></h2><div className="tennis-feed-tools"><div className="tennis-filter" role="group" aria-label="Filter league">{([{value:'ALL',label:'All selected'},{value:'ATP',label:'Men · ATP'},{value:'WTA',label:'Women · WTA'},{value:'NFL',label:'NFL'},{value:'CFB',label:'College'},{value:'MLB',label:'MLB'}] as const).filter(item=>item.value==='ALL'?VISIBLE_LEAGUES.length>1:VISIBLE_LEAGUES.includes(item.value)&&session?.config.leagues.includes(item.value)).map(item=><button key={item.value} aria-pressed={filter===item.value} onClick={()=>setFilter(item.value)}>{item.label}</button>)}</div><button className="tennis-refresh" aria-label="Refresh game markets" title="Refresh game markets" disabled={bot.refreshing} onClick={()=>void bot.refresh()}><RefreshCw size={16} className={bot.refreshing?'spin':''}/></button></div></div>
 
 
 

@@ -187,17 +187,39 @@ node --experimental-strip-types scripts/scorecard.ts history.json [research/stud
 6. Watch the scorecard. If forward paper agrees after the minimum sample, promote in a pinned pack. If not, drop the row and retire the version.
 7. To change a rule, write a new version. The old one keeps its evidence; the new one starts at step 3.
 
-## 14. What to test next
+## 14. College football first: the rule miner and the all-games sweep
+
+Since Sep 27 the dashboard shows college football only (`VISIBLE_LEAGUES` in `lib/tennis/leagues.ts`); every other league stays supported in code.
+
+**Rule miner** (`research/studies/rule_miner.py`, runs on the PC in minutes):
+- Builds every possible entry from CFB history: each side every 10 minutes pregame (6 h to 5 min out) and every 2 minutes live, bought at the ask and held to the final after the fee.
+- Uses only features the bot computes the same way: price, spread, minutes to start, home or away (`venue`), the closing pregame price and the move since it. The bot keeps only 60 s of history, so longer price changes are not used.
+- Searches about 5,300 rules: a price range of one to three 10¢ bands, plus up to two other conditions. One entry per rule per game.
+- **Discovery** (oldest 60% of games): at least 40 trades, one-sided t-test, Benjamini–Hochberg at a 10% false-discovery rate, at most 20 carried forward with near-duplicates removed.
+- **Holdout** (newest 40%): a survivor needs 20+ trades, a positive mean and p below 0.05 ÷ the number carried.
+- **Null:** the same search in a world where every price is exactly right. That world's survivor count is what luck produces, reported beside the real count.
+- Survivors become `lead` rows naming `mined-rule@1` (paper only). A rule positive in the holdout but not significant is listed as "watch" and gets no row.
+
+**Mined rules in the bot:** `mined-rule@1` (`lib/decision/strategies.ts`) proposes a hold to the final only while a measured row naming it fully matches, once per rule per game. Every other finding still applies, so a mined rule cannot override a measured loser. Paper only.
+
+**All-games sweep** (`lib/tennis/sweep.ts`, in the runner):
+- Every 30 s, every open college game is evaluated from the games list the runner already downloads (best bid and ask, score, quarter, possession), so it costs no order-book requests.
+- It runs in its own shadow-only session, stored apart from the bot's, so it never trades and never enters the replay journal.
+- Every strategy, and every permitted mined rule, is measured on every game with the same counterfactuals. Finished games are settled from their final result.
+- Results reach the Engine card's scorecard as forward-shadow rows: one weekend gives about as many measurements as months of one focused game.
+- The runner's lake recorder also stores those list quotes and game states (source `LIST`, top of book only) for the `live --league cfb` studies.
+
+## 15. What to test next
 
 In order:
-1. **Verified live on Sep 27:** the football clock counts down; scores read away–home in NFL and MLB; MLB live state (inning, half, count, outs, runners) matches the official MLB Stats API on all 14 games in progress. `lib/decision/sports/baseball.ts` exposes it as features (base-out state and so on). No MLB strategy is registered: the MLB studies found the market ahead of the model and the free feed.
-2. **On the PC, NFL history** (no new data needed):
+1. **On the PC, the rule miner:** `python research/studies/rule_miner.py`. Compare the survivor count with the calibrated-null count. If the real count is not clearly above it, there is nothing to trade. Add any rows with `scripts/evidence-pack.ts add pack.json research/studies/results/rule-miner-cfb.json <new-version>`, validate and publish; the bot paper-trades them on the next game.
+2. **On the PC, the NFL mechanism studies** (history already on disk):
    ```sh
    python research/studies/event_reaction.py nfl      # surprise-fade@1 against expected-fade, follow and random
    python research/studies/drive_entry.py nfl         # comeback-drive@1, comeback-drive-hold@1, drive-fade@1, leader-any
    python research/studies/maker_windows.py nfl       # quiet-window-maker@1 against maker-quote@1 and always-on
    ```
-   Each prints discovery and holdout results and writes at most one row per version. Read the controls before the headline: a fade that matches its control is not the claimed mechanism.
-3. **On the PC, CFB live** once the runner has recorded a few weekends (`live --league cfb` for each study). CFB is where the markets are thinnest.
-4. **Forward shadow:** leave the paper bot on the evidence gate during games. The scorecard's `forward-shadow` rows fill in without risking the forward test.
-5. **Merge rows** with `scripts/evidence-pack.ts add`, validate and publish. Only then does anything paper-trade.
+   Read the controls before the headline: a fade that matches its control is not the claimed mechanism.
+3. **Keep the runner on during college games.** The sweep scores every strategy on every game. After one or two weekends, the scorecard's forward-shadow rows answer what the history studies cannot.
+4. **CFB live studies** from the sweep's recordings: `live --league cfb` for each study.
+5. **Verified live on Sep 27:** the football clock counts down; scores read away–home in NFL and MLB; MLB live state matches the official MLB Stats API (`lib/decision/sports/baseball.ts`).

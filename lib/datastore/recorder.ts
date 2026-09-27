@@ -56,13 +56,16 @@ export class BookRecorder {
 
   get size(){return this.buffer.length;}
 
-  /** Record each distinct accepted book once; replays and repeats of the same receipt are skipped. */
-  add(inputs:TennisInput[]) {
+  /**
+   * Record each distinct accepted book once; replays and repeats of the same receipt are skipped. `src` overrides the
+   * source label: the all-games sweep records games-list quotes as 'LIST' (top of book only; the size is nominal).
+   */
+  add(inputs:TennisInput[],src?:string) {
     for(const input of inputs){
       if(input.source==='REPLAY'||!input.market?.slug||!Number.isFinite(input.receivedAt))continue;
       if((this.seen.get(input.market.slug)??-1)>=input.receivedAt)continue;
       this.seen.set(input.market.slug,input.receivedAt);
-      this.buffer.push(bookRecord(input));
+      this.buffer.push(src?{...bookRecord(input),src}:bookRecord(input));
       this.firstAt??=this.now();
     }
     if(this.buffer.length>MAX_BUFFER)this.buffer=this.buffer.slice(-MAX_BUFFER);

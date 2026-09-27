@@ -1,5 +1,5 @@
 import {otherSide,phaseOf,quoteOf,type DecisionContext,type FeatureValue,type SideKey} from './context.ts';
-import {latestScore} from './events.ts';
+import {endsDrive,latestScore} from './events.ts';
 
 /**
  * Named features the evidence conditions, models and strategies read. Research plug: add a feature
@@ -67,6 +67,8 @@ export const BUILTIN_FEATURES:FeatureRegistry={
   change5m:(ctx,side)=>change(ctx,side,300_000),
   change60m:(ctx,side)=>change(ctx,side,3_600_000),
   otherPrice:(ctx,side)=>finite(quoteOf(ctx,otherSide(side)).ask),
+  /** 'home' or 'away' for this side (team sports with a verified ordering). */
+  venue:(ctx,side)=>{const yes=ctx.market.yesOrdering;return yes!=='away'&&yes!=='home'?undefined:side==='yes'?yes:yes==='away'?'home':'away';},
 
   // Data freshness: a decision is only as good as its oldest input.
   quoteAgeMs:ctx=>typeof ctx.market.observedAt==='number'&&ctx.market.observedAt<=ctx.now?ctx.now-ctx.market.observedAt:undefined,
@@ -94,8 +96,11 @@ export const BUILTIN_FEATURES:FeatureRegistry={
   /** How much of the scorer's move happened before the report reached Dugout, in probability units. */
   'lastScore.movedBeforeReport':ctx=>{const e=latestScore(ctx.events,ctx.now);if(!e?.side)return undefined;const pre=sideOf(e.preYesMid,e.side),at=sideOf(e.atReportYesMid,e.side);return pre===undefined||at===undefined?undefined:at-pre;},
   'lastScore.id':ctx=>latestScore(ctx.events,ctx.now)?.id,
-  /** Drives so far: every score, change of possession or half ends one. */
-  driveNumber:ctx=>(ctx.events??[]).filter(e=>e.type==='score'||e.type==='possession'||(e.type==='period'&&(e.period==='Q3'||/OT/.test(e.period)))).length,
+  /** Drives so far: every score, change of possession or half ends one. Uses the recorded running count when present. */
+  driveNumber:ctx=>{
+    const seen=(ctx.events??[]).filter(e=>e.receivedAt<=ctx.now),counted=[...seen].reverse().find(e=>typeof e.drive==='number');
+    return counted?counted.drive!:seen.filter(endsDrive).length;
+  },
 };
 
 export function featureRegistry(...extra:Record<string,Feature>[]):FeatureRegistry {

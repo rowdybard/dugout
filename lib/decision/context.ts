@@ -22,6 +22,8 @@ export type MarketSnapshot={
   yes:Quote&{name?:string};no:Quote&{name?:string};
   /** YES midpoint at the last pregame book Dugout saw, when it saw one. */
   pregameYesMid?:number|null;
+  /** Team sports: whether YES is the away or the home team (verified per market). */
+  yesOrdering?:'away'|'home'|null;
 };
 export type GameState={
   status:'scheduled'|'live'|'final';

@@ -241,7 +241,7 @@ export function createEngine(options:EngineOptions={}):Engine {
     }
     const coefficient=ctx.market.feeCoefficient??DEFAULT_FEE_COEFFICIENT;
     const research=models.filter(model=>model.id!=='market-implied'&&model.applies(sport,phase));
-    const notes:StrategyNote[]=[];let current='engine';
+    const notes:StrategyNote[]=[];let current='engine',currentVersion:string|undefined;
     const stake=planOptions.mode==='real'?Math.min(sizing.maxStake,sizing.bankroll*sizing.maxBankrollFraction):Math.min(sizing.paperStake,Math.max(0,Math.min(sizing.maxStake,sizing.bankroll*sizing.maxBankrollFraction)));
     const tools:StrategyTools={phase,
       feature:(name,side)=>readFeature(features,name,ctx,side),
@@ -252,17 +252,23 @@ export function createEngine(options:EngineOptions={}):Engine {
       levels:side=>{const q=quoteOf(ctx,side);return q.asks??(q.ask!==null&&q.askSize?[{price:q.ask,quantity:q.askSize}]:[]);},
       stake,
       note:(code,detail)=>{notes.push({strategy:current,code,detail});},
+      rules:(side,style)=>{
+        const q=quoteOf(ctx,side),price=style==='maker'?q.bid:q.ask;
+        if(price===null)return [];
+        const input:MatchInput={sport,phase,style,strategy:current,strategyVersion:currentVersion,price,role:roleOf(q.ask??price,q.bid),read:name=>readFeature(features,name,ctx,side)};
+        return evidence.filter(row=>(row.status==='lead'||row.status==='proven')&&!!row.strategies?.length&&matchRow(row,input)==='match');
+      },
       pullAfterEventMs:phase==='live'?PULL_AFTER_EVENT_MS[sport]??null:null};
     const errors:string[]=[],proposals:Proposal[]=[];
     for(const strategy of planOptions.use??strategies){
       if(planOptions.strategies&&!planOptions.strategies.includes(strategy.id))continue;
       // Killed or replaced versions never propose again.
       if(RETIRED_STATUS.has(specOf(strategy.id,strategy.version)?.research.status??''))continue;
-      current=strategy.id;
+      current=strategy.id;currentVersion=strategy.version;
       try{proposals.push(...strategy.propose(ctx,tools));}
       catch(error){errors.push(`${strategy.id}: ${(error as Error).message}`);}
     }
-    current='engine';
+    current='engine';currentVersion=undefined;
     const dataAge=typeof ctx.market.observedAt==='number'&&Number.isFinite(ctx.market.observedAt)&&ctx.market.observedAt<=ctx.now?ctx.now-ctx.market.observedAt:null;
     const risk={...(planOptions.risk??EMPTY_RISK)};
     const considered:PlannedTrade[]=proposals.map(proposal=>{

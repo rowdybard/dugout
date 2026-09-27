@@ -1,4 +1,4 @@
-import type {TennisAction,TennisInput,TennisMarket,TennisSession} from '../tennis/types';
+import type {SweepSummary,TennisAction,TennisInput,TennisMarket,TennisSession} from '../tennis/types';
 
 export const RUNNER_PROTOCOL='DUGOUT-RUNNER-V1';
 export type RunnerJournalRow={id:string;kind:string;value:unknown;time:number};
@@ -20,7 +20,7 @@ export type ReplayFrame={
 export type RunnerMeta={ownerId:string;epoch:string;migrationId:string;activatedAt:number};
 export type SourceHealth={updatedAt:number;state:'starting'|'streaming'|'rest'|'waiting'|'error'|'stopped';message:string};
 export type RunnerUsage={day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number};
-export type RunnerState={session:TennisSession;runner:{mode:'service';backgroundConnected:true;epoch:string;lastTickAt:number;lastEngineCheck:number;quoteAgeMs:number|null;contextAgeMs:number|null;source:SourceHealth;usage:RunnerUsage;paperOnly:true}};
+export type RunnerState={session:TennisSession;sweep?:SweepSummary|null;runner:{mode:'service';backgroundConnected:true;epoch:string;lastTickAt:number;lastEngineCheck:number;quoteAgeMs:number|null;contextAgeMs:number|null;source:SourceHealth;usage:RunnerUsage;paperOnly:true}};
 export function runnable(session:TennisSession):boolean {
   return session.status==='running'||session.status==='stopping'||session.positions.some(p=>p.status==='open')||!!session.pending;
 }

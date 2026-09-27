@@ -1,5 +1,5 @@
 import type {DecisionContext,FeatureValue,Quote,SideKey} from './context.ts';
-import type {Phase,Style} from './evidence.ts';
+import type {Evidence,Phase,Style} from './evidence.ts';
 import type {Costs} from './costs.ts';
 import type {FairEstimate,Level} from './edge.ts';
 import type {NoTradeCode} from './why.ts';
@@ -49,6 +49,11 @@ export type StrategyTools={
   levels(side:SideKey):readonly Level[];
   /** The stake a trade would use here (paper stake in paper mode). */
   stake:number;
+  /**
+   * Measured rows (lead or proven) that name THIS strategy version and fully match this side now: the plug for rules
+   * found by research (research/studies/rule_miner.py). Unknown conditions never match.
+   */
+  rules(side:SideKey,style:Style):readonly Evidence[];
   /** Why this strategy is not proposing (lib/decision/why.ts). Shown in "why no trade". */
   note(code:NoTradeCode,detail:string):void;
 };
@@ -128,10 +133,32 @@ export function randomSideControl():Strategy {
     }};
 }
 
+/**
+ * Rules found by research (research/studies/rule_miner.py), delivered as evidence rows naming `mined-rule@1`: each
+ * row's price band and conditions ARE the entry rule. Proposes a hold to settlement on a side only while a measured
+ * row fully matches it, once per rule per game (the row id is the setup key). The gate then applies every other
+ * finding as usual, so a mined rule never overrides a measured loser.
+ */
+export function minedRule():Strategy {
+  return {id:'mined-rule',version:'1',description:'Rules mined from history, confirmed on later games, held to the final.',
+    propose(ctx,tools){
+      const out:Proposal[]=[];
+      for(const side of ['yes','no'] as const){
+        const ask=tools.quote(side).ask;
+        if(ask===null)continue;
+        for(const row of tools.rules(side,'taker-hold'))
+          out.push({strategy:'mined-rule',strategyVersion:'1',side,style:'taker-hold',price:ask,setupKey:row.id,exit:{kind:'hold-to-settlement'},
+            rationale:`Mined rule ${row.id}: ${row.plain}`});
+      }
+      if(!out.length)tools.note('NO_SETUP','No mined rule matches now.');
+      return out;
+    }};
+}
+
 export function hashSide(key:string):SideKey {
   let hash=2166136261;
   for(let i=0;i<key.length;i++){hash^=key.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0)%2===0?'yes':'no';
 }
 
-export const DEFAULT_STRATEGIES:readonly Strategy[]=Object.freeze([favouriteHold(),modelEdgeHold(),makerQuote()]);
+export const DEFAULT_STRATEGIES:readonly Strategy[]=Object.freeze([favouriteHold(),modelEdgeHold(),makerQuote(),minedRule()]);

@@ -1,6 +1,6 @@
 import {validateTennisConfig} from '../../../lib/tennis/engine.ts';
 import {reduceRunnerAction} from '../../../lib/runner/reducer.ts';
-import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
+import type {SweepSummary,TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
 import {toUnits} from '../../../lib/trading/money.ts';
 import {RunnerError,sha256} from '../../../lib/runner/protocol.ts';
 import type {MigrationChunk,MigrationData,MigrationManifest,MigrationStart,ReplayFrame,RunnerMeta,RunnerState,SourceHealth,RunnerUsage,RunnerCause,RunnerJournalRow,RunnerObservation} from '../../../lib/runner/contracts';
@@ -88,7 +88,7 @@ export class RunnerStore {
     const now=Date.now(),slug=session.positions.find(p=>p.status==='open')?.slug??session.pending?.slug??session.config.focusSlug;
     const quote=slug?session.quotes?.[slug]:undefined,context=slug?session.footballReports?.[slug]:undefined,report=context?.transition??context?.report;
     const age=(time:number|undefined|null)=>typeof time==='number'&&Number.isFinite(time)&&time>=0&&time<=now?now-time:null;
-    return {session,runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
+    return {session,sweep:this.get<SweepSummary>('sweep-summary'),runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
   }
   acceptNonce(nonce:string,now:number){
     this.storage.transactionSync(()=>{this.storage.sql.exec('DELETE FROM runner_nonces WHERE expires<?',now);

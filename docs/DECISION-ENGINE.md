@@ -53,7 +53,7 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
 | `evidence.ts` | The compiled-in evidence rows and the condition language |
 | `pack.ts` | Evidence-pack schema and validation, the bundled pack, and the untrusted-pack restriction |
 | `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`, `calibration-v1` with intervals) and the market-implied baseline |
-| `strategies.ts` | Built-in strategies: `favourite-hold@1`, `model-edge-hold@2`, `maker-quote@1`, plus the `random-side-control@1` control |
+| `strategies.ts` | Built-in strategies: `favourite-hold@1`, `model-edge-hold@2`, `maker-quote@1`, `mined-rule@1` (trades the rows `rule_miner.py` writes, paper only), plus the `random-side-control@1` control |
 | `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features, `comeback-drive@1` and `comeback-drive-hold@1`, `drive-fade@1`, `surprise-fade@1` and `quiet-window-maker@1`. `baseball.ts` holds live MLB features (inning, half, count, outs, runners, base-out state, who is batting), from fresh reports only. |
 | `sizing.ts`, `risk.ts`, `costs.ts` | Stakes, kill switches, fees and break-even |
 | `sources.ts`, `host.ts` | Streaming packs in: from a URL or an R2 binding, with a SHA-256 pin and fallback to the last good pack |
@@ -111,6 +111,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
+- **The all-games sweep** (runner only, `lib/tennis/sweep.ts`): every open college game is evaluated every 30 s from the games list and measured in a separate shadow session. It never trades. See [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md#14-college-football-first-the-rule-miner-and-the-all-games-sweep).
 - **The dashboard.** The Decision engine card shows the latest plan, every proposal with its result and reason, the maker quotes, fills and rebates, and any planned holds. The game picker lists upcoming games, so pregame strategies can be focused.
 - **The bet checker (for people).** The default mode is `real`. With `--slug` it reads the live book, gives a verdict per side, and prints the full engine plan: every strategy's proposal and why it was taken or refused.
 

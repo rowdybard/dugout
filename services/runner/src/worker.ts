@@ -5,9 +5,10 @@ import {json,verifyRunnerRequest,runnerError,RunnerError} from '../../../lib/run
 import {runnable} from '../../../lib/runner/contracts.ts';
 import type {MigrationStart,MigrationChunk,RunnerCommand} from '../../../lib/runner/contracts';
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
-import type {TennisAction} from '../../../lib/tennis/types';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
 import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
+import {createSweepSession,listInput,SWEEP_EVERY_MS,SWEEP_LEAGUES,sweepAwaiting,sweepStep,sweepSummary} from '../../../lib/tennis/sweep.ts';
+import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
 
 /** Optional research recording (docs/DATA-PLATFORM.md): add an R2 binding named LAKE to switch it on. */
 type LakeBindings={LAKE?:R2Put;LAKE_PREFIX?:string};
@@ -59,6 +60,37 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       throw new RunnerError(404,'Runner route was not found.');
     }catch(error){return runnerError(error);}finally{this.store.saveUsage();}
   }
+  /**
+   * The all-games sweep (lib/tennis/sweep.ts): every open college game measured in shadow from the games list, in a
+   * session stored apart from the bot's. Never trades, never touches the bot's session or journal; a failure here only
+   * skips one sweep.
+   */
+  private async sweep(session:TennisSession,lake:R2Put|undefined){
+    if(session.config.evidenceGate!=='evidence-v1'||session.status!=='running')return;
+    const now=Date.now(),last=this.store.get<number>('sweep-last')??0;
+    if(now-last<SWEEP_EVERY_MS&&last<=now)return;
+    this.store.set('sweep-last',now);
+    try{
+      const markets=await this.adapter.sweepList(SWEEP_LEAGUES,session,AbortSignal.timeout(3500));
+      let sweep=this.store.get<TennisSession>('sweep-session')??createSweepSession(session.config.evidencePack,now);
+      sweep={...sweep,config:{...sweep.config,evidencePack:session.config.evidencePack}};
+      if(session.config.evidencePack===undefined)delete sweep.config.evidencePack;
+      // Final results for games whose shadows wait on them: each checked at most every 10 minutes, four per sweep.
+      const checks=this.store.get<Record<string,number>>('sweep-settle-checks')??{},settlements:Record<string,number>={};
+      const listed=new Map(markets.map(market=>[market.slug,market]));
+      const due=sweepAwaiting(sweep).filter(slug=>{const market=listed.get(slug);return (!market||market.ended)&&now-(checks[slug]??0)>=600_000;}).slice(0,4);
+      for(const slug of due){
+        checks[slug]=now;
+        try{const value=await this.adapter.settlementOf(slug,AbortSignal.timeout(2000));if(value!==null)settlements[slug]=value;}catch{/* next sweep retries */}
+      }
+      for(const [slug,time] of Object.entries(checks))if(now-time>86_400_000)delete checks[slug];
+      this.store.set('sweep-settle-checks',checks);
+      const next=sweepStep(sweep,markets,settlements,now);
+      this.store.set('sweep-session',next);this.store.set('sweep-summary',sweepSummary(next,now));
+      // Research capture: every listed college game's quote and game state, marked as list quotes.
+      if(lake){this.recorder.add(markets.map(market=>listInput(market,now)).filter((input):input is TennisInput=>!!input),'LIST');this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
+    }catch{/* the sweep is research only */}
+  }
   private async schedule(){
     const session=this.store.session();
     if(session&&runnable(session)){
@@ -87,6 +119,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
         if(lake){this.recorder.add(inputs);this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
         await this.store.advance({action:'tick',sessionId:current.id},inputs,Date.now(),failures,current.revision);
         const after=this.store.session();
+        if(after)await this.sweep(after,lake);
         const finalMarket=endedMarket??inputs.find(i=>i.market.slug===after?.config.focusSlug&&i.market.ended)?.market;
         if(after?.status==='running'&&finalMarket&&finalMarket.slug===after.config.focusSlug&&finalMarket.ended&&finalMarket.observedAt<=Date.now()&&Date.now()-finalMarket.observedAt<=45000){
           await this.store.advance({action:'pause',sessionId:after.id,commandId:'runner-game-ended-'+after.id+'-'+after.revision},[],Date.now(),[],after.revision,{code:'FOCUSED_GAME_ENDED',market:finalMarket});

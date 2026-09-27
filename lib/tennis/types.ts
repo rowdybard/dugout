@@ -1,6 +1,7 @@
 import type {Book,Point} from '../market/types';
 import type {ExecutionMarket,PaperExecution,TradeSide} from '../trading/types';
 import type {RestBookReceipt} from '../trading/fresh-book';
+import type {TradeRecord} from '../decision/scorecard';
 import type {OpportunityAnalysis} from './opportunity';
 import type {AdaptiveExitPlan,AdaptiveExitState,AdaptiveExitAssessment} from './exit-analysis';
 import type {CompactPlan,PlanEntry} from './engine-plan';
@@ -133,7 +134,7 @@ export type TennisSession={
   setups?:Record<string,string>;
   /** Game events per market (lib/decision/events.ts), and the last game state they were detected from. */
   gameTape?:Record<string,GameEvent[]>;
-  tapeState?:Record<string,{reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean}>;
+  tapeState?:Record<string,{reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean;drives?:number}>;
   /** YES midpoint at the last pregame book seen, per market. */
   pregame?:Record<string,{mid:number;time:number}>;
   /** Shadow and counterfactual trades (lib/decision/shadow.ts): candidates never traded, and alternatives to real paper trades. */
@@ -145,6 +146,8 @@ export type TennisSession={
   whyCounts?:Partial<Record<NoTradeCode,number>>;
   /** The last book the engine evaluated per market: each book is evaluated (and counted) once. */
   evaluatedBooks?:Record<string,number>;
+  /** All-games sweep sessions only (lib/tennis/sweep.ts): when each game was last seen in the games list. */
+  sweepSeen?:Record<string,number>;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;
@@ -157,7 +160,11 @@ export type TennisAction=
  |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string}
  |{action:'reset';bankroll:number;commandId:string}
  |{action:'update-rules';rules:Partial<Omit<TennisConfig,'startingCash'|'version'>>;expectedRulesRevision:number;sessionId:string;commandId:string};
+/** The all-games sweep's dashboard summary (lib/tennis/sweep.ts). */
+export type SweepSummary={updatedAt:number;games:number;open:number;measured:number;records:TradeRecord[]};
 export type TennisRuntime={mode:'browser'|'migrating'|'service';intervalMs:number;backgroundConnected:boolean;streamConfigured:boolean;description:string;
   lastSuccessfulCheck?:number;quoteAgeMs?:number|null;gameReportAgeMs?:number|null;failureReason?:string|null;
-  usage?:{day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number}};
+  usage?:{day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number};
+  /** The runner's all-games sweep (lib/tennis/sweep.ts): shadow measurements across every open college game. */
+  sweep?:SweepSummary|null};
 export type TennisSessionResponse={session:TennisSession;runtime:TennisRuntime;error?:string};

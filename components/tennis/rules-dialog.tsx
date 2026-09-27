@@ -3,6 +3,7 @@ import {useState} from 'react';
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
 import {defaultLiveTennisConfig,describeTennisRules,normalizeTennisConfig,validateTennisConfig} from '@/lib/tennis/rules';
 import type {TennisAction,TennisConfig,TennisSession} from '@/lib/tennis/types';
+import {VISIBLE_LEAGUES} from '@/lib/tennis/leagues';
 import {tennisCommandId} from './command-id';
 import {localMoveUpgradeRules} from '@/lib/tennis/start-control';
 type NumberKey={ [K in keyof TennisConfig]-?:TennisConfig[K] extends number?K:never }[keyof TennisConfig];
@@ -18,7 +19,7 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
     <DialogTitle className="tennis-dialog-title">Set limits. Let the bot decide.</DialogTitle>
     <DialogDescription className="tennis-dialog-description">{local?'The bot measures price movement, buyer recovery, liquidity and costs locally. Set your budget and risk limits; it decides whether the evidence is sufficient.':'This run has older entry rules. Switch to the local decision engine for future entries; your balance and history stay saved.'}</DialogDescription>
     {!local&&<><button className="tennis-secondary" onClick={()=>setDraft({...draft,...localMoveUpgradeRules(draft)})}>Use local decision engine</button><details className="tennis-details"><summary><strong>Legacy entry rules</strong></summary><div className="tennis-details-content"><div className="tennis-strategy-choices" role="group" aria-label="Legacy bot strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button className={strategy==='auto'?'is-auto':''} key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='auto'?'Legacy Auto':strategy==='recovery'?'Fixed recovery':'Fixed rise'}</b></button>)}</div></div></details></>}
-    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{(['ATP','WTA','NFL','CFB','MLB'] as const).map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':league==='MLB'?'MLB':'NFL'}</button>)}</div>
+    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{VISIBLE_LEAGUES.map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':league==='MLB'?'MLB':'NFL'}</button>)}</div>
     <div className="tennis-rules-grid">
       {field('entryBudget','Dollars per trade','Maximum spend, including fees',.01,Math.min(100,draft.startingCash*.2),1,.01)}
       {!local&&field('targetReturn','Take profit at','Percent after fees',.01,100,.01,.1)}
