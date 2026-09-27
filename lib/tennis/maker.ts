@@ -1,4 +1,5 @@
 import type {FootballReportState,TennisMarket} from './types';
+import {feeUnits,fromUnits,toUnits} from '../trading/money.ts';
 
 /**
  * Paper market making: pure helpers. The bot rests a buy on each side at that side's best bid (a two-sided quote:
@@ -8,7 +9,10 @@ import type {FootballReportState,TennisMarket} from './types';
  * this and the optimistic model, so paper results here understate fills and overstate adverse selection.
  */
 
-/** Polymarket US maker rebate per contract (research/studies/report.md): 0.0125 · p · (1 − p). */
+/**
+ * Polymarket US maker rebate (docs.polymarket.us/fees): 0.0125 · C · p · (1 − p), credited to the resting side at
+ * execution and rounded to the cent, half to even, like the taker fee.
+ */
 export const MAKER_REBATE_COEFFICIENT=0.0125;
 /** Wider books are placeholder quotes in the research, not markets to make. */
 export const MAX_QUOTE_SPREAD=0.05;
@@ -26,7 +30,7 @@ export type MakerState={
 
 const exact=(value:number)=>Math.round(value*1_000_000)/1_000_000;
 
-export const makerRebate=(price:number,quantity:number)=>exact(quantity*MAKER_REBATE_COEFFICIENT*price*(1-price));
+export const makerRebate=(price:number,quantity:number)=>fromUnits(feeUnits(toUnits(quantity),toUnits(price),toUnits(MAKER_REBATE_COEFFICIENT)));
 
 /** Whole increments of contracts affordable for `stake` dollars at `price`; zero below the market minimum. */
 export function quoteQuantity(stake:number,price:number,increment:number,minimum:number):number {
