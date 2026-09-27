@@ -79,7 +79,8 @@ export type Engine={
   gate(ctx:DecisionContext,proposal:Proposal,mode:Mode):Verdict;
   decide(request:DecisionRequest):Verdict;
   quotePolicy(sport:Sport,phase:Phase,mode:Mode):QuotePolicy;
-  plan(ctx:DecisionContext,options:{mode:Mode;risk?:RiskState;strategies?:string[]}):Plan;
+  /** `strategies` filters the engine's strategies by id; `use` replaces them for this call. */
+  plan(ctx:DecisionContext,options:{mode:Mode;risk?:RiskState;strategies?:string[];use?:readonly Strategy[]}):Plan;
   regime(ctx:DecisionContext,side:SideKey):Record<string,FeatureValue|undefined>;
 };
 
@@ -178,7 +179,7 @@ export function createEngine(options:EngineOptions={}):Engine {
     return {...shared,quote:permitted,status:'lead',reason:permitted?`${summary} Paper or capped pilot only, to measure real fills and rewards.`:`${summary} Unproven; full real-money quoting waits for the pilot's result.`};
   }
 
-  function plan(ctx:DecisionContext,planOptions:{mode:Mode;risk?:RiskState;strategies?:string[]}):Plan {
+  function plan(ctx:DecisionContext,planOptions:{mode:Mode;risk?:RiskState;strategies?:string[];use?:readonly Strategy[]}):Plan {
     const mode=planOptions.mode,phase=phaseOf(ctx),sport=ctx.market.sport;
     const shared={...base,trust,time:ctx.now,slug:ctx.market.slug,sport,phase,mode};
     if(!phase)return {...shared,actions:[],considered:[],errors:[],summary:'The game is final or has no scheduled start.'};
@@ -191,7 +192,7 @@ export function createEngine(options:EngineOptions={}):Engine {
       model:side=>{for(const model of research){const p=model.predict(ctx,side,features);if(p!==null)return {id:model.id,p};}return null;},
       pullAfterEventMs:phase==='live'?PULL_AFTER_EVENT_MS[sport]??null:null};
     const errors:string[]=[],proposals:Proposal[]=[];
-    for(const strategy of strategies){
+    for(const strategy of planOptions.use??strategies){
       if(planOptions.strategies&&!planOptions.strategies.includes(strategy.id))continue;
       try{proposals.push(...strategy.propose(ctx,tools));}
       catch(error){errors.push(`${strategy.id}: ${(error as Error).message}`);}

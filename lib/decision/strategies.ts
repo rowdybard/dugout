@@ -35,9 +35,14 @@ export type Strategy={id:string;version:string;description:string;propose(ctx:De
 
 const SIDES:SideKey[]=['yes','no'];
 
-/** research/studies/pregame.py rule: buy the favourite at the last quote 5 min – 3 h before start, hold to the final. */
+/**
+ * research/studies/pregame.py rule: buy the favourite at the close (the last quote at least 5 minutes before the
+ * scheduled start) and hold to the final. A bot acts on the first tick inside the window, so the default window is
+ * narrow (5–8 minutes) to stay at the close the evidence measured. Observers that refresh a pick (the forward test)
+ * may use a wider window and keep only their latest observation.
+ */
 export function favouriteHold(options:{minLeadMinutes?:number;maxLeadMinutes?:number}={}):Strategy {
-  const min=options.minLeadMinutes??5,max=options.maxLeadMinutes??180;
+  const min=options.minLeadMinutes??5,max=options.maxLeadMinutes??8;
   return {id:'favourite-hold',version:'1',description:`Buy the pregame favourite ${min}–${max} minutes before start and hold to settlement.`,
     propose(_ctx,tools){
       if(tools.phase!=='pregame')return [];

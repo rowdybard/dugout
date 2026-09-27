@@ -6,6 +6,7 @@ export const tennisRulesSchema=z.object({
   decisionPolicy:z.enum(['price-v1','football-context-v1']).optional(),
   decisionEngine:z.literal('local-move-v1').optional(),
   evidenceGate:z.literal('evidence-v1').optional(),
+  evidencePack:z.string().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),

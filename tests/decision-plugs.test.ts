@@ -16,7 +16,8 @@ import type {Strategy} from '../lib/decision/strategies.ts';
 
 const START=Date.parse('2026-10-03T19:00:00Z');
 function ctx(over:Partial<DecisionContext>={},yes={ask:.78,bid:.77}):DecisionContext {
-  return {now:START-30*60_000,market:{slug:'aec-cfb-home-away-2026-10-03',sport:'CFB',startTime:START,feeCoefficient:.0695,open:true,observedAt:START-30*60_000,
+  // Six minutes before kickoff: inside the favourite-hold window (5–8 minutes), at the close the study measured.
+  return {now:START-6*60_000,market:{slug:'aec-cfb-home-away-2026-10-03',sport:'CFB',startTime:START,feeCoefficient:.0695,open:true,observedAt:START-6*60_000,
     yes:{...sidesFromYesBook(yes).yes,name:'Home'},no:{...sidesFromYesBook(yes).no,name:'Away'}},...over};
 }
 const row=(over:Partial<Evidence>):Evidence=>({id:'test-row',title:'Test row',status:'lead',sports:['CFB'],phases:['live'],styles:['taker-hold'],
@@ -37,6 +38,8 @@ test('plan: strategies propose, evidence gates, sizing and risk decide the actio
   const halted=defaultEngine.plan(ctx(),{mode:'paper',risk:{...EMPTY_RISK,halted:'owner stop'}});
   assert.equal(halted.actions.length,0);assert.ok(halted.considered.some(t=>t.blocked==='HALTED'));
   const stale=defaultEngine.plan(ctx({market:{...ctx().market,observedAt:START-3_600_000}}),{mode:'paper'});
+  const early=defaultEngine.plan(ctx({now:START-30*60_000,market:{...ctx().market,observedAt:START-30*60_000}}),{mode:'paper'});
+  assert.ok(!early.considered.some(t=>t.proposal.strategy==='favourite-hold'),'the bot waits for the close, not 30 minutes out');
   assert.ok(stale.considered.every(t=>t.blocked!==null));assert.ok(stale.considered.some(t=>t.blocked==='STALE_DATA'));
   const final=defaultEngine.plan(ctx({game:{status:'final'}}),{mode:'paper'});
   assert.equal(final.phase,null);assert.equal(final.actions.length,0);
@@ -73,9 +76,9 @@ test('features read context safely',()=>{
   const c=ctx({game:{status:'live',yesScore:14,noScore:7,period:2,extra:{down:3}},history:[{time:START-40*60_000,yesBid:.70,yesAsk:.71},{time:START-31*60_000,yesBid:.74,yesAsk:.75}]});
   assert.equal(readFeature(BUILTIN_FEATURES,'scoreDiff',c,'no'),-7);
   assert.equal(readFeature(BUILTIN_FEATURES,'role',c,'no'),'underdog');
-  assert.equal(readFeature(BUILTIN_FEATURES,'minutesToStart',c,'yes'),30);
-  // Latest quote at least 5 min old is the 70.5¢ midpoint at -40 min; now 77.5¢.
-  assert.ok(Math.abs((readFeature(BUILTIN_FEATURES,'change5m',c,'yes') as number)-7)<1e-9);
+  assert.equal(readFeature(BUILTIN_FEATURES,'minutesToStart',c,'yes'),6);
+  // Latest quote at least 5 min old is the 74.5¢ midpoint at -31 min; now 77.5¢.
+  assert.ok(Math.abs((readFeature(BUILTIN_FEATURES,'change5m',c,'yes') as number)-3)<1e-9);
   assert.equal(readFeature(BUILTIN_FEATURES,'game.down',c,'yes'),3);
   assert.equal(readFeature(BUILTIN_FEATURES,'nonexistent',c,'yes'),undefined);
   assert.equal(readFeature({boom:()=>{throw new Error('x');}},'boom',c,'yes'),undefined);

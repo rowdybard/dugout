@@ -1,7 +1,7 @@
 import {defaultEngine,DEFAULT_FEE_COEFFICIENT,type Engine} from './engine.ts';
 import type {DecisionContext,SideKey} from './context.ts';
 import type {GameMarket} from './polymarket.ts';
-import {hashSide} from './strategies.ts';
+import {favouriteHold,hashSide} from './strategies.ts';
 
 /**
  * Forward test of the CFB pregame favourite lead (research/studies/pregame.py rule), on games that
@@ -44,7 +44,8 @@ export function observe(previous:ForwardRow|undefined,game:GameMarket,book:{yes:
   const feeCoefficient=game.feeCoefficient??DEFAULT_FEE_COEFFICIENT;
   const ctx:DecisionContext={now,market:{slug:game.slug,sport:'CFB',title:game.title,startTime:game.startTime,feeCoefficient,open:true,observedAt:now,
     yes:{...book.yes,name:game.yes.name},no:{...book.no,name:game.no.name}}};
-  const plan=engine.plan(ctx,{mode:'paper',strategies:['favourite-hold']});
+  // The forward test refreshes its pick every run and keeps the latest, so it can observe the whole window.
+  const plan=engine.plan(ctx,{mode:'paper',use:[favouriteHold({minLeadMinutes:FORWARD_TEST.minLeadMs/60_000,maxLeadMinutes:FORWARD_TEST.maxLeadMs/60_000})]});
   const snapshot=(side:SideKey):SideSnapshot=>{
     const quote=book[side],name=game[side].name;
     if(quote.ask===null)return {name,ask:null,bid:quote.bid,code:'NO_ASK'};

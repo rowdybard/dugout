@@ -17,7 +17,8 @@ import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
-import {decide} from '../decision/engine.ts';
+import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
+import type {Phase} from '../decision/evidence.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
 export function createTennisSession(config: TennisConfig = defaultTennisConfig(), now = Date.now()): TennisSession {
@@ -108,8 +109,10 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   if (quote.bid === undefined || quote.ask === undefined || quote.bid > quote.ask) return { code: 'BOOK', reason: 'A valid two-sided book is required.' };
   if (quote.ask - quote.bid > session.config.maxSpreadPoints / 100 + EPSILON) return { code: 'SPREAD', reason: 'The gap between buying and selling prices is too wide.' };
   if (session.config.evidenceGate === 'evidence-v1') {
-    // Every strategy in this engine buys live and sells within minutes: a taker scalp.
-    const verdict = decide({ sport: input.market.league, phase: 'live', style: 'taker-scalp', mode: session.mode, ask: quote.ask, bid: quote.bid, feeCoefficient: input.market.execution!.feeCoefficient });
+    // Every legacy strategy in this engine buys live and sells within minutes: a taker scalp.
+    const resolved = sessionEngine(session);
+    if ('error' in resolved) return { code: 'EVIDENCE_PACK_UNAVAILABLE', reason: resolved.error };
+    const verdict = resolved.engine.decide({ sport: input.market.league, phase: 'live', style: 'taker-scalp', mode: session.mode, ask: quote.ask, bid: quote.bid, feeCoefficient: input.market.execution!.feeCoefficient });
     if (!verdict.permitted) return { code: `EVIDENCE_${verdict.code}`, reason: `Decision engine: ${verdict.reason}` };
   }
   if (!Number.isFinite(budget) || budget <= 0 || budget > Math.min(session.config.startingCash * 0.25, 100) + EPSILON || budget > session.cash || exact(budget) !== budget) return { code: 'BUDGET', reason: 'The paper amount exceeds available cash or the per-entry cap.' };
@@ -122,6 +125,71 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   if (sell.status !== 'filled') return { code: 'EXIT_DEPTH', reason: 'Not enough buyers currently exist to sell the full proposed position at the quoted selling price.' };
   if (1 - sell.cashDelta / -buy.cashDelta >= session.config.stopReturn - EPSILON) return { code: 'ENTRY_COST', reason: 'Buying and selling immediately would already reach the loss limit after spread and fees.' };
   return null;
+}
+
+/**
+ * Entry checks for engine-planned trades. The engine has already applied the evidence; these are the bot's own
+ * execution checks. Unlike scalps, a hold-to-settlement entry needs no immediate resale, so there is no exit-depth
+ * or round-trip-cost check, and pregame entries need no in-game context.
+ */
+function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number, phase: Phase) {
+  const issue = dataIssue(session, input, now);
+  if (issue) return { code: 'DATA', reason: issue };
+  if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This league is not selected for the bot.' };
+  if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return { code: 'FOCUS', reason: 'New entries are restricted to the focused game.' };
+  if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
+  if (phase === 'live' && session.config.decisionPolicy === 'football-context-v1' && isFootballMarket(input.market)) {
+    const context = session.footballReports?.[input.market.slug]?.assessment;
+    if (context?.status !== 'fresh') return { code: `CONTEXT_${(context?.status ?? 'unknown').toUpperCase()}`, reason: context?.reason ?? 'Waiting for verified football context.' };
+  }
+  const quote = quotes(input, side);
+  if (quote.bid === undefined || quote.ask === undefined || quote.bid > quote.ask) return { code: 'BOOK', reason: 'A valid two-sided book is required.' };
+  if (quote.ask - quote.bid > session.config.maxSpreadPoints / 100 + EPSILON) return { code: 'SPREAD', reason: 'The gap between buying and selling prices is too wide.' };
+  if (!Number.isFinite(budget) || budget <= 0 || budget > Math.min(session.config.startingCash * 0.25, 100) + EPSILON || budget > session.cash + EPSILON || exact(budget) !== budget) return { code: 'BUDGET', reason: 'The planned stake exceeds available cash or the per-entry cap.' };
+  if (holding(session)) return { code: 'POSITION', reason: 'One open position at a time. Close it before another entry.' };
+  const buy = simulate(session, input, { ...freshCommand(session, input, side, 'BUY', now, quote.ask), budget }, now);
+  if (buy.status !== 'filled' || !buy.apply) return { code: 'ENTRY_DEPTH', reason: `The full entry cannot execute at the quoted buying price. ${buy.reason}` };
+  return null;
+}
+
+/** Re-check an engine-planned entry on the later book: same phase, the bot's checks, and the evidence again. */
+function enginePendingIssue(session: TennisSession, input: TennisInput, intent: TennisIntent, now: number) {
+  const plan = intent.plan!;
+  const phase = marketPhase(input, now);
+  if (phase !== plan.phase) return { code: 'PHASE_CHANGED', reason: `The game is no longer ${plan.phase}; the planned entry no longer matches its evidence.` };
+  const issue = planEntryIssue(session, input, intent.side, intent.budget ?? 0, now, phase);
+  if (issue) return issue;
+  const resolved = sessionEngine(session);
+  if ('error' in resolved) return { code: 'EVIDENCE_PACK_UNAVAILABLE', reason: resolved.error };
+  const ask = quotes(input, intent.side).ask!;
+  const verdict = resolved.engine.gate(decisionContext(session, input, now, phase), { strategy: plan.strategy, strategyVersion: plan.strategyVersion,
+    side: intent.side === 'YES' ? 'yes' : 'no', style: plan.style, price: ask, exit: { kind: 'hold-to-settlement' }, rationale: 'Later-book recheck.' }, session.mode);
+  if (!verdict.permitted) return { code: `EVIDENCE_${verdict.code}`, reason: `Decision engine recheck: ${verdict.reason}` };
+  return null;
+}
+
+/** Ask the engine for a plan on each eligible book and stage the best taker-hold action, if any. */
+function stageEnginePlan(session: TennisSession, current: TennisInput[], now: number) {
+  const resolved = sessionEngine(session);
+  for (const input of [...current].sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
+    if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) continue;
+    if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
+    if ('error' in resolved) { record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); continue; }
+    const phase = marketPhase(input, now);
+    const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now) });
+    session.enginePlan = compactPlan(plan);
+    // Resting orders are managed separately; the bot's one position slot takes taker holds only.
+    const action = plan.actions.find(item => item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement');
+    if (!action || !phase) continue;
+    const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO';
+    const issue = planEntryIssue(session, input, side, action.stake, now, phase);
+    if (issue) { record(session, now, input.market.slug, side, 'SKIP', issue.code, `Engine plan not executable: ${issue.reason}`, input); continue; }
+    const entry: PlanEntry = { strategy: action.proposal.strategy, strategyVersion: action.proposal.strategyVersion, style: action.proposal.style, phase, exit: 'hold-to-settlement',
+      code: action.verdict.code, evidence: action.verdict.deciding?.id ?? null, pack: action.verdict.pack, stake: action.stake, reason: action.verdict.reason };
+    stage(session, input, side, 'BUY', now, 'AUTOMATIC', `Decision engine: ${action.proposal.rationale} ${action.verdict.reason}`, action.stake);
+    if (session.pending?.action === 'BUY') session.pending.plan = entry;
+    return;
+  }
 }
 
 /** A return to the old midpoint is a scenario, not a forecast or executable quote. */
@@ -225,6 +293,10 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
         market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy,
         exitRules:{targetReturn:(intent.signalConfig??session.config).targetReturn,stopReturn:(intent.signalConfig??session.config).stopReturn,maxHoldMs:(intent.signalConfig??session.config).maxHoldMs,source:'entry'},
         ...(intent.contextSnapshot?{entryContext:structuredClone(intent.contextSnapshot)}:{}) });
+      if(intent.plan){
+        const opened=session.positions.at(-1)!;
+        opened.exitPolicy=intent.plan.exit;opened.plan=structuredClone(intent.plan);
+      }
       if(intent.analysis?.entry){
         const opened=session.positions.at(-1)!,entry=intent.analysis.entry,cfg=intent.signalConfig??session.config;
         opened.entryAnalysis=structuredClone(intent.analysis);
@@ -269,7 +341,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
     record(session, now, intent.slug, intent.side, 'SKIP', 'RETIRED_ENTRY', 'An earlier user-placed entry was canceled. Only the bot can open a position.');
     return false;
   }
-  if(intent.action==='BUY'&&session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(intent.market)){
+  if(intent.action==='BUY'&&intent.plan?.phase!=='pregame'&&session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(intent.market)){
     const state=session.footballReports?.[intent.slug];
     const boundary=!!intent.contextSnapshot&&!!state?.report&&footballBoundaryChanged(intent.contextSnapshot,state.report);
     if(!intent.contextSnapshot||state?.assessment.status!=='fresh'||boundary){
@@ -300,9 +372,10 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   }
   if (session.ledger.some(entry => entry.id === intent.id)) { session.pending = null; return false; }
   if (intent.action === 'BUY') {
-    const quantitative=intent.signalConfig?.decisionEngine==='local-move-v1';
+    const quantitative=!intent.plan&&intent.signalConfig?.decisionEngine==='local-move-v1';
     const recheck=quantitative?pendingSignalIssue(session,input,intent,now):null;
-    const issue = entryIssue(session, input, intent.side, intent.budget ?? 0, now) ?? recheck ?? (quantitative?null:pendingSignalIssue(session, input, intent, now));
+    const issue = intent.plan ? enginePendingIssue(session, input, intent, now)
+      : entryIssue(session, input, intent.side, intent.budget ?? 0, now) ?? recheck ?? (quantitative?null:pendingSignalIssue(session, input, intent, now));
     // Recheck the complete entry and its exit costs on the later book.
     if (issue) {
       session.pending = null;
@@ -318,7 +391,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
   }
   const command: PaperCommand = { commandId: intent.id, marketSlug: intent.slug, positionId: intent.positionId,
     side: intent.side, action: intent.action, source: intent.source, limitPrice: intent.limitPrice,
-    createdAt: intent.createdAt, strategyVersion: intent.signalConfig?.decisionEngine??position?.entryAnalysis?.version??session.config.decisionEngine??session.config.version,
+    createdAt: intent.createdAt, strategyVersion: (intent.plan?`${intent.plan.strategy}-v${intent.plan.strategyVersion}`:undefined)??(intent.action==='SELL'&&position?.plan?`${position.plan.strategy}-v${position.plan.strategyVersion}`:undefined)??intent.signalConfig?.decisionEngine??position?.entryAnalysis?.version??session.config.decisionEngine??session.config.version,
     ...(intent.action === 'BUY' ? { budget: intent.budget } : { quantity: position!.quantity }) };
   const result = simulate(session, input, command, now);
   session.consumedBooks[intent.slug] = input.receivedAt;
@@ -624,7 +697,13 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (!session.pending && input && !dataIssue(session, input, now) && input.receivedAt > (session.consumedBooks[position.slug] ?? -1)) {
       const availableReturn = position.netLiquidationValue !== null && position.liquidationQuantity > 0
         ? position.netLiquidationValue / (position.costBasis * position.liquidationQuantity / position.quantity) - 1 : null;
-      if(position.exitPlan){
+      if(position.exitPolicy==='hold-to-settlement'){
+        // Planned to the final result: no profit target, stop or time limit. Stop and the account loss limit still close it.
+        const reason=session.exitRequested?.positionId===position.id?session.exitRequested.reason:session.status==='stopping'?'Session stopped: attempting to close remaining paper quantity.':null;
+        if(reason)stage(session,input,position.side,'SELL',now,session.exitRequested?.source??'AUTOMATIC',reason);
+        else if(!processed)record(session,now,position.slug,position.side,'WAIT','HOLD_TO_SETTLEMENT',
+          `Holding to the final result as the decision engine planned (${position.plan?.strategy??'engine'}, ${position.plan?.evidence??'evidence'}). Only settlement, Stop or the account loss limit closes it.`,input,{netReturn:availableReturn??undefined});
+      }else if(position.exitPlan){
         const quote=quotes(input,position.side),band=Math.max(position.exitPlan.tickSize*2,(quote.ask??0)-(quote.bid??0));
         const bids=quote.bids.filter(q=>q.price>=(quote.bid??0)-band-EPSILON).reduce((n,q)=>n+q.quantity,0);
         const asks=quote.asks.filter(q=>q.price<=(quote.ask??0)+band+EPSILON).reduce((n,q)=>n+q.quantity,0);
@@ -711,6 +790,11 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
         if(latest.length)session.lastReason=blocker?.reason??progress?.reason??cooldown?.reason??'Auto is watching for a recovery or a sustained rise. Neither setup is ready yet.';
       }
       if((session.decisionSequence??0)>beforeSequence)session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
+    }
+    if(session.config.evidenceGate==='evidence-v1'&&!session.pending){
+      stageEnginePlan(session,current,now);
+      // The engine's plan explains the bot's state better than a refused legacy scalp.
+      if(!session.pending&&session.enginePlan&&session.enginePlan.time===now)session.lastReason=`Decision engine: ${session.enginePlan.summary}`;
     }
   }
   const value = tennisEquity(session);
