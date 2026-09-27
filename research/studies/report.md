@@ -39,6 +39,18 @@ Measured on the 32 densely sampled 2026 regular-season games (5,317 plays, 518 b
 - The market moves about 0.6–0.7× nflfastR's per-play change. Since the market is also more accurate (section 3), this is the model overreacting, not the market underreacting.
 - **Conclusion:** trading on public NFL play information is too slow. Winning on speed would need a feed reaching us within a few seconds of the play *and* faster order entry than professional market makers. A live test on Sep 27 records how late ESPN's free feed publishes each play (`research/market-history/live_lag_probe.py`).
 
+## Pregame, all sports (`pregame.py`, `cross_venue_nfl.py`)
+Buying at the last executable quote at least 5 minutes before start and holding to settlement, taker fee included:
+- **MLB (2,021 games): efficient.** Favourite, underdog, home and away all lose about 3.5–4%, which is the cost of fees and spread. Mid-priced favourites (55–70¢) look slightly overpriced: −7.9% [−12.2, −3.1]. Pregame calibration slope is 0.87, meaning prices are slightly overconfident.
+- **NFL (231 games): Polymarket's close equals the sportsbook close.** The home-side gap versus the de-vigged nflverse closing moneyline is +0.2¢ [−0.5, +0.7]. Home teams lost money in both periods (−12.5%, −21%), but sportsbooks priced them the same way, and 2025–26 home teams simply underperformed (48% wins versus 55% priced). Treat it as season noise, **not a Polymarket edge**.
+- **College football (632 games): strong favourite-longshot bias.** Underdogs lose −33% [−50, −13] in 2026 (sides priced under 15¢ lose 47%). Buying favourites is **+2.5% [−1.4, +6.6]** after fees (bands: 70–85¢ +3.1%, 85–100¢ +1.3%). This is the most promising lead so far, but not yet significant. About 60 new games a week will settle it.
+
+## MLB live (1,973 games, 2026 to Aug 25)
+- Live prices are well calibrated (slope 1.04, Brier 0.151).
+- Longshots are overpriced: sides under 10¢ lose 48%, and 10–20¢ lose 13%.
+- 90¢+ favourites break even after fees (+0.1%).
+- No price band is profitable to hold.
+
 ## What this means (so far)
 1. **NFL as a taker is efficient on every axis tested:** scalping, calibration, model disagreement and speed. There is no retail edge from public data.
 2. Stop tuning in-game scalping. The data says it cannot beat taker costs.
