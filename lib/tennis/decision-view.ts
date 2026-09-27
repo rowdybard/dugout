@@ -25,7 +25,7 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
   const usage=runtime?.mode==='service'?runtime.usage:undefined;
   const budgetReached=!!usage&&usage.day===new Date(now).toISOString().slice(0,10)&&usage.estimatedRowsWritten>=usage.entryPauseAt;
   const quoting=!!session.maker&&(!!session.maker.quotes.YES||!!session.maker.quotes.NO);
-  const holdLabel=held?.exitPolicy==='hold-to-settlement'?'Holding to final':held?.exitPolicy==='maker'?'Market making':'Holding';
+  const holdLabel=held?.exitPolicy==='hold-to-settlement'?'Holding to final':held?.exitPolicy==='maker'?'Market making':held?.exitPolicy==='drive'?'Riding the drive':'Holding';
   const state=runtime?.mode==='migrating'?'Setup paused':session.pending?.action==='SELL'||session.exitRequested||session.status==='stopping'?'Exiting':
     held?(session.status==='paused'?`${holdLabel} · entries paused`:holdLabel):session.pending?.action==='BUY'?'Buying':
     pausedFlat?'Paused':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':

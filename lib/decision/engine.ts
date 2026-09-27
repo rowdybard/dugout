@@ -1,8 +1,9 @@
 import {formatEstimate,testCondition,type Evidence,type Phase,type Role,type Sport,type Style} from './evidence.ts';
 import {BUNDLED_PACK,restrictUntrusted,type EvidencePack,type Trust} from './pack.ts';
-import {BUILTIN_FEATURES,featureRegistry,readFeature,type Feature,type FeatureRegistry} from './features.ts';
+import {featureRegistry,readFeature,type Feature,type FeatureRegistry} from './features.ts';
 import {compileModel,type ModelSpec,type ProbabilityModel} from './models.ts';
 import {DEFAULT_STRATEGIES,type Proposal,type Strategy,type StrategyTools} from './strategies.ts';
+import {SPORT_FEATURES,SPORT_STRATEGIES} from './sports/index.ts';
 import {DEFAULT_SIZING,stakeFor,type SizingLimits} from './sizing.ts';
 import {checkRisk,DEFAULT_RISK,EMPTY_RISK,type RiskLimits,type RiskState} from './risk.ts';
 import {DEFAULT_FEE_COEFFICIENT,estimateCosts,MAX_EXECUTABLE_SPREAD,roleOf,type Costs} from './costs.ts';
@@ -36,7 +37,8 @@ export type DecisionRequest={
   modelProbability?:number|null;
 };
 
-export type VerdictCode='PROVEN'|'LEAD_PAPER'|'LEAD_PILOT'|'UNPROVEN_REAL'|'DROPPED'|'NO_EVIDENCE'|'NOT_EXECUTABLE'|'CLOSED'|'INVALID';
+/** EXPLORE_PAPER: a pre-registered, unmeasured strategy traded on paper only, to measure it (plan option `explore`). */
+export type VerdictCode='PROVEN'|'LEAD_PAPER'|'LEAD_PILOT'|'EXPLORE_PAPER'|'UNPROVEN_REAL'|'DROPPED'|'NO_EVIDENCE'|'NOT_EXECUTABLE'|'CLOSED'|'INVALID';
 export type Verdict={
   engine:string;pack:string;trust:Trust;
   action:'allow'|'paper-only'|'block';
@@ -67,20 +69,29 @@ export type Plan={
 
 export type EngineOptions={
   pack?:EvidencePack;trust?:Trust;
+  /** Added to the built-in and sport features (lib/decision/sports). */
   features?:Record<string,Feature>;
   models?:(ProbabilityModel|ModelSpec)[];
   strategies?:readonly Strategy[];
   sizing?:Partial<SizingLimits>;risk?:Partial<RiskLimits>;
 };
 
+/**
+ * Exploring: strategy ids the caller lets trade on PAPER where the research has no result for that strategy.
+ * Only strategies with a pre-registered hypothesis qualify, never in pilot or real mode, and never once an
+ * evidence row names the strategy (its own result then decides). `use` supplies the strategies for a custom call.
+ */
+export type ExploreOptions={explore?:readonly string[];use?:readonly Strategy[]};
+export type PlanOptions={mode:Mode;risk?:RiskState;strategies?:string[];use?:readonly Strategy[];explore?:readonly string[]};
+
 export type Engine={
   version:string;pack:{version:string;trust:Trust;source:string};
   evidence:readonly Evidence[];strategies:readonly Strategy[];models:readonly ProbabilityModel[];
-  gate(ctx:DecisionContext,proposal:Proposal,mode:Mode):Verdict;
+  gate(ctx:DecisionContext,proposal:Proposal,mode:Mode,options?:ExploreOptions):Verdict;
   decide(request:DecisionRequest):Verdict;
   quotePolicy(sport:Sport,phase:Phase,mode:Mode):QuotePolicy;
   /** `strategies` filters the engine's strategies by id; `use` replaces them for this call. */
-  plan(ctx:DecisionContext,options:{mode:Mode;risk?:RiskState;strategies?:string[];use?:readonly Strategy[]}):Plan;
+  plan(ctx:DecisionContext,options:PlanOptions):Plan;
   regime(ctx:DecisionContext,side:SideKey):Record<string,FeatureValue|undefined>;
 };
 
@@ -94,6 +105,8 @@ const inBand=(price:number,band:{min:number;max:number})=>price>band.min+EPSILON
 /** Price- or role-specific findings outrank the general result for the same regime. */
 const specificity=(item:Evidence)=>(item.price?2:0)+(item.role?1:0)+(item.conditions?.length??0)+(item.strategies?1:0);
 const mostSpecific=(items:Evidence[])=>[...items].sort((a,b)=>specificity(b)-specificity(a))[0]??null;
+/** Descending order that treats equal infinities as ties. */
+const descending=(a:number,b:number)=>a===b?0:a>b?-1:1;
 
 type MatchInput={sport:Sport;phase:Phase;style:Style;strategy?:string;price?:number;role?:Role;read?:(feature:string)=>FeatureValue|undefined};
 function matchRow(row:Evidence,input:MatchInput):'match'|'no'|'unknown' {
@@ -114,13 +127,28 @@ export function createEngine(options:EngineOptions={}):Engine {
   const trust:Trust=options.trust??(options.pack&&options.pack!==BUNDLED_PACK?'untrusted':'bundled');
   const pack=trust==='untrusted'?restrictUntrusted(options.pack!):options.pack??BUNDLED_PACK;
   const evidence=Object.freeze([...pack.evidence]);
-  const features:FeatureRegistry=options.features?featureRegistry(options.features):BUILTIN_FEATURES;
+  const features:FeatureRegistry=featureRegistry(SPORT_FEATURES,options.features??{});
   const models=Object.freeze([...(pack.models??[]),...(options.models??[])].map(model=>'predict' in model?model:compileModel(model)));
-  const strategies=options.strategies??DEFAULT_STRATEGIES;
+  const strategies=options.strategies??[...DEFAULT_STRATEGIES,...SPORT_STRATEGIES];
   const sizing={...DEFAULT_SIZING,...options.sizing},riskLimits={...DEFAULT_RISK,...options.risk};
   const base={engine:ENGINE_VERSION,pack:pack.version};
 
-  function gate(ctx:DecisionContext,proposal:Proposal,mode:Mode):Verdict {
+  function gate(ctx:DecisionContext,proposal:Proposal,mode:Mode,exploreOptions:ExploreOptions={}):Verdict {
+    return explored(measured(ctx,proposal,mode),proposal,mode,exploreOptions);
+  }
+
+  /** Paper-only test of a pre-registered strategy that no evidence row names yet. */
+  function explored(verdict:Verdict,proposal:Proposal,mode:Mode,{explore,use}:ExploreOptions):Verdict {
+    if(mode!=='paper'||!explore?.includes(proposal.strategy)||(verdict.code!=='NO_EVIDENCE'&&verdict.code!=='DROPPED'))return verdict;
+    const strategy=[...(use??[]),...strategies].find(item=>item.id===proposal.strategy);
+    if(!strategy?.hypothesis||verdict.evidence.some(row=>row.strategies?.includes(proposal.strategy)))return verdict;
+    const general=verdict.deciding;
+    return {...verdict,action:'paper-only',permitted:true,code:'EXPLORE_PAPER',deciding:null,
+      reason:`Paper test of an unmeasured idea. ${strategy.hypothesis}`+
+        (general?` For comparison: ${general.title}, ${formatEstimate(general.estimate)} measured; this rule has not been measured on its own.`:' No study covers it yet.')};
+  }
+
+  function measured(ctx:DecisionContext,proposal:Proposal,mode:Mode):Verdict {
     const quote=quoteOf(ctx,proposal.side),coefficient=ctx.market.feeCoefficient??DEFAULT_FEE_COEFFICIENT;
     const taker=proposal.style!=='maker',price=proposal.price,bid=quote.bid;
     const verdict=(action:Verdict['action'],code:VerdictCode,reason:string,extra:Partial<Verdict>={}):Verdict=>({...base,trust,action,code,reason,
@@ -179,7 +207,7 @@ export function createEngine(options:EngineOptions={}):Engine {
     return {...shared,quote:permitted,status:'lead',reason:permitted?`${summary} Paper or capped pilot only, to measure real fills and rewards.`:`${summary} Unproven; full real-money quoting waits for the pilot's result.`};
   }
 
-  function plan(ctx:DecisionContext,planOptions:{mode:Mode;risk?:RiskState;strategies?:string[];use?:readonly Strategy[]}):Plan {
+  function plan(ctx:DecisionContext,planOptions:PlanOptions):Plan {
     const mode=planOptions.mode,phase=phaseOf(ctx),sport=ctx.market.sport;
     const shared={...base,trust,time:ctx.now,slug:ctx.market.slug,sport,phase,mode};
     if(!phase)return {...shared,actions:[],considered:[],errors:[],summary:'The game is final or has no scheduled start.'};
@@ -200,14 +228,16 @@ export function createEngine(options:EngineOptions={}):Engine {
     const dataAge=typeof ctx.market.observedAt==='number'&&Number.isFinite(ctx.market.observedAt)&&ctx.market.observedAt<=ctx.now?ctx.now-ctx.market.observedAt:null;
     const risk={...(planOptions.risk??EMPTY_RISK)};
     const considered:PlannedTrade[]=proposals.map(proposal=>{
-      const verdict=gate(ctx,proposal,mode);
+      const verdict=gate(ctx,proposal,mode,{explore:planOptions.explore,use:planOptions.use});
       const stake=stakeFor({action:verdict.permitted?verdict.action:'block',mode,evidence:verdict.deciding,costs:verdict.costs,limits:sizing});
       if(!verdict.permitted)return {proposal,verdict,stake:0,blocked:verdict.code,reason:verdict.reason};
       if(stake<=0)return {proposal,verdict,stake:0,blocked:'NO_STAKE',reason:'The evidence lower bound does not support a real-money stake.'};
       return {proposal,verdict,stake,blocked:null,reason:verdict.reason};
     });
     const score=(trade:PlannedTrade)=>{const e=trade.verdict.deciding?.estimate;return e?(e.unit==='cents'?e.mean/100:e.mean):-Infinity;};
-    const ranked=considered.filter(trade=>!trade.blocked).sort((a,b)=>score(b)-score(a)||specificity(b.verdict.deciding!)-specificity(a.verdict.deciding!));
+    // Measured results outrank explored ideas (no deciding row), then the more specific row wins.
+    const rank=(trade:PlannedTrade)=>trade.verdict.deciding?specificity(trade.verdict.deciding):-1;
+    const ranked=considered.filter(trade=>!trade.blocked).sort((a,b)=>descending(score(a),score(b))||descending(rank(a),rank(b)));
     const actions:PlannedTrade[]=[];let taker=false;
     for(const trade of ranked){
       if(trade.proposal.style!=='maker'&&taker){trade.blocked='ONE_TAKER_PER_MARKET';trade.reason='Another taker entry on this market ranked higher.';continue;}

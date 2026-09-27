@@ -11,7 +11,12 @@ export type ExitPolicy=
   |{kind:'hold-to-settlement'}
   |{kind:'scalp';targetReturn:number;stopReturn:number;maxHoldMs:number}
   /** Resting order: cancel for `pullAfterEventMs` after each play/pitch event. */
-  |{kind:'maker';pullAfterEventMs:number|null};
+  |{kind:'maker';pullAfterEventMs:number|null}
+  /**
+   * Football: hold while the drive lasts. Sell when it ends (score, change of possession, end of the half),
+   * at a net loss of `stopReturn`, or after `maxHoldMs`, whichever comes first.
+   */
+  |{kind:'drive';stopReturn:number;maxHoldMs:number};
 
 export type Proposal={
   strategy:string;strategyVersion:string;side:SideKey;style:Style;
@@ -31,7 +36,13 @@ export type StrategyTools={
   pullAfterEventMs:number|null;
 };
 
-export type Strategy={id:string;version:string;description:string;propose(ctx:DecisionContext,tools:StrategyTools):Proposal[]};
+export type Strategy={id:string;version:string;description:string;
+  /**
+   * A pre-registered idea the research has not measured yet, stated before any result. Only a strategy with a
+   * hypothesis may be explored on paper (plan option `explore`), and only until evidence names the strategy.
+   */
+  hypothesis?:string;
+  propose(ctx:DecisionContext,tools:StrategyTools):Proposal[]};
 
 const SIDES:SideKey[]=['yes','no'];
 

@@ -3,7 +3,9 @@ import {packFor} from '../decision/registry.ts';
 import type {DecisionContext,PricePoint} from '../decision/context.ts';
 import type {Phase,Style} from '../decision/evidence.ts';
 import type {RiskState} from '../decision/risk.ts';
-import type {TennisInput,TennisSession} from './types';
+import {QUARTER_SECONDS} from '../decision/sports/index.ts';
+import type {FeatureValue} from '../decision/context.ts';
+import type {TennisInput,TennisMarket,TennisSession} from './types';
 
 /**
  * Adapter between the paper bot's session/inputs and the decision engine (lib/decision).
@@ -13,13 +15,16 @@ import type {TennisInput,TennisSession} from './types';
 /** What the bot records on an engine-planned intent and position. */
 export type PlanEntry={
   strategy:string;strategyVersion:string;style:Style;phase:Phase;
-  exit:'hold-to-settlement';
+  /** hold-to-settlement: held to the final. drive: sold when the football drive ends, at the stop, or at the time limit. */
+  exit:'hold-to-settlement'|'drive';
+  drive?:{stopReturn:number;maxHoldMs:number};
   code:string;evidence:string|null;pack:string;stake:number;reason:string;
 };
 /** The latest plan, compact enough to keep in session state for the dashboard. */
 export type CompactPlan={
   time:number;slug:string;phase:Phase|null;pack:string;trust:string;summary:string;
-  considered:{strategy:string;side:'YES'|'NO';style:Style;price:number;stake:number;result:string;reason:string}[];
+  /** `code` is the evidence verdict (EXPLORE_PAPER marks a paper test of an unmeasured idea). */
+  considered:{strategy:string;side:'YES'|'NO';style:Style;price:number;stake:number;result:string;code?:string;reason:string}[];
 };
 
 const round=(x:number)=>Math.round(x*1e6)/1e6;
@@ -53,6 +58,45 @@ function periodNumber(period:string|null):number|null {
   return match?Number(match[1]):null;
 }
 
+/**
+ * How the provider's football clock (eventState.elapsed) runs. Null until checked on a live game: game seconds
+ * remaining then stay unknown, and strategies fall back to whole quarters left.
+ */
+export const FOOTBALL_CLOCK:'countdown'|'elapsed'|null=null;
+
+/** Game seconds left in regulation, or null when the quarter or clock direction is unknown. */
+export function footballSecondsRemaining(period:string,clock:string,direction:'countdown'|'elapsed'|null=FOOTBALL_CLOCK):number|null {
+  const quarter=/^Q([1-4])$/.exec(period)?.[1],time=/^(\d{1,2}):([0-5]\d)$/.exec(clock);
+  if(!quarter||!time||!direction)return null;
+  const shown=Number(time[1])*60+Number(time[2]);
+  if(shown>QUARTER_SECONDS)return null;
+  return (4-Number(quarter))*QUARTER_SECONDS+(direction==='countdown'?shown:QUARTER_SECONDS-shown);
+}
+
+/** Scores read "away-home" (verified on NFL and CFB); `yesOrdering` says which one YES is. */
+export function sideScores(score:string|null|undefined,ordering:TennisMarket['yesOrdering']):{yesScore:number;noScore:number}|null {
+  const match=/^(\d+)\s*-\s*(\d+)$/.exec(score?.trim()??'');
+  if(!match||(ordering!=='away'&&ordering!=='home'))return null;
+  const away=Number(match[1]),home=Number(match[2]);
+  return ordering==='away'?{yesScore:away,noScore:home}:{yesScore:home,noScore:away};
+}
+
+/**
+ * Football facts for the engine, only from a fresh verified report for this game and team mapping. Anything
+ * less (stale, between plays, conflicting) leaves them unknown, and strategies that need them propose nothing.
+ */
+function footballGame(session:TennisSession,market:TennisMarket):{period:number|null;secondsRemaining:number|null;yesScore:number;noScore:number;extra:Record<string,FeatureValue|null>}|null {
+  const state=session.footballReports?.[market.slug],report=state?.report,identity=market.footballIdentity;
+  if(state?.assessment.status!=='fresh'||!report||!identity||report.eventId!==market.eventId||report.yesTeamId!==identity.yesTeamId||report.noTeamId!==identity.noTeamId)return null;
+  const scores=sideScores(report.score,market.yesOrdering);
+  if(!scores)return null;
+  const possession=report.possessionTeamId===report.yesTeamId?'yes':report.possessionTeamId===report.noTeamId?'no':null;
+  if(!possession)return null;
+  const own=report.fieldPosition.teamId===report.possessionTeamId;
+  return {period:periodNumber(report.period),secondsRemaining:footballSecondsRemaining(report.period,report.clock),...scores,
+    extra:{possession,yardsToEndZone:own?100-report.fieldPosition.yard:report.fieldPosition.yard,down:report.down,distance:report.yardsToGo}};
+}
+
 export function decisionContext(session:TennisSession,input:TennisInput,now:number,phase:Phase|null):DecisionContext {
   const market=input.market;
   const bid=input.book.bids.reduce<TennisInput['book']['bids'][number]|null>((best,level)=>level.quantity>0&&(!best||level.price>best.price)?level:best,null);
@@ -64,7 +108,8 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
       feeCoefficient:market.execution?.feeCoefficient??null,open:input.book.state==='MARKET_STATE_OPEN',observedAt:input.receivedAt,
       yes:{name:market.yesName,ask:ask?.price??null,bid:bid?.price??null,askSize:ask?.quantity??null,bidSize:bid?.quantity??null},
       no:{name:market.noName,ask:bid?round(1-bid.price):null,bid:ask?round(1-ask.price):null,askSize:bid?.quantity??null,bidSize:ask?.quantity??null}},
-    game:{status:market.ended?'final':phase==='live'?'live':'scheduled',period:periodNumber(market.period),observedAt:market.contextUpdatedAt},
+    game:{status:market.ended?'final':phase==='live'?'live':'scheduled',period:periodNumber(market.period),observedAt:market.contextUpdatedAt,
+      ...(phase==='live'&&(market.league==='NFL'||market.league==='CFB')?footballGame(session,market)??{}:{})},
     history};
 }
 
@@ -83,5 +128,5 @@ export function sessionRisk(session:TennisSession,now:number):RiskState {
 export function compactPlan(plan:Plan):CompactPlan {
   return {time:plan.time,slug:plan.slug,phase:plan.phase,pack:plan.pack,trust:plan.trust,summary:plan.summary,
     considered:plan.considered.slice(0,8).map(trade=>({strategy:trade.proposal.strategy,side:trade.proposal.side==='yes'?'YES' as const:'NO' as const,
-      style:trade.proposal.style,price:trade.proposal.price,stake:trade.stake,result:trade.blocked??'ACTION',reason:trade.reason.slice(0,300)}))};
+      style:trade.proposal.style,price:trade.proposal.price,stake:trade.stake,result:trade.blocked??'ACTION',code:trade.verdict.code,reason:trade.reason.slice(0,300)}))};
 }

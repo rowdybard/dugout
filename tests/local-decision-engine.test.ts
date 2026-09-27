@@ -17,7 +17,7 @@ function input(time:number,bid:number,side:TradeSide='YES',football=false):Tenni
 }
 function queued(side:TradeSide='YES',football=false){
   // Scalping mechanics are tested with the evidence gate off; tests/decision-engine.test.ts covers the gate.
-  const config={...defaultLiveTennisConfig(),evidenceGate:undefined,maker:undefined,entryBudget:10,focusSlug:SLUG,leagues:[football?'CFB' as const:'ATP' as const]};
+  const config={...defaultLiveTennisConfig(),evidenceGate:undefined,maker:undefined,explore:undefined,entryBudget:10,focusSlug:SLUG,leagues:[football?'CFB' as const:'ATP' as const]};
   let session=createTennisSession(config,NOW-60001);session.id='synthetic-local-account';
   session=applyTennisAction(session,{action:'start',commandId:'synthetic-start'},[],NOW-60001);
   for(const [offset,bid] of trajectory){const quote=input(NOW+offset*1000,bid,side,football);session=stepTennisSession(session,[quote],quote.receivedAt);if(session.pending)return {session,quote};}

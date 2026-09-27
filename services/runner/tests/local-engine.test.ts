@@ -31,7 +31,7 @@ function diskStorage(db:DatabaseSync):RunnerStorage{
 
 test('native SQLite runner restores a pending local entry, holds beyond fixed target, trails out, and exactly replays all cash and fees',async(t)=>{
   t.mock.method(globalThis,'fetch',async()=>{assert.fail('Native local decision execution must not invoke a network or model service.');});
-  const source=createTennisSession({...defaultLiveTennisConfig(),evidenceGate:undefined,maker:undefined,entryBudget:10,focusSlug:'synthetic-tennis',leagues:['ATP']},NOW);
+  const source=createTennisSession({...defaultLiveTennisConfig(),evidenceGate:undefined,maker:undefined,explore:undefined,entryBudget:10,focusSlug:'synthetic-tennis',leagues:['ATP']},NOW);
   source.id='synthetic-native-local-account';source.status='paused';
   const fixture=await active(source);let db=fixture.db,store=new RunnerStore(fixture.storage,VERSION);
   const directory=mkdtempSync(join(tmpdir(),'dugout-native-local-')),databasePath=join(directory,'runner.sqlite');

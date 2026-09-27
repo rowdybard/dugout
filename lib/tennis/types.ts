@@ -8,6 +8,7 @@ import type {MakerState} from './maker';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
+export type ExplorableStrategy='comeback-drive';
 export type FootballContext={
   possessionTeam:string|null;down:number|null;yardsToGo:number|null;
   possessionTeamId?:string|null;
@@ -39,6 +40,11 @@ export type TennisMarket={
   live:boolean;ended:boolean;score:string|null;period:string|null;tournament:string|null;clock?:string|null;
   football?:FootballContext|null;
   footballIdentity?:{yesTeamId:string;noTeamId:string};
+  /**
+   * Team sports: whether YES is the away or home team. Scores read "away-home" (verified Sep 27, 2026 on
+   * finished CFB and NFL games), so this maps the score string to the YES and NO sides.
+   */
+  yesOrdering?:'away'|'home'|null;
   active:boolean;bid:number|null;ask:number|null;price:number|null;
   observedAt:number;contextUpdatedAt:number|null;history:TennisPricePoint[];
   quoteObservedAt?:number;quoteSource?:'CATALOG'|'REST'|'WEBSOCKET'|'REPLAY';
@@ -56,6 +62,11 @@ export type TennisConfig={
   evidenceGate?:'evidence-v1';
   /** Pinned evidence-pack version for the gate and planner. Absent means the bundled pack. */
   evidencePack?:string;
+  /**
+   * Pre-registered strategies the engine may trade on paper before the research has measured them
+   * (verdict EXPLORE_PAPER). Absent means none.
+   */
+  explore?:ExplorableStrategy[];
   /** Paper market making where the evidence permits resting orders (lib/tennis/maker.ts). Absent means off. */
   maker?:'paper-v1';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
@@ -81,8 +92,9 @@ export type TennisPosition={
   /**
    * hold-to-settlement: engine-planned; only settlement, Stop or the account loss limit closes it.
    * maker: inventory from resting-quote fills; settles, or is sold on Stop or the loss limit.
+   * drive: engine-planned football trade; sold when the drive ends, at its stop or time limit (plan.drive).
    */
-  exitPolicy?:'hold-to-settlement'|'maker';plan?:PlanEntry;
+  exitPolicy?:'hold-to-settlement'|'maker'|'drive';plan?:PlanEntry;
 };
 export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
 export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
@@ -99,6 +111,8 @@ export type TennisSession={
   enginePlan?:CompactPlan;
   /** Paper market-making quotes and pull state. Inventory lives in positions with exitPolicy 'maker'. */
   maker?:MakerState;
+  /** The football drive each market last entered, so one drive is traded once. Cleared when the drive ends. */
+  drives?:Record<string,{possessionTeamId:string;score:string;period:string}>;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;

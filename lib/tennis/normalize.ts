@@ -20,6 +20,11 @@ const decimal=(value:number)=>{const scaled=value*1e6,rounded=Math.round(scaled)
 const isFootball=(league:TennisLeague)=>league==='NFL'||league==='CFB';
 const winnerType=(league:TennisLeague)=>isFootball(league)?'football_team_full_game_winner':league==='MLB'?'baseball_team_full_game_winner':'tennis_match_winner';
 
+/** YES is away or home only when the two sides say so consistently. */
+function orderingOf(yes:unknown,no:unknown):'away'|'home'|null{
+  return yes==='away'&&no==='home'?'away':yes==='home'&&no==='away'?'home':null;
+}
+
 /** Drive IDs identify possession and field territory separately; never infer from title order. */
 function footballContext(raw:unknown,sides:Raw[]):FootballContext|null{
   const state=object(raw),drive=object(state.driveState);
@@ -101,6 +106,7 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
       yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
       ...(football?{clock:string(state.elapsed)||null,football:footballContext(state.footballState,sides),footballIdentity:{yesTeamId:String(object(yes[0].team).id),noTeamId:String(object(no[0].team).id)}}:{}),
+      ...(team?{yesOrdering:orderingOf(object(yes[0].team).ordering,object(no[0].team).ordering)}:{}),
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
       observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});
   }

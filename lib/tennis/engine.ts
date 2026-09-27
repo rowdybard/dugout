@@ -136,13 +136,13 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
  * execution checks. Unlike scalps, a hold-to-settlement entry needs no immediate resale, so there is no exit-depth
  * or round-trip-cost check, and pregame entries need no in-game context.
  */
-function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number, phase: Phase) {
+function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number, phase: Phase, exit: PlanEntry['exit'] = 'hold-to-settlement') {
   const issue = dataIssue(session, input, now);
   if (issue) return { code: 'DATA', reason: issue };
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This league is not selected for the bot.' };
   if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return { code: 'FOCUS', reason: 'New entries are restricted to the focused game.' };
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
-  if (phase === 'live' && session.config.decisionPolicy === 'football-context-v1' && isFootballMarket(input.market)) {
+  if (phase === 'live' && (session.config.decisionPolicy === 'football-context-v1' || exit === 'drive') && isFootballMarket(input.market)) {
     const context = session.footballReports?.[input.market.slug]?.assessment;
     if (context?.status !== 'fresh') return { code: `CONTEXT_${(context?.status ?? 'unknown').toUpperCase()}`, reason: context?.reason ?? 'Waiting for verified football context.' };
   }
@@ -153,7 +153,52 @@ function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeS
   if (holding(session)) return { code: 'POSITION', reason: 'One open position at a time. Close it before another entry.' };
   const buy = simulate(session, input, { ...freshCommand(session, input, side, 'BUY', now, quote.ask), budget }, now);
   if (buy.status !== 'filled' || !buy.apply) return { code: 'ENTRY_DEPTH', reason: `The full entry cannot execute at the quoted buying price. ${buy.reason}` };
+  if (exit === 'drive') {
+    // A drive trade is sold within minutes, so buyers for the whole position must exist now.
+    const sell = executePaperCommand({ ...freshCommand(session, input, side, 'SELL', now, quote.bid), quantity: buy.filledQty },
+      { cash: exact(session.cash + buy.cashDelta), marketExposure: -buy.cashDelta, totalExposure: -buy.cashDelta, availableQuantity: buy.filledQty },
+      input.market.execution!, input.book, policy(session, input, now));
+    if (sell.status !== 'filled') return { code: 'EXIT_DEPTH', reason: 'Not enough buyers to sell the whole position at the current bid.' };
+  }
   return null;
+}
+
+/** How long a drive trade may go without any game report before it is sold rather than held blind. */
+const DRIVE_FEED_TIMEOUT_MS = 120_000;
+
+/** Why a drive trade should close now, or null while the drive lasts. */
+function driveExit(session: TennisSession, position: TennisPosition, now: number, availableReturn: number | null): { code: string; reason: string } | null {
+  const rule = position.plan?.drive, entry = position.entryContext;
+  if (!rule || !entry) return { code: 'DRIVE_UNKNOWN', reason: 'This drive trade has no entry report. Selling.' };
+  const state = session.footballReports?.[position.slug];
+  const report = state?.report && state.report.reportTime >= entry.reportTime ? state.report : undefined;
+  const transition = state?.transition && state.transition.reportTime >= entry.reportTime ? state.transition : undefined;
+  const latest = transition && (!report || transition.reportTime >= report.reportTime) ? transition : report;
+  if (latest && latest.score !== entry.score) return { code: 'DRIVE_SCORE', reason: `Score changed from ${entry.score} to ${latest.score}. Drive over.` };
+  if (report && report.possessionTeamId !== entry.possessionTeamId) return { code: 'DRIVE_POSSESSION', reason: 'The other team has the ball. Drive over.' };
+  if (latest && latest.period !== entry.period && (entry.period === 'Q2' || entry.period === 'Q4')) return { code: 'DRIVE_HALF', reason: `${entry.period === 'Q2' ? 'The half' : 'Regulation'} ended. Drive over.` };
+  if (availableReturn !== null && availableReturn <= -rule.stopReturn + EPSILON) return { code: 'DRIVE_STOP', reason: `Down ${Math.round(rule.stopReturn * 100)}% after costs. Stop reached.` };
+  if (now - position.openedAt >= rule.maxHoldMs) return { code: 'DRIVE_TIME', reason: `Held ${Math.round(rule.maxHoldMs / 60_000)} minutes, this rule's limit.` };
+  if (now - Math.max(entry.reportTime, latest?.reportTime ?? 0) > DRIVE_FEED_TIMEOUT_MS) return { code: 'DRIVE_FEED_LOST', reason: 'No game report for 2 minutes. Selling rather than holding blind.' };
+  return null;
+}
+
+/**
+ * At a drive trade's planned exit: does the evidence support holding this side to the final instead? Only a
+ * measured result counts (lead or proven, never an explored idea). Today no live hold is supported, so it sells.
+ */
+function holdAfterDrive(session: TennisSession, position: TennisPosition, input: TennisInput, now: number) {
+  const resolved = sessionEngine(session), phase = marketPhase(input, now);
+  if ('error' in resolved || phase !== 'live') return undefined;
+  const side = position.side === 'YES' ? 'yes' : 'no';
+  return resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode }).considered.find(trade => trade.proposal.side === side
+    && trade.proposal.style === 'taker-hold' && trade.proposal.exit.kind === 'hold-to-settlement' && trade.verdict.permitted && trade.verdict.code !== 'EXPLORE_PAPER');
+}
+
+/** The fresh verified football report for a market, if any. */
+function freshFootball(session: TennisSession, slug: string) {
+  const state = session.footballReports?.[slug];
+  return state?.assessment.status === 'fresh' ? state.report : undefined;
 }
 
 /** Re-check an engine-planned entry on the later book: same phase, the bot's checks, and the evidence again. */
@@ -161,10 +206,18 @@ function enginePendingIssue(session: TennisSession, input: TennisInput, intent: 
   const plan = intent.plan!;
   const phase = marketPhase(input, now);
   if (phase !== plan.phase) return { code: 'PHASE_CHANGED', reason: `The game is no longer ${plan.phase}; the planned entry no longer matches its evidence.` };
-  const issue = planEntryIssue(session, input, intent.side, intent.budget ?? 0, now, phase);
+  const issue = planEntryIssue(session, input, intent.side, intent.budget ?? 0, now, phase, plan.exit);
   if (issue) return issue;
   const resolved = sessionEngine(session);
   if ('error' in resolved) return { code: 'EVIDENCE_PACK_UNAVAILABLE', reason: resolved.error };
+  if (plan.exit === 'drive') {
+    // The setup is game state, not only a price: the strategy must still propose it, and the gate permit it.
+    const again = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now), strategies: [plan.strategy], explore: session.config.explore });
+    const side = intent.side === 'YES' ? 'yes' : 'no';
+    if (again.actions.some(action => action.proposal.side === side && action.proposal.exit.kind === 'drive')) return null;
+    const refused = again.considered.find(trade => trade.proposal.side === side);
+    return refused ? { code: refused.blocked ?? 'SETUP_GONE', reason: `Decision engine recheck: ${refused.reason}` } : { code: 'SETUP_GONE', reason: 'The drive setup no longer holds on the later report.' };
+  }
   const ask = quotes(input, intent.side).ask!;
   const verdict = resolved.engine.gate(decisionContext(session, input, now, phase), { strategy: plan.strategy, strategyVersion: plan.strategyVersion,
     side: intent.side === 'YES' ? 'yes' : 'no', style: plan.style, price: ask, exit: { kind: 'hold-to-settlement' }, rationale: 'Later-book recheck.' }, session.mode);
@@ -183,20 +236,34 @@ function stageEnginePlan(session: TennisSession, current: TennisInput[], now: nu
     if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
     if ('error' in resolved) { record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); cancelMakerQuotes(session, resolved.error, now); continue; }
     const phase = marketPhase(input, now);
-    const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now) });
+    const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now), explore: session.config.explore });
     session.enginePlan = compactPlan(plan);
-    const action = makerPositions(session).length ? undefined : plan.actions.find(item => item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement');
+    const action = makerPositions(session).length ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
+      || (item.proposal.style === 'taker-scalp' && item.proposal.exit.kind === 'drive'));
     if (!action || !phase) {
       if (session.config.maker === 'paper-v1' && session.config.focusSlug === input.market.slug) updateMakerQuotes(session, input, plan, phase, now);
       continue;
     }
-    const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO';
-    const issue = planEntryIssue(session, input, side, action.stake, now, phase);
+    const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO', exit = action.proposal.exit;
+    const report = exit.kind === 'drive' ? freshFootball(session, input.market.slug) : undefined;
+    if (exit.kind === 'drive') {
+      const traded = session.drives?.[input.market.slug];
+      if (!report) { record(session, now, input.market.slug, side, 'SKIP', 'CONTEXT_UNKNOWN', 'Engine plan not executable: the drive needs a fresh verified game report.', input); continue; }
+      if (traded && traded.possessionTeamId === report.possessionTeamId && traded.score === report.score) {
+        record(session, now, input.market.slug, side, 'WAIT', 'DRIVE_TRADED', 'This drive was already traded once. Waiting for the next one.', input); continue;
+      }
+    }
+    const issue = planEntryIssue(session, input, side, action.stake, now, phase, exit.kind === 'drive' ? 'drive' : 'hold-to-settlement');
     if (issue) { record(session, now, input.market.slug, side, 'SKIP', issue.code, `Engine plan not executable: ${issue.reason}`, input); continue; }
-    const entry: PlanEntry = { strategy: action.proposal.strategy, strategyVersion: action.proposal.strategyVersion, style: action.proposal.style, phase, exit: 'hold-to-settlement',
+    const entry: PlanEntry = { strategy: action.proposal.strategy, strategyVersion: action.proposal.strategyVersion, style: action.proposal.style, phase,
+      exit: exit.kind === 'drive' ? 'drive' : 'hold-to-settlement', ...(exit.kind === 'drive' ? { drive: { stopReturn: exit.stopReturn, maxHoldMs: exit.maxHoldMs } } : {}),
       code: action.verdict.code, evidence: action.verdict.deciding?.id ?? null, pack: action.verdict.pack, stake: action.stake, reason: action.verdict.reason };
     stage(session, input, side, 'BUY', now, 'AUTOMATIC', `Decision engine: ${action.proposal.rationale} ${action.verdict.reason}`, action.stake);
-    if (session.pending?.action === 'BUY') { session.pending.plan = entry; cancelMakerQuotes(session, 'A planned entry takes the account slot.', now); }
+    if (session.pending?.action === 'BUY') {
+      session.pending.plan = entry;
+      if (report) session.pending.contextSnapshot = structuredClone(report);
+      cancelMakerQuotes(session, 'A planned entry takes the account slot.', now);
+    }
     return;
   }
 }
@@ -467,6 +534,10 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
       if(intent.plan){
         const opened=session.positions.at(-1)!;
         opened.exitPolicy=intent.plan.exit;opened.plan=structuredClone(intent.plan);
+        if(intent.plan.exit==='drive'&&intent.contextSnapshot){
+          const report=intent.contextSnapshot;
+          (session.drives??={})[intent.slug]={possessionTeamId:report.possessionTeamId,score:report.score,period:report.period};
+        }
       }
       if(intent.analysis?.entry){
         const opened=session.positions.at(-1)!,entry=intent.analysis.entry,cfg=intent.signalConfig??session.config;
@@ -512,7 +583,7 @@ function processPending(session: TennisSession, inputs: TennisInput[], now: numb
     record(session, now, intent.slug, intent.side, 'SKIP', 'RETIRED_ENTRY', 'An earlier user-placed entry was canceled. Only the bot can open a position.');
     return false;
   }
-  if(intent.action==='BUY'&&intent.plan?.phase!=='pregame'&&session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(intent.market)){
+  if(intent.action==='BUY'&&intent.plan?.phase!=='pregame'&&(session.config.decisionPolicy==='football-context-v1'||intent.plan?.exit==='drive')&&isFootballMarket(intent.market)){
     const state=session.footballReports?.[intent.slug];
     const boundary=!!intent.contextSnapshot&&!!state?.report&&footballBoundaryChanged(intent.contextSnapshot,state.report);
     if(!intent.contextSnapshot||state?.assessment.status!=='fresh'||boundary){
@@ -814,6 +885,10 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if(!isFootballMarket(input.market)||input.source==='REPLAY')continue;
     const prior=session.footballReports[input.market.slug],next=assessFootballContext(input.market,now,prior);
     session.footballReports[input.market.slug]=next;
+    // A traded drive is over once possession or the score changes; the next drive may be traded.
+    const traded=session.drives?.[input.market.slug];
+    if(traded&&((next.report&&(next.report.possessionTeamId!==traded.possessionTeamId||next.report.score!==traded.score))||(next.transition&&next.transition.score!==traded.score)))
+      delete session.drives![input.market.slug];
     if(session.config.decisionPolicy==='football-context-v1'&&prior?.report&&next.report&&footballBoundaryChanged(prior.report,next.report))
       resetFootballSetup(session,input.market.slug,'Score, possession or quarter changed. Confirming a new setup.');
   }
@@ -869,7 +944,20 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (!session.pending && input && !dataIssue(session, input, now) && input.receivedAt > (session.consumedBooks[position.slug] ?? -1)) {
       const availableReturn = position.netLiquidationValue !== null && position.liquidationQuantity > 0
         ? position.netLiquidationValue / (position.costBasis * position.liquidationQuantity / position.quantity) - 1 : null;
-      if(position.exitPolicy==='hold-to-settlement'){
+      if(position.exitPolicy==='drive'){
+        const forced=session.exitRequested?.positionId===position.id?session.exitRequested.reason:session.status==='stopping'?'Session stopped: attempting to close remaining paper quantity.':null;
+        const planned=forced?null:driveExit(session,position,now,availableReturn);
+        const hold=planned?holdAfterDrive(session,position,input,now):undefined;
+        if(hold){
+          const kept={...position.plan!};delete kept.drive;
+          position.exitPolicy='hold-to-settlement';
+          position.plan={...kept,strategy:hold.proposal.strategy,strategyVersion:hold.proposal.strategyVersion,style:'taker-hold',exit:'hold-to-settlement',
+            code:hold.verdict.code,evidence:hold.verdict.deciding?.id??null,pack:hold.verdict.pack,reason:hold.verdict.reason};
+          record(session,now,position.slug,position.side,'WAIT','DRIVE_END_HOLD',`${planned!.reason} The evidence supports holding to the final: ${hold.verdict.reason}`,input,{netReturn:availableReturn??undefined});
+        }else if(forced||planned)stage(session,input,position.side,'SELL',now,session.exitRequested?.source??'AUTOMATIC',forced??planned!.reason);
+        else if(!processed)record(session,now,position.slug,position.side,'WAIT','DRIVE_HOLD',
+          'Holding while the drive lasts. Sells on a score, a change of possession, the end of the half, the stop or the time limit.',input,{netReturn:availableReturn??undefined});
+      }else if(position.exitPolicy==='hold-to-settlement'){
         // Planned to the final result: no profit target, stop or time limit. Stop and the account loss limit still close it.
         const reason=session.exitRequested?.positionId===position.id?session.exitRequested.reason:session.status==='stopping'?'Session stopped: attempting to close remaining paper quantity.':null;
         if(reason)stage(session,input,position.side,'SELL',now,session.exitRequested?.source??'AUTOMATIC',reason);
