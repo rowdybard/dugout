@@ -10,8 +10,11 @@ each live game is forward-filled onto a 15 s grid, per side (home, and away as t
   dip          : same drop, no recovery confirmation
   momentum     : rise of >= 2 sigma (buy strength)
   random       : control, one random tradable point per side every ~5 min
-Entry = ask one grid step (15 s) after the signal ("lag") or at the signal step ("nolag", optimistic).
-Exit = bid after 1/2/5/10 minutes. Returns include taker fees both ways (lib/trading/money.ts formula).
+Entry = ask one grid step (15 s) after the signal ("lag") or at the signal step ("nolag", optimistic);
+the entry step must itself be executable (spread <= 2c).
+Exit = bid at the first executable quote (spread <= 5c) at least 1/2/5/10 minutes later; if the book never
+becomes executable again the position is held to settlement. Returns include taker fees on every fill
+(lib/trading/money.ts formula; no exit fee at settlement). "beforeFees" still pays the spread.
 A 2-minute per-side cooldown prevents overlapping trades. CIs resample whole games.
 Writes research/studies/results/drop-reversion-<sport>.json.
 """
@@ -23,7 +26,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from common import RESULTS, fmt, load, mean_ci, round_trip_return
+from common import EXECUTABLE_SPREAD, RESULTS, fee, fmt, load, mean_ci
 
 STEP = 15  # seconds
 LOOKBACK = 12  # steps = 3 min
@@ -79,34 +82,44 @@ def cooldown(mask: np.ndarray) -> np.ndarray:
 
 def analyze(sport: str) -> dict:
     df = load(sport)
+    df = df[df.home_win.isin([0.0, 1.0])]
     rng = np.random.default_rng(11)
     trades = []
     for gid, game in df.groupby("game_id", sort=False):
         coef = float(game.fee_coefficient.dropna().iloc[0]) if game.fee_coefficient.notna().any() else 0.0695
+        home_win = float(game.home_win.iloc[0])
         g = grid(game)
         if g.empty:
             continue
         for s in side_frames(g):
             sig = signals(s, rng)
+            won = home_win if s.side.iloc[0] == "home" else 1 - home_win
             ask, bid, n = s.ask.values, s.bid.values, len(s)
+            ok_exit = np.flatnonzero(s.spread.values <= EXECUTABLE_SPREAD + 1e-9)
             for name, mask in sig.items():
                 for i in np.flatnonzero(mask):
                     for lag_name, lag in (("lag", 1), ("nolag", 0)):
                         e = i + lag
+                        if e >= n or s.spread.values[e] > 0.02 + 1e-9:
+                            continue
                         for h_name, h in HORIZONS.items():
-                            x = e + h
-                            if x >= n:
+                            if e + h >= n:
                                 continue
-                            trades.append((gid, s.side.iloc[0], name, lag_name, h_name, ask[e], bid[x], coef,
-                                           bid[x] - ask[e]))
-    t = pd.DataFrame(trades, columns=["game_id", "side", "signal", "latency", "horizon", "entry_ask", "exit_bid", "coef", "gross"])
-    t["net"] = round_trip_return(t.entry_ask, t.exit_bid, t.coef)
-    t["gross_ret"] = t.gross / t.entry_ask
+                            j = np.searchsorted(ok_exit, e + h)
+                            settled = j >= len(ok_exit)
+                            exit_px = won if settled else bid[ok_exit[j]]
+                            trades.append((gid, s.side.iloc[0], name, lag_name, h_name, ask[e], exit_px, settled, coef))
+    t = pd.DataFrame(trades, columns=["game_id", "side", "signal", "latency", "horizon", "entry_ask", "exit_px", "settled", "coef"])
+    cost = t.entry_ask + fee(t.entry_ask, t.coef)
+    proceeds = t.exit_px - np.where(t.settled, 0.0, fee(t.exit_px, t.coef))
+    t["net"] = (proceeds - cost) / cost
+    t["gross_ret"] = (t.exit_px - t.entry_ask) / t.entry_ask
     res = {"sport": sport, "games": int(df.game_id.nunique()), "trades": len(t), "results": {}}
     for (sig, lat, hor), part in t.groupby(["signal", "latency", "horizon"]):
         res["results"][f"{sig}|{lat}|{hor}"] = {"net": mean_ci(part.net, part.game_id.values),
-                                                "grossNoCosts": mean_ci(part.gross_ret, part.game_id.values),
-                                                "winRate": float((part.net > 0).mean()), "avgEntry": float(part.entry_ask.mean())}
+                                                "beforeFees": mean_ci(part.gross_ret, part.game_id.values),
+                                                "winRate": float((part.net > 0).mean()), "avgEntry": float(part.entry_ask.mean()),
+                                                "settledShare": float(part.settled.mean())}
     return res
 
 
@@ -119,7 +132,7 @@ def main() -> None:
         for key, v in sorted(res["results"].items()):
             sig, lat, hor = key.split("|")
             if lat == "lag":
-                print(f"  {sig:13s} {hor:>3s} net {fmt(v['net'])} | before costs {fmt(v['grossNoCosts'])} | win {v['winRate']:.2f}")
+                print(f"  {sig:13s} {hor:>3s} net {fmt(v['net'])} | before fees {fmt(v['beforeFees'])} | win {v['winRate']:.2f}")
 
 
 if __name__ == "__main__":

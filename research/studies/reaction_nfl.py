@@ -46,6 +46,13 @@ def slope(x, y) -> float | None:
 
 def main() -> None:
     aligned = load("nfl")
+    # Timing needs dense prices: 2025 history is 1-minute sampled, 2026 is ~1-second. Keep only games
+    # whose live median observation gap is <= 5 s (override with --all to include everything).
+    if "--all" not in sys.argv:
+        live = aligned[aligned.phase == "live"]
+        dense = live.groupby("game_id").ts.apply(lambda s: s.diff().median()) <= 5
+        aligned = aligned[aligned.game_id.isin(dense[dense].index)]
+        print(f"dense-sampled games: {aligned.game_id.nunique()}", flush=True)
     seasons = sorted(aligned.season.unique())
     plays = []
     for season in seasons:
@@ -61,8 +68,9 @@ def main() -> None:
     for gid, g in plays.groupby("game_id"):
         m = aligned[aligned.game_id == gid]
         ts, mid = m.ts.values.astype(float), m.home_mid.values
-        snap = g.t.astype("int64").values / 1e9
-        nxt = g.next_t.astype("int64").values / 1e9
+        epoch = pd.Timestamp(0, tz="UTC")
+        snap = (g.t - epoch).dt.total_seconds().values
+        nxt = (g.next_t - epoch).dt.total_seconds().values
         rec = {"game_id": gid, "dwp": g.dwp.values, "play_type": g.play_type.values, "gap": nxt - snap}
         for name, off in OFFSETS.items():
             rec[name] = price_at(ts, mid, snap + off)

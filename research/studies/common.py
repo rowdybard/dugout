@@ -17,9 +17,15 @@ ALIGNED = DATA / "aligned"
 RESULTS = ROOT / "studies" / "results"
 
 
+# Empty books show placeholder quotes (ask 0.999 / bid 0.001, spread ~1.0), common in thin late-2025
+# markets. Rows wider than this are not executable prices and are excluded from price-based analysis.
+EXECUTABLE_SPREAD = 0.05
+
+
 def load(sport: str) -> pd.DataFrame:
     df = pd.read_parquet(ALIGNED / f"{sport}.parquet")
     df = df[(df.home_ask > 0) & (df.home_ask < 1) & (df.home_bid > 0) & (df.home_bid < 1) & (df.spread >= 0)]
+    df = df.assign(executable=df.spread <= EXECUTABLE_SPREAD + 1e-9)
     return df.sort_values(["game_id", "ts", "seq"]).reset_index(drop=True)
 
 

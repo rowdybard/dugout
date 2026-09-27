@@ -1,0 +1,107 @@
+{
+  "plays": 29666,
+  "games": 180,
+  "all": {
+    "+15s": {
+      "slopeVsModel": 0.09479825859187999,
+      "medianShareOfFinalMove": 0.0
+    },
+    "+30s": {
+      "slopeVsModel": 0.2398460600459647,
+      "medianShareOfFinalMove": 0.0
+    },
+    "+60s": {
+      "slopeVsModel": 0.5408479342138348,
+      "medianShareOfFinalMove": 0.7500000931323116
+    },
+    "+120s": {
+      "slopeVsModel": 0.6696061523985023,
+      "medianShareOfFinalMove": 1.0
+    },
+    "next_snap": {
+      "slopeVsModel": 0.48027885922137914,
+      "medianShareOfFinalMove": 0.27522964877273265
+    },
+    "next+60s": {
+      "slopeVsModel": 0.6811856106757821,
+      "medianShareOfFinalMove": 1.0
+    },
+    "n": 29666
+  },
+  "bigPlays": {
+    "+15s": {
+      "slopeVsModel": 0.09113668896132651,
+      "medianShareOfFinalMove": 0.0
+    },
+    "+30s": {
+      "slopeVsModel": 0.23404133015758763,
+      "medianShareOfFinalMove": 0.0
+    },
+    "+60s": {
+      "slopeVsModel": 0.5282761979997757,
+      "medianShareOfFinalMove": 0.9166667287548512
+    },
+    "+120s": {
+      "slopeVsModel": 0.6490928253383055,
+      "medianShareOfFinalMove": 1.0
+    },
+    "next_snap": {
+      "slopeVsModel": 0.4923809518776615,
+      "medianShareOfFinalMove": 0.7142857055969912
+    },
+    "next+60s": {
+      "slopeVsModel": 0.6642166685267891,
+      "medianShareOfFinalMove": 1.0
+    },
+    "n": 3181
+  },
+  "byPlayType": {
+    "field_goal": {
+      "n": 268,
+      "slopeAtNextSnap": 0.3854581373545329,
+      "slopeAt+60s": 0.3725581016665903
+    },
+    "kickoff": {
+      "n": 105,
+      "slopeAtNextSnap": 0.5634367723461604,
+      "slopeAt+60s": 0.5162473975577337
+    },
+    "no_play": {
+      "n": 430,
+      "slopeAtNextSnap": 0.2840485906486061,
+      "slopeAt+60s": 0.247313128527151
+    },
+    "pass": {
+      "n": 3838,
+      "slopeAtNextSnap": 0.5421965299978957,
+      "slopeAt+60s": 0.6088660194699121
+    },
+    "punt": {
+      "n": 365,
+      "slopeAtNextSnap": 0.3106660367778293,
+      "slopeAt+60s": 0.2545367106459267
+    },
+    "run": {
+      "n": 1618,
+      "slopeAtNextSnap": 0.4891768937254494,
+      "slopeAt+60s": 0.5686236974856091
+    }
+  },
+  "reversal": {
+    "next+60s": {
+      "n": 3181,
+      "meanFirstMove": 0.04621156856900152,
+      "meanFollowThrough": 0.018445772102525845
+    },
+    "next+180s": {
+      "n": 3181,
+      "meanFirstMove": 0.04621156856900152,
+      "meanFollowThrough": 0.015394216275531523
+    },
+    "next+300s": {
+      "n": 3181,
+      "meanFirstMove": 0.04621156856900152,
+      "meanFollowThrough": 0.01307151869155835
+    }
+  }
+}

@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models" / "nfl"))
 from common import DATA, update_manifest  # noqa: E402
 from features import FEATURES, PBP_COLUMNS, build  # noqa: E402
+from fetch_polymarket_us import is_full_game  # noqa: E402
 
 PM = DATA / "pmus"
 NFL = DATA / "nfl"
@@ -44,7 +45,7 @@ def home_prices(prices: pd.DataFrame, long_is_home: bool) -> pd.DataFrame:
 
 def main() -> None:
     catalog = pd.read_parquet(PM / "catalog.parquet")
-    markets = catalog[catalog.league == "nfl"].copy()
+    markets = catalog[(catalog.league == "nfl") & is_full_game(catalog)].copy()
     markets["away"] = markets.long_abbr.str.upper().replace(CODE)
     markets["home"] = markets.short_abbr.str.upper().replace(CODE)
     schedule = pd.read_parquet(NFL / "schedules" / "games.parquet")
@@ -77,9 +78,9 @@ def main() -> None:
             unmatched.append({"market": m.market_slug, "reason": "empty history"})
             continue
         px = home_prices(prices, long_is_home=False).sort_values(["ts", "seq"])
-        px["t"] = pd.to_datetime(px.ts, unit="s", utc=True)
+        px["t"] = pd.to_datetime(px.ts, unit="s", utc=True).astype("datetime64[ns, UTC]")
         if not plays.empty:
-            plays["t"] = pd.to_datetime(plays.time_of_day, utc=True, format="ISO8601")
+            plays["t"] = pd.to_datetime(plays.time_of_day, utc=True, format="ISO8601").astype("datetime64[ns, UTC]")
             plays = plays.sort_values("t")
             px = pd.merge_asof(px, plays.drop(columns=["game_id", "time_of_day"]).rename(columns={"t": "play_t"}),
                                left_on="t", right_on="play_t", direction="backward")

@@ -24,8 +24,9 @@ BANDS = [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]
 
 
 def checkpoints(df: pd.DataFrame) -> pd.DataFrame:
+    """Checkpoints use executable quotes only (spread <= EXECUTABLE_SPREAD); placeholders are skipped."""
     rows = []
-    for gid, g in df.groupby("game_id", sort=False):
+    for gid, g in df[df.executable].groupby("game_id", sort=False):
         pre = g[g.phase == "pregame"]
         if not pre.empty:
             rows.append(pre.iloc[-1].to_dict() | {"checkpoint": "pregame_close"})
