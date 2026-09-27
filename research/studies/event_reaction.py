@@ -4,6 +4,7 @@ an overreaction to surprise from a plain live favourite-longshot effect.
 
 Usage (on the PC, research venv active):
   python research/studies/event_reaction.py nfl [--all]              # NFL history: aligned prices + nflverse snaps
+  python research/studies/event_reaction.py cfb [--all]              # college history: aligned prices + ESPN plays
   python research/studies/event_reaction.py live --league cfb [--dest D:/lake]
                                                                      # books the runner recorded, with the feed's score
 Writes research/studies/results/event-reaction-<source>.json with the evidence row (if any) to add to a pack
@@ -214,10 +215,10 @@ def summarize(trades: pd.DataFrame, paths: pd.DataFrame, league: str, source: st
 
 # ---- Sources --------------------------------------------------------------------------------------------------
 
-def nfl_history(dense_only: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Aligned NFL prices (align_nfl.py; the away team is YES) and scoring plays from nflverse pre-snap scores."""
+def nfl_history(dense_only: bool = True, league: str = "nfl") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Aligned prices (align_nfl.py or align_cfb.py; the away team is YES here) and scoring plays from pre-snap scores."""
     from common import load
-    df = load("nfl")
+    df = load(league)
     df = df[df.phase == "live"]
     if dense_only:
         gaps = df.groupby("game_id").ts.apply(lambda s: s.diff().median())
@@ -259,20 +260,20 @@ def live_source(league: str, dest: str | None) -> tuple[pd.DataFrame, pd.DataFra
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("source", choices=["nfl", "live"])
+    parser.add_argument("source", choices=["nfl", "cfb", "live"], help="nfl or cfb: history with play-by-play; live: the runner's recordings")
     parser.add_argument("--league", choices=["nfl", "cfb"], default="cfb", help="live source only")
     parser.add_argument("--dest", help="lake folder instead of R2 (live source)")
     parser.add_argument("--all", action="store_true", help="NFL history: include sparsely sampled games (timing is then unreliable)")
     args = parser.parse_args()
-    league = "nfl" if args.source == "nfl" else args.league
-    books, scores = nfl_history(not args.all) if args.source == "nfl" else live_source(league, args.dest)
+    league = args.source if args.source != "live" else args.league
+    books, scores = nfl_history(not args.all, args.source) if args.source != "live" else live_source(league, args.dest)
     trades, paths = study(books, scores)
     sensitivity = {}
-    if args.source == "nfl":
+    if args.source != "live":
         for shift in (15, 30):
             shifted, _ = study(books, scores, shift_s=shift)
             sensitivity[f"+{shift}s report delay"] = interval(shifted[shifted.variant == "surprise-fade"])
-    name = "nfl" if args.source == "nfl" else f"live-{league}"
+    name = args.source if args.source != "live" else f"live-{league}"
     summary = summarize(trades, paths, league, name, sensitivity)
     RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"event-reaction-{name}.json"

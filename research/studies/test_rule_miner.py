@@ -66,12 +66,33 @@ def test_rows_use_the_bots_feature_definitions() -> None:
 def test_bands_match_the_engine_conditions() -> None:
     values = np.array([-30.0, -29.999, 0.0, 0.001, np.nan])
     assert list(rm.band_mask(values, -30, 0)) == [False, True, True, False, False], "lo < x <= hi"
-    assert rm.conditions_json([("minutesToStart", "0-30 min in", -30, 0), ("venue", "home", None, None), ("pregamePrice", "pregame >80c", 0.8, None)]) == [
+    assert rm.conditions_json([("minutesToStart", "0-30 min in", -30, 0), ("venue", "home", "eq", "home"), ("pregamePrice", "pregame >80c", 0.8, None)]) == [
         {"feature": "minutesToStart", "op": "gt", "value": -30}, {"feature": "minutesToStart", "op": "lte", "value": 0},
         {"feature": "venue", "op": "eq", "value": "home"}, {"feature": "pregamePrice", "op": "gt", "value": 0.8}]
     assert len(rm.price_ranges()) == 1 + 10 + 9 + 8
     live = rm.conditions_of("live")
     assert [] in live and len(live) == 1 + 19 + 141
+
+
+def test_game_state_rows_and_rules() -> None:
+    g = game(0, fav_yes=True, yes_ordering="away", yes_won=1.0)
+    # Plays: at kickoff 0-0 with the away team (YES) receiving; 10 minutes in the home team scores and has the ball.
+    g.state = pd.DataFrame({"t": [g.start + 100, g.start + 590, g.start + 1500], "period": [1, 1, 2], "away_now": [0.0, 0.0, 0.0],
+                            "home_now": [0.0, 7.0, 7.0], "poss": ["away", "home", "home"]})
+    rows = rm.build_rows([g])
+    yes = rows[(rows.phase == "live") & (rows.side == "yes")].set_index("minutesToStart")
+    assert yes.loc[-2.0, "scoreDiff"] == 0 and yes.loc[-2.0, "hasBall"] is True and yes.loc[-2.0, "period"] == 1
+    assert yes.loc[-10.0, "scoreDiff"] == -7 and yes.loc[-10.0, "hasBall"] is False
+    # More than 45 s after the latest play the state is unknown, as the bot's report would be stale.
+    assert math.isnan(yes.loc[-12.0, "scoreDiff"]) and yes.loc[-12.0, "hasBall"] is None
+    assert rows[rows.phase == "pregame"].scoreDiff.isna().all()
+    live = rows[rows.phase == "live"].reset_index(drop=True)
+    has_ball = rm.rule_mask(live, None, [("hasBall", "has the ball", "eq", True)])
+    assert has_ball.sum() == 2 and set(live[has_ball].side) == {"yes", "no"}  # YES at 2 min, NO at 10 min
+    assert rm.rule_mask(live, None, [("period", "Q1", "eq", 1)]).sum() == 4
+    assert rm.conditions_json([("hasBall", "has the ball", "eq", True), ("scoreDiff", "down 1-7", -8, -1)]) == [
+        {"feature": "hasBall", "op": "eq", "value": True}, {"feature": "scoreDiff", "op": "gt", "value": -8}, {"feature": "scoreDiff", "op": "lte", "value": -1}]
+    assert len(rm.conditions_of("live", game_state=True)) == 1 + 32 + 438 and len(rm.conditions_of("pregame", game_state=True)) == len(rm.conditions_of("pregame"))
 
 
 def test_one_entry_per_game_first_moment_yes_first() -> None:

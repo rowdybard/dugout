@@ -4,6 +4,7 @@ current quoting rule (maker-quote@1) and against always-on quoting.
 
 Usage (on the PC, research venv active):
   python research/studies/maker_windows.py nfl [--all]               # NFL history: aligned prices + nflverse snaps
+  python research/studies/maker_windows.py cfb [--all]               # college history: aligned prices + ESPN plays
   python research/studies/maker_windows.py live --league cfb [--dest D:/lake]
                                                                      # books the runner recorded with the feed's state
 Writes research/studies/results/maker-windows-<source>.json with the evidence row (if any).
@@ -205,10 +206,11 @@ def windows_from_feed(t: np.ndarray, mid: np.ndarray, spread: np.ndarray, betwee
     return {"window": window, "maker-quote": base & ~pulled, "always": base, "between-snaps": np.zeros(len(t), bool)}
 
 
-def nfl_history(dense_only: bool = True) -> pd.DataFrame:
+def nfl_history(dense_only: bool = True, league: str = "nfl") -> pd.DataFrame:
+    """Aligned prices and snaps (align_nfl.py or align_cfb.py); the away team is YES here."""
     from common import load
     from event_reaction import scores_from_snaps
-    df = load("nfl")
+    df = load(league)
     df = df[df.phase == "live"]
     if dense_only:
         gaps = df.groupby("game_id").ts.apply(lambda s: s.diff().median())
@@ -245,15 +247,15 @@ def live_source(league: str, dest: str | None) -> pd.DataFrame:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("source", choices=["nfl", "live"])
+    parser.add_argument("source", choices=["nfl", "cfb", "live"], help="nfl or cfb: history with play-by-play; live: the runner's recordings")
     parser.add_argument("--league", choices=["nfl", "cfb"], default="cfb", help="live source only")
     parser.add_argument("--dest", help="lake folder instead of R2 (live source)")
     parser.add_argument("--all", action="store_true", help="NFL history: include sparsely sampled games")
     args = parser.parse_args()
-    league = "nfl" if args.source == "nfl" else args.league
-    books = nfl_history(not args.all) if args.source == "nfl" else live_source(league, args.dest)
+    league = args.source if args.source != "live" else args.league
+    books = nfl_history(not args.all, args.source) if args.source != "live" else live_source(league, args.dest)
     fills = study(books)
-    name = "nfl" if args.source == "nfl" else f"live-{league}"
+    name = args.source if args.source != "live" else f"live-{league}"
     summary = summarize(fills, books.groupby("game").t.min(), league, name)
     RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"maker-windows-{name}.json"

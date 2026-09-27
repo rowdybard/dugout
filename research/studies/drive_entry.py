@@ -5,6 +5,7 @@ measures them in shadow (never traded) until a row from this study names their v
 
 Usage (on the PC, research venv active):
   python research/studies/drive_entry.py nfl                       # NFL history: aligned prices + nflverse play-by-play
+  python research/studies/drive_entry.py cfb                       # college history: aligned prices + ESPN play-by-play (align_cfb.py)
   python research/studies/drive_entry.py live --league cfb [--dest D:/lake] [--clock countdown|elapsed]  (default countdown, verified Sep 27)
                                                                    # books the runner recorded with the feed's drive state
 Writes research/studies/results/drive-entry-<source>.json, including the evidence row to add to a pack
@@ -302,10 +303,10 @@ def hold_row(hold: dict, split: dict, gain: dict, league: str, path: str, sample
 
 # ---- Sources --------------------------------------------------------------------------------------------------
 
-def nfl_history() -> pd.DataFrame:
-    """research/data/aligned/nfl.parquet (align_nfl.py). NFL markets put the away team on YES (verified Sep 27, 2026)."""
+def nfl_history(league: str = "nfl") -> pd.DataFrame:
+    """research/data/aligned/<league>.parquet (align_nfl.py, align_cfb.py), in home terms; the away team is YES here."""
     from common import load
-    df = load("nfl")
+    df = load(league)
     df = df[df.phase == "live"].copy()
     poss = np.where(df.posteam == df.away_team, "yes", np.where(df.posteam == df.home_team, "no", ""))
     return pd.DataFrame({"game": df.game_id, "t": df.ts.astype(float), "yes_ask": 1 - df.home_bid, "yes_bid": 1 - df.home_ask,
@@ -381,15 +382,15 @@ def live_books(league: str, dest: str | None, clock: str | None) -> pd.DataFrame
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("source", choices=["nfl", "live"])
+    parser.add_argument("source", choices=["nfl", "cfb", "live"], help="nfl or cfb: history with play-by-play; live: the runner's recordings")
     parser.add_argument("--league", choices=["nfl", "cfb"], default="nfl", help="live source only")
     parser.add_argument("--dest", help="lake folder instead of R2 (live source)")
     parser.add_argument("--clock", choices=["countdown", "elapsed"], default="countdown", help="how the feed's football clock runs (live source; verified countdown on Sep 27, 2026)")
     args = parser.parse_args()
-    league = "nfl" if args.source == "nfl" else args.league
-    frame = nfl_history() if args.source == "nfl" else live_books(league, args.dest, args.clock)
+    league = args.source if args.source != "live" else args.league
+    frame = nfl_history(args.source) if args.source != "live" else live_books(league, args.dest, args.clock)
     trades = study(frame)
-    name = "nfl" if args.source == "nfl" else f"live-{league}"
+    name = args.source if args.source != "live" else f"live-{league}"
     summary = summarize(trades, league, name)
     RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"drive-entry-{name}.json"

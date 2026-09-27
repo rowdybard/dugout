@@ -51,6 +51,9 @@ __pycache__/
 # Strategy-lab data lake (large, re-fetchable) and local research secrets
 /research/data/
 /research/*.log
+# Dugout Lab's local progress and working evidence pack
+/research/lab/state.json
+/research/lab/pack.json
 .venv/
 
 # Forward-test ledgers live on the forward-test-data branch

@@ -175,7 +175,7 @@ node --experimental-strip-types scripts/scorecard.ts history.json [research/stud
 | Cross-venue prices (sportsbooks, Kalshi) | Cross-venue and stale-quote strategies | A licensed odds feed; not free |
 | Within-Polymarket consistency (moneyline vs spread vs total) | Arbitrage-style consistency checks | Record the related markets for the same game |
 | Calibrated live models with intervals | `model-edge-hold@2` | Fit `calibration-v1` tables from `calibration.py` output; they must beat the market on held-out games |
-| CFB play-by-play history | CFB history studies (only live recordings exist) | The runner's recordings accumulate; `live` sources in each study |
+| CFB play-by-play history | Closed Sep 27: `research/market-history/fetch_cfb_pbp.py` downloads every college game's plays from ESPN's public feed (wall-clock time, score, down, distance, field position, possession, ESPN win probability; no key) and `align_cfb.py` joins them to prices. Matching checked on 120 upcoming games: all 120 matched | — |
 
 ## 13. How an idea becomes a strategy
 
@@ -209,9 +209,13 @@ Since Sep 27 the dashboard shows college football only (`VISIBLE_LEAGUES` in `li
 - Results reach the Engine card's scorecard as forward-shadow rows: one weekend gives about as many measurements as months of one focused game.
 - The runner's lake recorder also stores those list quotes and game states (source `LIST`, top of book only) for the `live --league cfb` studies.
 
+**College play-by-play:** `fetch_cfb_pbp.py` and `align_cfb.py` produce `research/data/aligned/cfb.parquet` in the same layout as the NFL table, so `drive_entry.py cfb`, `event_reaction.py cfb` and `maker_windows.py cfb` run on college history. `rule_miner.py --game-state` is a separate, pre-registered run that adds score margin, quarter and possession, from a play at most 45 s old (the bot uses only a fresh report).
+
+**Dugout Lab** (`research/lab/lab.py`; on Windows double-click `research/lab/Start Dugout Lab.bat`): a local page at http://127.0.0.1:8765 with one button per step, in order: get the code, check the data, refresh college prices, download plays, line them up, the two rule finders, the three college studies, build the evidence pack, publish. It shows each result in plain words, remembers progress, runs one fixed command at a time and listens on the PC only.
+
 ## 15. What to test next
 
-In order:
+In order (each is one button in Dugout Lab):
 1. **On the PC, the rule miner:** `python research/studies/rule_miner.py`. Compare the survivor count with the calibrated-null count. If the real count is not clearly above it, there is nothing to trade. Add any rows with `scripts/evidence-pack.ts add pack.json research/studies/results/rule-miner-cfb.json <new-version>`, validate and publish; the bot paper-trades them on the next game.
 2. **On the PC, the NFL mechanism studies** (history already on disk):
    ```sh
