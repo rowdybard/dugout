@@ -6,6 +6,7 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 
 ## Start here
 
+- **[Strategy lab handoff](docs/STRATEGY-LAB-HANDOFF.md): read this first.** As of September 27, 2026, the project is rebuilding its strategy from historical data toward a real-money, context-driven decision engine. It holds the audit findings, decisions, data sources and the current checklist.
 - [Full bot and developer manual](docs/BOT-MANUAL.md): operation, actual rules, editing, troubleshooting, configuration and limitations.
 - [Chad's getting-started guide](chad.md): plain-English customer instructions and access status.
 - [Maintainer handoff](docs/MAINTAINER-HANDOFF.md): where things stand and what remains unverified.

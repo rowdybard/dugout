@@ -170,7 +170,7 @@ export class PolymarketInputAdapter implements InputAdapter {
     const latest=new Map<string,TennisMarket>();
     const results=await Promise.allSettled(markets.map(m=>{
       if(m.league==='NFL'||m.league==='CFB'){
-        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
+        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
         reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
       }
       let context:TennisMarket|undefined;

@@ -3,7 +3,7 @@ import {reduceRunnerAction} from '../../../lib/runner/reducer.ts';
 import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
 import {toUnits} from '../../../lib/trading/money.ts';
 import {RunnerError,sha256} from '../../../lib/runner/protocol.ts';
-import type {MigrationChunk,MigrationData,MigrationManifest,MigrationStart,ReplayFrame,RunnerMeta,RunnerState,SourceHealth,RunnerUsage,RunnerCause} from '../../../lib/runner/contracts';
+import type {MigrationChunk,MigrationData,MigrationManifest,MigrationStart,ReplayFrame,RunnerMeta,RunnerState,SourceHealth,RunnerUsage,RunnerCause,RunnerJournalRow,RunnerObservation} from '../../../lib/runner/contracts';
 
 export type SqlRow=Record<string,SqlStorageValue>;
 export interface RunnerSql {exec<T extends SqlRow=SqlRow>(sql:string,...bindings:(string|number|null)[]):{toArray():T[];rowsWritten?:number};}
@@ -14,6 +14,10 @@ const validHash=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s);
 const id=(s:unknown)=>typeof s==='string'&&/^[A-Za-z0-9_-]{8,160}$/.test(s);
 const ordered=(value:unknown):unknown=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,ordered(v)])):value;
 const equivalent=(a:unknown,b:unknown)=>JSON.stringify(ordered(a))===JSON.stringify(ordered(b));
+// Leave 10,000 rows of the Free plan's 100,000/day allowance for exits and overhead.
+// This is a per-runner estimate, not an account-wide Cloudflare quota meter.
+export const RUNNER_ENTRY_WRITE_LIMIT=90000;
+type AuditBundle={version:1;records:RunnerJournalRow[];observations:RunnerObservation[]};
 function assertCutover(session:TennisSession){
   if(!['idle','paused','stopped'].includes(session.status)||session.pending||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Migration requires inactive entries, no open position and no pending order.');
   const positions=new Set(session.positions.map(p=>p.id));
@@ -66,12 +70,18 @@ export class RunnerStore {
   }
   private rows<T extends SqlRow=SqlRow>(query:string,...bindings:(string|number|null)[]){return this.storage.sql.exec<T>(query,...bindings).toArray();}
   get<T>(key:string):T|null{const row=this.rows<{v:string}>('SELECT v FROM runner_meta WHERE k=?',key)[0];return row?parse<T>(row.v):null;}
-  set(key:string,value:unknown){this.storage.sql.exec('INSERT INTO runner_meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v',key,JSON.stringify(value));}
+  set(key:string,value:unknown){this.storage.sql.exec('INSERT INTO runner_meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v WHERE runner_meta.v<>excluded.v',key,JSON.stringify(value));}
   active(){return this.get<RunnerMeta>('active');}
   session(){return this.get<TennisSession>('session');}
   health():SourceHealth{return this.get<SourceHealth>('source')??{updatedAt:0,state:'stopped',message:'Runner has not started.'};}
-  usage(now=Date.now()):RunnerUsage{const day=new Date(now).toISOString().slice(0,10),stored=this.get<RunnerUsage>('usage');return stored?.day===day?stored:{day,estimatedRowsWritten:0,alarmChecks:0,entryPauseAt:75000};}
-  saveUsage(now=Date.now(),alarm=false){const usage=this.usage(now),pending=this.pendingWrites;this.pendingWrites=0;usage.estimatedRowsWritten+=pending+1;usage.alarmChecks+=Number(alarm);this.set('usage',usage);this.pendingWrites=0;return usage;}
+  usage(now=Date.now()):RunnerUsage{const day=new Date(now).toISOString().slice(0,10),stored=this.get<RunnerUsage>('usage');return {...(stored?.day===day?stored:{day,estimatedRowsWritten:0,alarmChecks:0}),entryPauseAt:RUNNER_ENTRY_WRITE_LIMIT};}
+  saveUsage(now=Date.now(),alarm=false){
+    const usage=this.usage(now),pending=this.pendingWrites;
+    if(!pending&&!alarm)return usage;
+    // An existing value updates one row; first insertion also creates its PK index row.
+    usage.estimatedRowsWritten+=pending+(this.get('usage')?1:2);usage.alarmChecks+=Number(alarm);
+    this.set('usage',usage);this.pendingWrites=0;return usage;
+  }
   accountAlarmWrite(){this.pendingWrites++;}
   state():RunnerState{
     const session=this.session(),meta=this.active();if(!session||!meta)throw new RunnerError(409,'Runner migration is not active.');
@@ -182,9 +192,10 @@ export class RunnerStore {
     return this.storage.transactionSync(()=>{
       const current=this.session(),identity=this.active();
       if(current?.id!==before.id||current.revision!==before.revision||identity?.epoch!==meta.epoch)throw new RunnerError(409,'Session changed while recording inputs.');
-      for(const r of inputRows)this.storage.sql.exec('INSERT OR IGNORE INTO runner_inputs(id,value) VALUES(?,?)',r.id,r.value);
-      const latest=inputs.toSorted((a,b)=>b.receivedAt-a.receivedAt)[0];if(latest)this.set('last-input',{receivedAt:latest.receivedAt,contextUpdatedAt:latest.market.contextUpdatedAt});
-      const record=(id:string,kind:string,value:unknown,time:number)=>this.storage.sql.exec('INSERT INTO runner_journal(id,kind,value,time,session_id) VALUES(?,?,?,?,?)',id,kind,JSON.stringify(value),time,next.id);
+      // One physical audit row per atomic reducer step, with every logical record
+      // and exact input retained. Avoid one indexed INSERT for each team/replay/input.
+      const bundle:AuditBundle={version:1,records:[],observations:inputRows.map(r=>({id:r.id,value:parse<TennisInput>(r.value)}))};
+      const record=(id:string,kind:string,value:unknown,time:number)=>bundle.records.push({id,kind,value,time});
       const evidence={runnerFrameId:meta.ownerId+':frame:'+next.id+':'+next.revision,runnerInputIds:frame.inputIds};
       const oldDecisions=new Set(before.decisions.map(d=>d.id)),oldLedger=new Set(before.ledger.map(e=>e.id));
       for(const d of next.decisions)if(!oldDecisions.has(d.id))record(meta.ownerId+':'+next.id+':'+d.id,'decision',{...d,...evidence},d.time);
@@ -194,6 +205,7 @@ export class RunnerStore {
       if(commandId)record(meta.ownerId+':runner-command:'+commandId,'control',{action,fingerprint,...(cause?{cause}:{})},now);
       if(next.id!==before.id)record(meta.ownerId+':runner-archive:'+before.id,'archive',before,now);
       if(next.id!==before.id||next.revision%100===0)record(meta.ownerId+':checkpoint:'+next.id+':'+next.revision,'checkpoint',next,now);
+      this.storage.sql.exec('INSERT INTO runner_journal(id,kind,value,time,session_id) VALUES(?,?,?,?,?)',meta.ownerId+':bundle:'+next.id+':'+next.revision,'audit-bundle-v1',JSON.stringify(bundle),now,next.id);
       this.set('session',next);const response=this.state();
       if(commandId)this.storage.sql.exec('INSERT INTO runner_commands(id,fingerprint,response) VALUES(?,?,?)',commandId,fingerprint,JSON.stringify(response));
       this.saveUsage(now,action.action==='tick');
@@ -209,12 +221,21 @@ export class RunnerStore {
       this.storage.sql.exec('DELETE FROM runner_exports WHERE captured<?',now-86400000);
     }
     const rows=this.rows<{seq:number,id:string,kind:string,value:string,time:number}>('SELECT seq,id,kind,value,time FROM runner_journal WHERE seq>? AND seq<=? ORDER BY seq LIMIT ?',after,snapshot.boundary,limit);
-    const records=rows.map(r=>({...r,value:parse<Record<string,unknown>>(r.value)})),ids=new Set<string>();
+    const inline=new Map<string,TennisInput>();
+    // Expand new physical bundles into the same logical export format. Legacy rows
+    // stay untouched. A page never splits a bundle, so its input evidence travels with it.
+    const records=rows.flatMap(r=>{
+      if(r.kind!=='audit-bundle-v1')return [{...r,value:parse<Record<string,unknown>>(r.value)}];
+      const bundle=parse<AuditBundle>(r.value);
+      if(bundle.version!==1)throw new RunnerError(500,'Unsupported runner audit bundle.');
+      for(const observation of bundle.observations)inline.set(observation.id,observation.value);
+      return bundle.records.map(record=>({...record,seq:r.seq,value:record.value as Record<string,unknown>}));
+    }),ids=new Set<string>();
     for(const r of records){if(r.kind==='replay'&&Array.isArray(r.value.inputIds))r.value.inputIds.forEach(i=>{if(typeof i==='string')ids.add(i);});
       for(const ref of observationRefs(r.kind,r.value))ids.add(ref);
     }
     const missingObservationIds:string[]=[];
-    const observations=[...ids].flatMap(id=>{const found=this.rows<{value:string}>('SELECT value FROM runner_inputs WHERE id=?',id)[0];if(!found)missingObservationIds.push(id);return found?[{id,value:parse<TennisInput>(found.value)}]:[];});
+    const observations=[...ids].flatMap(id=>{const bundled=inline.get(id);if(bundled)return [{id,value:bundled}];const found=this.rows<{value:string}>('SELECT value FROM runner_inputs WHERE id=?',id)[0];if(!found)missingObservationIds.push(id);return found?[{id,value:parse<TennisInput>(found.value)}]:[];});
     const nextCursor=rows.at(-1)?.seq??after;
     return {schemaVersion:3,exportId,capturedAt:snapshot.captured,session:parse<TennisSession>(snapshot.snapshot),records,observations,missingObservationIds,pageEvidenceComplete:missingObservationIds.length===0,exactReplayStartsAt:'migration-checkpoint',nextCursor,complete:nextCursor>=snapshot.boundary};
   }

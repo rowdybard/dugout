@@ -2,6 +2,7 @@
 
 ## Current operating guides
 
+- **[Strategy lab handoff](STRATEGY-LAB-HANDOFF.md): read this first.** It covers the real-money goal, audit findings, decisions, verified data sources and the live checklist.
 - [Project README](../README.md)
 - [Bot and developer manual](BOT-MANUAL.md)
 - [Architecture](ARCHITECTURE.md)

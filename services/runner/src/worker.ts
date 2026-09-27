@@ -69,7 +69,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
         this.store.set('source',{updatedAt:Date.now(),state:'waiting',message:'New entries paused at the runner write-budget estimate. Existing exits remain managed.'});
       }
       // Persist the next wakeup before external I/O. Recovery never depends on the browser.
-      await this.ctx.storage.setAlarm(Date.now()+10000);
+      await this.ctx.storage.setAlarm(Date.now()+2500);
       this.store.accountAlarmWrite();
       try{
         const current=this.store.session()!;

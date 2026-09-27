@@ -22,12 +22,15 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
   const forming=quoteAge!==null&&quoteAge<=session.config.maxBookAgeMs&&signal.some(value=>value&&
     value.lastObservedAt===quote?.time&&['DIP','RECOVERING','RISING'].includes(value.phase));
   const pausedFlat=session.status==='paused'&&!held&&!session.pending;
+  const usage=runtime?.mode==='service'?runtime.usage:undefined;
+  const budgetReached=!!usage&&usage.day===new Date(now).toISOString().slice(0,10)&&usage.estimatedRowsWritten>=usage.entryPauseAt;
   const state=runtime?.mode==='migrating'?'Setup paused':session.pending?.action==='SELL'||session.exitRequested||session.status==='stopping'?'Exiting':
     held?(session.status==='paused'?'Holding · entries paused':'Holding'):session.pending?.action==='BUY'?'Buying':
     pausedFlat?'Paused':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
     checkStale?'Waiting for a check':forming?'Setup forming':'Watching';
   const reason=runtime?.mode==='migrating'?'Entries are paused while the saved account moves to the background runner.':
-    pausedFlat?'Entries are paused. Chart prices can keep updating. Press Start to resume the saved bot focus.':
+    pausedFlat?(budgetReached?`Daily storage budget reached (${usage!.estimatedRowsWritten.toLocaleString()} / ${usage!.entryPauseAt.toLocaleString()} estimated rows). Entries remain paused; the daily allowance renews at 00:00 UTC. Resetting the paper balance will not clear it.`:
+      /paused/i.test(session.lastReason)?`${session.lastReason} Press Start when ready.`:`${session.lastReason} Entries are paused; press Start when ready.`):
     session.status==='idle'?(focus?'The paper bot has not started. Press Start to check the saved bot focus.':'Choose a bot focus, then press Start to begin paper checks.'):
     session.status==='stopped'?'This paper run is stopped. Its chart can still update; create a new run when ready.':
     checkStale?'The saved bot check is more than 20 seconds old or unavailable. Live chart updates do not confirm that the bot is checking.':

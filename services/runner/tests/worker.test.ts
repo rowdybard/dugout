@@ -30,7 +30,7 @@ test('Worker rejects unsigned controls before selecting any object',async()=>{
 test('signed resume arms recovery before provider I/O, then engine persists and next alarm remains scheduled',async(t)=>{
   const f=await setup();let now=NOW+2000;t.mock.method(Date,'now',()=>now);
   assert.equal((await request(f.instance,'/v1/command',{command:{action:'resume',commandId:'alarm-resume'}})).status,200);assert.equal(f.alarm(),now+2500);
-  now+=4000;let called=false;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic book'}),async gather(){assert.equal(f.alarm(),now+10000);called=true;return {inputs:[input(now)],failures:[]};}};
+  now+=4000;let called=false;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic book'}),async gather(){assert.equal(f.alarm(),now+2500);called=true;return {inputs:[input(now)],failures:[]};}};
   await f.instance.alarm();assert.equal(called,true);assert.equal(f.instance.store.session()?.lastTickAt,now);assert.ok(f.alarm()!==null);assert.ok(f.writes()>=2);assert.equal(f.instance.store.usage(now).alarmChecks,1);
 });
 test('provider failure keeps a recovery alarm and paused flat command removes alarms',async(t)=>{

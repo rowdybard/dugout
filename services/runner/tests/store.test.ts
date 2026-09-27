@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {RunnerStore} from '../src/store.ts';
+import {RunnerStore,RUNNER_ENTRY_WRITE_LIMIT} from '../src/store.ts';
 import {applyTennisAction,stepTennisSession} from '../../../lib/tennis/engine.ts';
 import {sha256} from '../../../lib/runner/protocol.ts';
 import {OWNER,EPOCH,NOW,sqlite,migration,active,input,snapshot} from './helpers.ts';
@@ -115,7 +115,7 @@ test('reset revisions stay monotonic, racing stale commands lose, and budget can
   assert.equal(result.filter(r=>r.status==='fulfilled').length,1);assert.notEqual(store.session()?.id,old.id);assert.equal(store.session()?.cash,90);
   assert.equal(store.session()?.revision,old.revision+1);
   await assert.rejects(()=>store.advance({action:'tick',sessionId:old.id},[],NOW+4,[],0),/changed/);
-  store.set('usage',{day:new Date(NOW).toISOString().slice(0,10),estimatedRowsWritten:75001,alarmChecks:1,entryPauseAt:75000});await assert.rejects(()=>store.advance({action:'resume',commandId:'over-budget'},[],NOW+5),/write-budget/);
+  store.set('usage',{day:new Date(NOW).toISOString().slice(0,10),estimatedRowsWritten:RUNNER_ENTRY_WRITE_LIMIT+1,alarmChecks:1,entryPauseAt:75000});await assert.rejects(()=>store.advance({action:'resume',commandId:'over-budget'},[],NOW+5),/write-budget/);
 });
 test('reset is accepted by revision-monotonic UI polling and delayed old account responses remain older',async()=>{
   const {store}=await active();await store.advance({action:'resume',commandId:'revision-resume'},[],NOW+2);await store.advance({action:'tick'},[],NOW+4000);await store.advance({action:'pause',commandId:'revision-pause'},[],NOW+5000);const previous=store.session()!;

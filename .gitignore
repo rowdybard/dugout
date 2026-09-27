@@ -48,3 +48,6 @@ next-env.d.ts
 /services/runner/build/
 /work/
 __pycache__/
+# Strategy-lab data lake (large, re-fetchable) and local research secrets
+/research/data/
+.venv/
