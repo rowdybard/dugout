@@ -75,8 +75,10 @@ export class RunnerStore {
   accountAlarmWrite(){this.pendingWrites++;}
   state():RunnerState{
     const session=this.session(),meta=this.active();if(!session||!meta)throw new RunnerError(409,'Runner migration is not active.');
-    const input=this.get<{receivedAt:number;contextUpdatedAt:number|null}>('last-input'),now=Date.now();
-    return {session,runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:input?Math.max(0,now-input.receivedAt):null,contextAgeMs:input?.contextUpdatedAt!=null?Math.max(0,now-input.contextUpdatedAt):null,source:this.health(),usage:this.usage(now),paperOnly:true}};
+    const now=Date.now(),slug=session.positions.find(p=>p.status==='open')?.slug??session.pending?.slug??session.config.focusSlug;
+    const quote=slug?session.quotes?.[slug]:undefined,report=slug?session.footballReports?.[slug]?.report:undefined;
+    const age=(time:number|undefined|null)=>typeof time==='number'&&Number.isFinite(time)&&time>=0&&time<=now?now-time:null;
+    return {session,runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
   }
   acceptNonce(nonce:string,now:number){
     this.storage.transactionSync(()=>{this.storage.sql.exec('DELETE FROM runner_nonces WHERE expires<?',now);

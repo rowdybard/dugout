@@ -23,6 +23,8 @@ Start/Resume explicitly saves the new policy for an older account before startin
 
 Selecting a game changes the chart. **Focus bot on this game** changes future entry eligibility. **Pause** prevents entries and continues exits; **Stop** requests an exit and waits for executable conditions. A simulated order is not guaranteed to fill. The full manual describes these distinctions.
 
+The bot focuses on the whole game, never a user-selected team. **Compare both teams** shows each side's latest saved decision. Chart-side selection affects viewing only. **Accepted bot quote**, **Bot game report**, and **Runner update** have separate clocks; chart refreshes and rejected book arrivals cannot make the bot's accepted book appear fresh.
+
 Football field reports and executable books have separate timestamps. A successful check can return an old play report. New football entries under the context policy need verified context within 45 seconds. Runner entries enforce a spread no wider than 2 cents and book age no older than 5 seconds. These are eligibility checks, not a profit guarantee.
 
 ## Local development

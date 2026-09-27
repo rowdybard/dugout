@@ -42,11 +42,9 @@ export function useTennis() {
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   const accept=useCallback((response:TennisSessionResponse)=>{
     if(!mounted.current)return;
-    setSession(current=>{
-      if(current&&current.revision>response.session.revision)return current;
-      sessionRef.current=response.session;
-      return response.session;
-    });
+    if(sessionRef.current&&sessionRef.current.revision>response.session.revision)return;
+    sessionRef.current=response.session;
+    setSession(response.session);
     setRuntime(response.runtime);
     setNow(Date.now());
     setConnectionIssue(null);

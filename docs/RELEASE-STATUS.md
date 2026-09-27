@@ -2,6 +2,14 @@
 
 Evidence date: September 26, 2026. This records observations and test results; it is not a live account-status feed.
 
+## Accepted-feed status correction
+
+- Observed a newly fetched REST response containing an older, different book than the accepted WebSocket book. The ordering guard rejected it correctly, but runtime health previously reported the rejected receipt's age as quote freshness.
+- Runtime quote age now derives from the accepted focused/held book; football report age derives from saved verified report evidence. The UI distinguishes these from runner updates and never substitutes chart timestamps. Flat paused/idle/stopped sessions have explicit labels.
+- The WebSocket handshake deadline is cancelled after upgrade, and the subscription explicitly requests unbatched updates. The old lifetime timeout and the fix have regression coverage. Older, conflicting books remain rejected; spread and freshness checks are unchanged.
+- Both outcomes remain eligible in the focused game. The decision card adds an expandable comparison of both teams. Out-of-order session responses cannot update runtime/catalog independently of their rejected session snapshot.
+- Full suite: **573 tests passed**, zero failed/skipped. Runtime observation at 01:59:30 UTC September 27, before this release: running UMass–Sacramento State, 70 recent quotes per outcome, 19 historical fills, unchanged cash 93.93805, no open position. The current decision rejected an insufficient volatility-adjusted drop. This is not evidence of a completed trade under the new engine.
+
 ## Background cutover
 
 The Cloudflare Worker `dugout-paper-runner` was deployed with its SQLite Durable Object namespace and migration tag `v1`. Account migration completed through the authenticated UI while paused and flat; it did not start the bot.

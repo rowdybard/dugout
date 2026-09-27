@@ -81,7 +81,11 @@ export class PolymarketInputAdapter implements InputAdapter {
     this.retryAt=now()+10000;
     try{
       const headers=await marketSocketHeaders(keys.keyId,keys.secretKey);
-      const response=await fetch('https://api.polymarket.us/v1/ws/markets',{headers:{...headers,Upgrade:'websocket'},signal:AbortSignal.timeout(3000)});
+      // Bound the handshake, not the lifetime of the upgraded connection.
+      const handshake=new AbortController(),timer=setTimeout(()=>handshake.abort(),3000);
+      let response:Response;
+      try{response=await fetch('https://api.polymarket.us/v1/ws/markets',{headers:{...headers,Upgrade:'websocket'},signal:handshake.signal});}
+      finally{clearTimeout(timer);}
       if(response.status!==101||!response.webSocket)throw new Error('Market websocket handshake did not succeed.');
       if(generation!==this.generation){response.webSocket.close(1000,'Obsolete connection');return;}
       const socket=response.webSocket,state=new StreamState(true);this.socket=socket;this.state=state;
@@ -99,7 +103,7 @@ export class PolymarketInputAdapter implements InputAdapter {
       });
       socket.addEventListener('close',disconnect);socket.addEventListener('error',disconnect);
       socket.accept();state.connected('market');
-      socket.send(JSON.stringify({subscribe:{requestId:crypto.randomUUID(),subscriptionType:'SUBSCRIPTION_TYPE_MARKET_DATA',marketSlugs:markets.map(m=>m.slug)}}));
+      socket.send(JSON.stringify({subscribe:{requestId:crypto.randomUUID(),subscriptionType:'SUBSCRIPTION_TYPE_MARKET_DATA',marketSlugs:markets.map(m=>m.slug),responsesDebounced:false}}));
       this.setHealth('streaming','Native market stream is connected.');
     }catch{this.setHealth('rest','Live stream is unavailable; checking bounded current REST books.');}
   }
@@ -127,7 +131,7 @@ export class PolymarketInputAdapter implements InputAdapter {
     try{
       const {data,receipt}=await fetchFreshMarketBook(market.slug,signal);
       const book=normalizeTennisBook(data,market.slug),providerTime=Date.parse(book.time);
-      this.setHealth('rest','Using a freshly verified REST book.');
+      this.setHealth('rest','REST book received; engine ordering and freshness checks still apply.');
       return {market:verified,book,receivedAt:receipt.requestedAt,source:'REST',sourceTime:Number.isFinite(providerTime)?providerTime:null,restReceipt:receipt,settlement,...(settlement!==null?{settlementReceivedAt:now()}: {})};
     }catch(error){
       if((error as {status?:number}).status===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60000)));

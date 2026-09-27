@@ -67,6 +67,26 @@ test('native websocket ignores old source clocks without refreshing receipt; inv
   socket.message({requestId:'fixture-request',subscriptionType:'SUBSCRIPTION_TYPE_MARKET_DATA',...bookRaw(now+10000)});
   assert.equal(socket.closed,true);assert.equal((await adapter.gather(session)).inputs[0].source,'REST');adapter.close();
 });
+
+test('successful websocket upgrade cancels its handshake deadline and requests unbatched updates',async(t)=>{
+  const {store}=await active();let time=NOW+2000;t.mock.method(Date,'now',()=>time);
+  const session=store.session()!;session.status='running';store.set('focused-market:synthetic-tennis',input(time).market);
+  const socket=new FakeSocket();let handshakeSignal:AbortSignal|undefined;
+  t.mock.timers.enable({apis:['setTimeout']});
+  t.mock.method(globalThis,'fetch',async(url:string,options?:RequestInit)=>{
+    if(url.includes('/v1/ws/markets')){handshakeSignal=options?.signal??undefined;handshakeSignal?.addEventListener('abort',()=>socket.close());return {status:101,webSocket:socket} as unknown as Response;}
+    if(url.includes('/events/slug/'))return Response.json(eventRaw());
+    if(url.includes('/market/slug/'))return Response.json({market:marketRaw()});return fresh(time);
+  });
+  const tasks:Promise<unknown>[]=[];
+  const adapter=new PolymarketInputAdapter(store,async()=>({keyId:'synthetic-provider',secretKey:btoa('x'.repeat(32))}),task=>tasks.push(task));
+  await adapter.gather(session);await Promise.all(tasks);
+  assert.equal(JSON.parse(socket.messages[0]).subscribe.responsesDebounced,false);
+  t.mock.timers.tick(4000);time+=4000;
+  assert.equal(handshakeSignal?.aborted,false);assert.equal(socket.closed,false);
+  socket.message({requestId:'fixture-request',subscriptionType:'SUBSCRIPTION_TYPE_MARKET_DATA',...bookRaw(time)});
+  assert.equal((await adapter.gather(session)).inputs[0].source,'WEBSOCKET');adapter.close();
+});
 test('held football exits use their book before a slow direct game report, then use the persisted fresh report',async(t)=>{
   const {store}=await active();let now=NOW+2000;t.mock.method(Date,'now',()=>now);const session=store.session()!,market={...input(NOW).market,eventId:'112943',league:'CFB' as const,score:'7-0',period:'Q1',clock:'10:30',contextUpdatedAt:NOW,footballIdentity:{yesTeamId:'1',noTeamId:'2'},football:{possessionTeam:'Synthetic A',possessionTeamId:'1',down:2,yardsToGo:7,fieldPosition:{team:'Synthetic B',teamId:'2',yard:30},timeouts:[]},execution:{...input(NOW).market.execution!,league:'CFB' as const}};
   session.positions=[{status:'open',market,lastContext:market} as unknown as typeof session.positions[number]];

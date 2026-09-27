@@ -8,6 +8,19 @@ import type {ReplayFrame} from '../../../lib/runner/contracts';
 import type {TennisInput} from '../../../lib/tennis/types';
 import {replayFrame} from '../../../lib/runner/replay.ts';
 
+test('runner freshness follows the accepted focused book, never a newer rejected receipt',async(t)=>{
+  const {store}=await active();let time=NOW+2000;t.mock.method(Date,'now',()=>time);
+  await store.advance({action:'resume'},[],time);
+  await store.advance({action:'tick'},[input(time)],time);
+  time+=7000;
+  const older=input(time,.40,.41);older.sourceTime=NOW;
+  await store.advance({action:'tick'},[older],time);
+  assert.equal(store.state().runner.quoteAgeMs,7000);
+  assert.equal(store.state().session.quotes['synthetic-tennis'].bid,.49);
+  const s=store.session()!;s.config.focusSlug='different-game';store.set('session',s);
+  assert.equal(store.state().runner.quoteAgeMs,null);
+});
+
 test('migration is inert, resumable by identical chunk, and preserves full source checkpoint',async()=>{
   const f=sqlite(),store=new RunnerStore(f.storage),session=snapshot();
   const quote=input(NOW),data={journal:[{id:OWNER+':legacy-decision',kind:'decision',time:NOW,value:{slug:quote.market.slug,bookTime:NOW}}],observations:[{id:quote.market.slug+':'+NOW,value:quote}]};
