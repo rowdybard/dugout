@@ -60,6 +60,10 @@ The primary view keeps Start/Pause/Stop, Bot rules, sport selection, decision/fr
 
 **Decision details** is an optional closed panel below the plain decision reason. It shows the evidence time, warm-up, measured drop/noise, recovery drift, depth, spread, costs, scenario headroom and risk ratio. While held, it distinguishes the saved entry scenario from the latest exit assessment and frozen risk limits. Chart details uses that chart's exact game and outcome. Missing measurements say Not available; an older receipt is not relabeled as a current calculation.
 
+**Compare both teams** lists each side's latest saved reason and age, using verified team names when available. Focus selects a whole game; chart-side selection cannot restrict the engine to a team. The card identifies its own bot game, which can differ from the chart.
+
+**Accepted bot quote** uses the saved accepted book for the held, pending or focused game, in that priority order. **Bot game report** is independent football evidence. **Runner update** is a saved check/control timestamp, not proof that a book passed validation. Missing evidence remains unknown. Older session responses are rejected as a whole, including runtime and chart projections.
+
 Errors, stale-data indicators, chart legend, and missing-quote warnings remain visible. The old Beginner mode state, toggle, and localStorage preference were removed in the reviewed interface change. A previously saved `true` value no longer controls the interface. Plain wording does not mean the engine has fewer checks.
 
 ### Controls

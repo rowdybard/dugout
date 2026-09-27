@@ -25,6 +25,8 @@ The bot often waits. An old quote, a large gap between buying and selling prices
 
 You do not need to edit the advanced rules for a first demonstration. This guide does not recommend changing them to chase a loss or force a trade.
 
+**You choose the game, not the team.** The bot checks both teams and can buy either one if its setup qualifies. Switching the team shown on the chart only changes your view. Open **Compare both teams** to see the latest reason for each side. It can hold only one position at a time.
+
 ## What the screen means
 
 | Screen item | Meaning |
@@ -32,6 +34,10 @@ You do not need to edit the advanced rules for a first demonstration. This guide
 | Paper balance | Simulated account value, with estimates for held positions; see the account details |
 | Available cash | Fake cash currently available |
 | Bot focus | The game allowed for future entries |
+| Compare both teams | Each team's latest saved decision; your chart selection does not lock a team |
+| Accepted bot quote | Age of the book the bot actually accepted; rejected arrivals cannot refresh it |
+| Runner update | Age of a saved check/control update, not proof that the quote passed |
+| Bot game report | Age of the saved football report, independent of prices |
 | Buy / sell quote | Current prices to enter or exit; the gap matters |
 | Book checked | Age of the market quote check, separate from the game report |
 | Report age | Age of the provider's game information |
@@ -43,6 +49,18 @@ You do not need to edit the advanced rules for a first demonstration. This guide
 | More details | Detailed history, diagnostics and the saved-history download |
 
 The field is a drawing of provider reports, not live video. It can lag, and faded or missing markers indicate old or unverified information. Fresh market prices do not mean the field report is fresh.
+
+## If it is not buying
+
+Read the current decision before changing anything:
+
+- **Paused / Ready / Stopped:** it is not starting new trades. Use Start when you want a paper run.
+- **Collecting executable history:** both the quote count and elapsed history must qualify. For example, 35/20 quotes and 87/90 seconds still needs more usable history.
+- **Drop is not distinct from volatility:** the move is too small compared with recent price noise. It is checking but has no qualifying setup.
+- **Football report older than 45 seconds:** prices may be live, but game facts are too old for entry. The app cannot invent a newer play.
+- **Older provider book:** a newly delivered response contains older prices than the bot already saw. It waits for a current book.
+
+Do not reset the balance or loosen rules to make a trade appear. If **Runner update** stops advancing while running, use Reconnect and tell the owner the game, time and message. A different chart does not change the named **Bot game**.
 
 ## A few useful limits
 

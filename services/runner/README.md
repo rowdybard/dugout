@@ -2,6 +2,8 @@
 
 This Worker owns one account's authoritative paper session in a SQLite Durable Object. The Sites application stays the authenticated UI and signs server-to-server runner requests. The Worker has no real-order route or paid model client. It is independent of the optional Node stream bridge in `services/trading`.
 
+The WebSocket handshake has a three-second deadline which is cleared after upgrade; it must not close a healthy long-lived connection. Full-book subscriptions request `responsesDebounced: false`. REST arrivals still pass provider ordering and freshness validation. Runtime quote age comes from accepted session evidence, never merely the most recently received input. Focus selects a game; the shared reducer evaluates both outcomes.
+
 This directory is part of the full repository, not a standalone install. Its imports depend on shared `lib` sources. Keep the repository lockfile and shared sources when distributing it. See [the architecture](../../docs/ARCHITECTURE.md) for application boundaries.
 
 ## Configuration

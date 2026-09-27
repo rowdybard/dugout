@@ -2,6 +2,10 @@
 
 Updated September 26, 2026. Read [the manual](BOT-MANUAL.md) and [release evidence](RELEASE-STATUS.md). Possessing this file or source ZIP does not grant hosted account access.
 
+September 27 UTC follow-up: `2f02e87` passed 573 tests and both builds and was deployed to the dashboard and native Worker. A workerd reproduction confirmed the old upgrade timeout closed an open WebSocket; the handshake timer now clears after upgrade. Production subsequently retained a streaming connection and collected 64 observations per side. At 02:04:44 UTC the account was running, flat, with unchanged cash; stale football context blocked entry. Earlier paused-account statements below describe the dated cutover. This short observation does not complete live acceptance.
+
+GitHub is public at https://github.com/rowdybard/dugout. `main` contains the full project. Original GitHub history was preserved as a merge parent without changing the tested source tree or force-pushing. Sites publication and GitHub pushes are separate: publishing to one does not update the other. Use `git status -sb` for local changes and tracking, and `git log origin/main..HEAD` for unpushed commits after fetching.
+
 ## Current product
 
 - Active UI: `app/page.tsx` and `app/tennis/page.tsx` render `components/tennis/tennis-dashboard.tsx`; `/sports` redirects to `/`.
