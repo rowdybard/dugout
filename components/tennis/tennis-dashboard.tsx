@@ -33,6 +33,7 @@ import {localMoveUpgradeRules,startPaperBot} from '@/lib/tennis/start-control';
 
 import {TennisPriceChart,TennisSparkline} from './price-chart';
 
+import '@fontsource-variable/inter';
 import './tennis.css';
 
 
@@ -175,60 +176,64 @@ export function TennisDashboard() {
 
   const reset=async()=>{const ok=await bot.perform({action:'reset',bankroll:resetBalance,commandId:tennisCommandId()});if(ok)setResetOpen(false);};
 
+  const watchable=[...new Map([...(followedMarket?[followedMarket]:[]),...(focusedMarket?[focusedMarket]:[]),...liveMarkets].map(m=>[m.slug,m] as const)).values()];
+  const engineLabel=session?.config.evidenceGate==='evidence-v1'?'Evidence engine':session?.config.decisionEngine==='local-move-v1'?'Local engine':'Legacy rules';
+
   return <div className="tennis-app">
 
-    <header className="tennis-header"><Link className="tennis-logo" href="/" aria-label="Dugout home"><span className="tennis-logo-mark"><Activity size={20}/></span>dugout<span style={{color:'#c2f477',marginLeft:-8}}>.</span></Link><div className="tennis-header-actions"><span className="tennis-paper-pill"><FlaskConical size={12}/>PAPER TRADING</span></div></header>
+    <header className="tennis-header"><Link className="tennis-logo" href="/" aria-label="Dugout home"><span className="tennis-logo-mark"><Activity size={20}/></span>dugout<span className="tennis-logo-dot">.</span></Link><div className="tennis-header-actions"><span className="tennis-feed-indicator"><span className={`tennis-dot ${bot.streamStatus==='live'?'is-live':'is-waiting'}`}/>{bot.streamStatus==='live'?'Live stream':bot.streamStatus==='connecting'?'Connecting…':'REST checks'}{catalog&&<span>· {age(catalog.updatedAt,now)}</span>}</span><span className="tennis-paper-pill"><FlaskConical size={12}/>PAPER</span></div></header>
 
     <main className="tennis-main">
 
-      <div className="tennis-heading"><div><span className="tennis-kicker">{focus==='football'?'FOOTBALL · NFL & COLLEGE':focus==='baseball'?'BASEBALL · MLB':focus==='all'?'TENNIS, FOOTBALL & BASEBALL':'TENNIS · ATP & WTA'}</span><h1>Let the bot watch.</h1></div><div className="tennis-feed-indicator"><span className={`tennis-dot ${bot.streamStatus==='live'?'is-live':'is-waiting'}`}/>{bot.streamStatus==='live'?'Live Polymarket US stream':bot.streamStatus==='connecting'?'Connecting live stream…':'Polymarket US · REST checks'}{catalog&&<span>· {age(catalog.updatedAt,now)}</span>}</div></div>
-
-      <div className="tennis-tour-choice tennis-sport-choice" role="group" aria-label="Sports the bot watches">{(['tennis','football','baseball','all'] as const).map(value=><button key={value} aria-pressed={focus===value} disabled={!session||bot.busy||focus===value} onClick={()=>void chooseSport(value)}>{value==='tennis'?'Tennis':value==='football'?'Football':value==='baseball'?'Baseball':'All sports'}</button>)}</div>
+      <h1 className="tennis-visually-hidden">Dugout paper bot</h1>
+      <div className="tennis-tour-choice tennis-sport-choice" role="group" aria-label="Sports the bot watches">{(['tennis','football','baseball','all'] as const).map(value=><button key={value} aria-pressed={focus===value} disabled={!session||bot.busy||focus===value} onClick={()=>void chooseSport(value)}>{value==='tennis'?'Tennis':value==='football'?'Football':value==='baseball'?'Baseball':'All'}</button>)}</div>
       {bot.error&&!selected&&<div className="tennis-error" role="alert"><TriangleAlert size={16}/><span>{bot.error}</span><button aria-label="Dismiss error" onClick={bot.clearError}><X size={15}/></button></div>}
-      {bot.connectionIssue&&<div className="tennis-error" role="status"><RefreshCw size={16}/><span>{bot.connectionIssue} Last saved check: {session?age(session.lastTickAt,now):'connecting'}.</span></div>}
+      {bot.connectionIssue&&<div className="tennis-error" role="status"><RefreshCw size={16}/><span>{bot.connectionIssue} Last check {session?age(session.lastTickAt,now):'connecting'}.</span></div>}
 
-      <section className="tennis-command" aria-label="Paper bot controls">
-
-        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.evidenceGate==='evidence-v1'?'EVIDENCE DECISION ENGINE':session?.config.decisionEngine==='local-move-v1'?'LOCAL DECISION ENGINE':session?.config.strategy==='auto'?'LEGACY AUTO':session?.config.strategy==='momentum'?'LEGACY RISE':'LEGACY RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
-
-          <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||migrating||!session?.config.focusSlug||entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)} onClick={()=>void startBot()}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||migrating||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||migrating||!session||session.status==='stopping'||(isPaused&&!session.config.focusSlug)} onClick={()=>{if(isPaused)void startBot();else void bot.perform({action:'pause',commandId:tennisCommandId()});}}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Start paper bot':'Pause bot'}</button>}
-
-          {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop bot</button>}
-
-          <button className="tennis-secondary" disabled={!session} onClick={()=>setSettingsOpen(true)}>Bot rules</button>{bot.advisorEnabled&&<button className="tennis-secondary" onClick={()=>setAdvisorOpen(true)}>Ask Claude</button>}
-          {session&&session.config.decisionEngine!=='local-move-v1'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:localMoveUpgradeRules(session.config),expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use decision engine</button>}
-
-          {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}</div>
-
-          {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}<div className="tennis-runtime"><Clock3 size={12}/>{background?'Cloudflare runner · continues with this page closed':migrating?'Background setup in progress · entries paused':'Runs while this page is open and visible'} · paper only</div>{isPaused&&open.length>0&&<p className="tennis-order-help">Exits are still checked. Pause only blocks new entries.</p>}
-
+      <section className="tennis-bot" aria-label="Paper bot">
+        <div className="tennis-bot-head">
+          <div className="tennis-bot-game">
+            <span className="tennis-label"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status} · {engineLabel}</span>
+            <h2>{followedMarket?`${followedMarket.yesName} vs. ${followedMarket.noName}`:'Pick a game below'}</h2>
+            <div className="tennis-bot-game-tools">
+              {watchable.length>1&&<select aria-label="Game to watch" value={followedMarket?.slug} onChange={event=>setFollowed(event.target.value)}>{watchable.map(m=><option key={m.slug} value={m.slug}>{m.yesName} vs. {m.noName}{m.slug===session?.config.focusSlug?' · bot':m.live?' · live':''}</option>)}</select>}
+              {followedMarket&&session?.config.focusSlug===followedMarket.slug?<span className="tennis-tag">Bot’s game</span>:followedMarket&&<button className="tennis-secondary" disabled={bot.busy||!session||migrating} onClick={()=>void setGameFocus(followedMarket.slug)}>Focus bot here</button>}
+            </div>
+          </div>
+          <div className="tennis-bot-money">
+            <span className="tennis-label">{incompleteMark?'Cash + priced exits':'Balance'}</span>
+            <strong className="tennis-balance">{session?money(liquidCash):'—'}</strong>
+            <span className={`tennis-pnl ${pnl<0?'tennis-negative':'tennis-positive'}`}>{session?`${signed(pnl)}${incompleteMark?' · partly unpriced':''}`:'Loading'}</span>
+            <span className="tennis-money-meta">Cash {session?money(session.cash):'—'} · Entry {session?money(isIdle?entryBudget:session.config.entryBudget):'—'}</span>
+          </div>
         </div>
 
-        <div className="tennis-command-right"><span className="tennis-section-label">{incompleteMark?'CASH + PRICED EXIT SIZE':'PAPER BALANCE'}</span><strong className="tennis-balance">{session?money(liquidCash):'—'}</strong><span className={`tennis-pnl ${pnl<0?'tennis-negative':'tennis-positive'}`}>{session?`${signed(pnl)} ${incompleteMark?'· some holdings unpriced':'since start'}`:'Loading fake balance'}</span><div className="tennis-money-meta"><div>Available cash<strong>{session?money(session.cash):'—'}</strong></div><div>Bot entry<strong>{session?money(isIdle?entryBudget:session.config.entryBudget):'—'}</strong></div><button className="tennis-link" disabled={!session||bot.busy||open.length>0||!!session?.pending} title={open.length?'Stop the bot and finish its exits before resetting':undefined} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}>Reset balance</button></div></div>
+        <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||migrating||!session?.config.focusSlug||entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)} onClick={()=>void startBot()}><Play size={17}/>{bot.busy?'Starting…':'Start'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||migrating||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New run</button>:<button className="tennis-primary" disabled={bot.busy||migrating||!session||session.status==='stopping'||(isPaused&&!session.config.focusSlug)} onClick={()=>{if(isPaused)void startBot();else void bot.perform({action:'pause',commandId:tennisCommandId()});}}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Start':'Pause'}</button>}
+          {!isIdle&&!isStopped&&session&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>Stop</button>}
+          <button className="tennis-secondary" disabled={!session} onClick={()=>setSettingsOpen(true)}>Rules</button>{bot.advisorEnabled&&<button className="tennis-secondary" onClick={()=>setAdvisorOpen(true)}>Ask Claude</button>}
+          {session&&session.config.decisionEngine!=='local-move-v1'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:localMoveUpgradeRules(session.config),expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use decision engine</button>}
+          {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}
+          <button className="tennis-link tennis-reset-link" disabled={!session||bot.busy||open.length>0||!!session?.pending} title={open.length?'Stop the bot and finish its exits before resetting':undefined} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}>Reset balance</button></div>
 
+        {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}
+        {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Entry':'Exit'} queued · fills on the next fresh book</div>}
+        {open.length>0&&<div className="tennis-position-list" aria-label="Open paper positions">{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-label">{position.league} · {position.side}</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for a price':partial?'Part can sell now':'If sold now'}</small></div><span className="tennis-tag">{session?.pending?.action==='SELL'?'Exiting':position.exitPolicy==='maker'?'Quote fill':position.exitPolicy==='hold-to-settlement'?'Holding to final':position.exitPolicy==='drive'?'Riding the drive':'Managing'}</span></article>;})}</div>}
+
+        <div className="tennis-bot-watch">{followedMarket?<TennisMatchChart key={followedMarket.slug} market={followedMarket} session={session} now={now} contextAssessment={bot.contextAssessments[followedMarket.slug]} contextCheck={bot.contextChecks[followedMarket.slug]}/>:<p className="tennis-order-help">Pick a game below to watch it here.</p>}</div>
+        {bot.watchedBookError&&(!followedMarket?.quoteObservedAt||Math.abs(now-followedMarket.quoteObservedAt)>5000)&&<p className="tennis-order-help" role="status">{bot.watchedBookError}</p>}
+        {bot.watchedContextError&&<p className="tennis-order-help" role="status">Game report: {bot.watchedContextError}</p>}
+
+        {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} now={now}/>}
+        <div className="tennis-runtime"><Clock3 size={13}/>{background?'Runs in the cloud, even with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still checked':''}</div>
       </section>
 
-      {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} now={now}/>}
       <RunnerSetup runtime={bot.runtime} flat={open.length===0&&!session?.pending} onComplete={bot.reloadAccount}/>
-      <section className="tennis-rule-summary" aria-label="Bot game focus"><b>{session?.config.focusSlug?`Bot focus: ${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}`:'Saved game'}`:'Choose one game for the bot'}</b><p>{session?.config.focusSlug?'New entries are limited to this game. Both teams are evaluated; existing positions still receive exit checks.':'The chart is for watching. Focus a game below before starting the bot.'}</p>{followedMarket&&session?.config.focusSlug!==followedMarket.slug&&<button className="tennis-secondary" disabled={bot.busy||!session||migrating} onClick={()=>void setGameFocus(followedMarket.slug)}>Focus bot on {followedMarket.yesName} vs. {followedMarket.noName}</button>}</section>
-
       <GamePicker markets={availableMarkets} selected={followedMarket?.slug??null} focused={session?.config.focusSlug??null} busy={bot.busy||!session||migrating} loading={catalog?.discovery?.complete===false} now={now} onSelect={setFollowed} onFocus={slug=>void setGameFocus(slug)}/>
-      {bot.watchedBookError&&(!followedMarket?.quoteObservedAt||Math.abs(now-followedMarket.quoteObservedAt)>5000)&&<p className="tennis-order-help" role="status">Selected game: {bot.watchedBookError}</p>}
-      {bot.watchedContextError&&<p className="tennis-order-help" role="status">Game report: {bot.watchedContextError}</p>}
 
-      <section className="tennis-live-panel" aria-label="Follow a live match"><div className="tennis-live-panel-head"><div><span className="tennis-kicker">LIVE MATCH WATCH</span><h2>{followedMarket?`${followedMarket.yesName} vs. ${followedMarket.noName}`:'Waiting for a live match'}</h2></div>{liveMarkets.length>1&&<label>Match<select aria-label="Match to follow" value={followedMarket?.slug} onChange={event=>setFollowed(event.target.value)}>{liveMarkets.map(m=><option key={m.slug} value={m.slug}>{m.yesName} vs. {m.noName}</option>)}</select></label>}</div>{followedMarket?<TennisMatchChart key={followedMarket.slug} market={followedMarket} session={session} now={now} contextAssessment={bot.contextAssessments[followedMarket.slug]} contextCheck={bot.contextChecks[followedMarket.slug]}/>:<p className="tennis-order-help">The live chart appears when the feed confirms a match is in play. Upcoming matches are listed below.</p>}</section>
-
-
-
-      {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Paper entry':'Paper exit'} queued · waiting for a fresh book after {session.config.executionDelayMs/1000}s execution delay.</div>}
-
-      {open.length>0&&<section className="tennis-position-list" aria-label="Open paper positions"><h2 className="tennis-open-title">The bot’s open trade</h2>{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-section-label">{position.league} · {position.side} · PAPER</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} remaining cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for fresh exit value':partial?'Only part can sell now':'Net P/L if filled now'}</small></div><span className="tennis-status">{session?.pending?.action==='SELL'?'Bot is exiting':position.exitPolicy==='maker'?'Market-making inventory':position.exitPolicy==='hold-to-settlement'?'Holding to the final':'Bot is managing'}</span></article>;})}</section>}
-
-      <section className="tennis-activity" aria-label="Paper balance history"><div className="tennis-activity-head"><h2>Paper balance</h2><span className="tennis-section-label">Fees included</span></div><TennisPriceChart points={session?.equity??[]} currency/><div className="tennis-feed-note"><span>{closed.length} closed positions</span><span>{session?signed(pnl):'—'} since start{incompleteMark?' · some holdings unpriced':''}</span></div></section>
+      <section className="tennis-activity" aria-label="Paper balance history"><div className="tennis-activity-head"><h2>Balance</h2><span className="tennis-label">After fees</span></div><TennisPriceChart points={session?.equity??[]} currency/><div className="tennis-feed-note"><span>{closed.length} closed</span><span>{session?signed(pnl):'—'} since start</span></div></section>
 
       {(bot.feedError||catalog?.errors.length!==0&&catalog?.errors.length)&&<div className="tennis-error" role="alert"><TriangleAlert size={16}/><span>{bot.feedError||catalog?.errors.join(' ')}</span></div>}
-
-      <details className="tennis-details tennis-main-details"><summary><strong>More details</strong><span>History, diagnostics & more markets</span></summary><div className="tennis-details-content">
+      <details className="tennis-details tennis-main-details"><summary><strong>More</strong><span>History, markets, diagnostics</span></summary><div className="tennis-details-content">
         <section className="tennis-rule-summary" aria-label="Connection diagnostics"><b>Connection & checks</b><p>{bot.runtime?.description||'Connecting to the saved paper account.'}</p>{background&&<p className="tennis-order-help">Last successful check: {bot.runtime?.lastSuccessfulCheck?age(bot.runtime.lastSuccessfulCheck,now):'waiting'}. {bot.runtime?.usage&&`${bot.runtime.usage.estimatedRowsWritten.toLocaleString()} estimated storage writes today. Free limits can interrupt service.`}</p>}<small>{session?.evaluated??0} quote evaluations · Rules revision {session?.rulesRevision??0}</small></section>
       {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':`${Math.round((session.testRun.endsAt-session.testRun.startedAt)/60000)}-minute paper watch`}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked · {session.testRun.liveSlugs.length} live matches observed</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/><small>{session.testRun.complete?'New entries paused. Existing exits are still managed.':background?'The background runner continues with this page closed.':'Keep this page open and visible. Entries pause automatically when the window ends.'}</small></section>}
       <section className="tennis-activity" aria-label="Paper session results"><div className="tennis-activity-head"><div><h2>History</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a><div className="tennis-subtabs" role="group" aria-label="Experiment view">{([{id:'decisions',label:'Bot activity'},{id:'trades',label:`Bot orders · ${session?.ledger.length??0}`}] as const).map(tab=><button key={tab.id} aria-pressed={activityTab===tab.id} onClick={()=>setActivityTab(tab.id)}>{tab.label}</button>)}</div></div><button className="tennis-link" onClick={()=>setShowAll(!showAll)}>{showAll?'Show less':'Show all'}</button></div>
@@ -251,7 +256,7 @@ export function TennisDashboard() {
 
     </main>
 
-    <footer className="tennis-footer"><span>Paper research. Fills and fees are estimates. Exits depend on available buyers.</span><span>Bot only · fake money · no real orders</span></footer>
+    <footer className="tennis-footer"><span>Paper trading · fake money · no real orders</span></footer>
 
     <TennisMarketDialog key={selected??'none'} market={selectedMarket} session={session} now={now} onClose={()=>setSelected(null)} contextAssessment={selectedMarket?bot.contextAssessments[selectedMarket.slug]:undefined} contextCheck={selectedMarket?bot.contextChecks[selectedMarket.slug]:undefined}/>
 
