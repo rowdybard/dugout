@@ -1,0 +1,171 @@
+{
+  "games": 1190,
+  "pas": 90159,
+  "all": {
+    "n": 90159,
+    "-30s": {
+      "slopeVsModel": -0.3299206188921556,
+      "medianShareOfT+120Move": 0.0
+    },
+    "T": {
+      "slopeVsModel": 0.30934074884922536,
+      "medianShareOfT+120Move": 0.2857142400984669
+    },
+    "+5s": {
+      "slopeVsModel": 0.41247485744108864,
+      "medianShareOfT+120Move": 0.5384613973854186
+    },
+    "+10s": {
+      "slopeVsModel": 0.45293073953392304,
+      "medianShareOfT+120Move": 0.6363629528808494
+    },
+    "+20s": {
+      "slopeVsModel": 0.4725333683481666,
+      "medianShareOfT+120Move": 0.66666691501922
+    },
+    "+30s": {
+      "slopeVsModel": 0.48129368485121854,
+      "medianShareOfT+120Move": 0.75
+    },
+    "+60s": {
+      "slopeVsModel": 0.4940660932250849,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+120s": {
+      "slopeVsModel": 0.5060201475897795,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+300s": {
+      "slopeVsModel": 0.5201336924638923,
+      "medianShareOfT+120Move": 1.0
+    }
+  },
+  "bigPAs": {
+    "n": 12983,
+    "-30s": {
+      "slopeVsModel": -0.3603101205711474,
+      "medianShareOfT+120Move": 0.0
+    },
+    "T": {
+      "slopeVsModel": 0.28363029544267176,
+      "medianShareOfT+120Move": 0.5
+    },
+    "+5s": {
+      "slopeVsModel": 0.3670305973424237,
+      "medianShareOfT+120Move": 0.8181817196617437
+    },
+    "+10s": {
+      "slopeVsModel": 0.4042902823314075,
+      "medianShareOfT+120Move": 0.9166667908429433
+    },
+    "+20s": {
+      "slopeVsModel": 0.4215154868306719,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+30s": {
+      "slopeVsModel": 0.4280299368558648,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+60s": {
+      "slopeVsModel": 0.43655316449932996,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+120s": {
+      "slopeVsModel": 0.446704933845165,
+      "medianShareOfT+120Move": 1.0
+    },
+    "+300s": {
+      "slopeVsModel": 0.4571059910783122,
+      "medianShareOfT+120Move": 1.0
+    }
+  },
+  "byEvent": {
+    "double": {
+      "n": 1974,
+      "slopeAtT+10s": 0.7138643967568575,
+      "slopeAtT+60s": 0.769208329158865
+    },
+    "double_play": {
+      "n": 135,
+      "slopeAtT+10s": 1.0909827179472893,
+      "slopeAtT+60s": 1.2084942139314436
+    },
+    "field_error": {
+      "n": 150,
+      "slopeAtT+10s": 0.8249589842936338,
+      "slopeAtT+60s": 0.9753380046375781
+    },
+    "field_out": {
+      "n": 8224,
+      "slopeAtT+10s": 0.579823053923802,
+      "slopeAtT+60s": 0.6062967083801702
+    },
+    "fielders_choice": {
+      "n": 105,
+      "slopeAtT+10s": 0.6170066399167766,
+      "slopeAtT+60s": 0.8317380128262977
+    },
+    "fielders_choice_out": {
+      "n": 93,
+      "slopeAtT+10s": 0.7907076741930738,
+      "slopeAtT+60s": 1.2613698177015247
+    },
+    "force_out": {
+      "n": 539,
+      "slopeAtT+10s": 0.5734694002392875,
+      "slopeAtT+60s": 0.6471866521483703
+    },
+    "grounded_into_double_play": {
+      "n": 917,
+      "slopeAtT+10s": 1.0541488017424196,
+      "slopeAtT+60s": 1.132814931845096
+    },
+    "hit_by_pitch": {
+      "n": 192,
+      "slopeAtT+10s": 0.7362744443797371,
+      "slopeAtT+60s": 0.900295673210366
+    },
+    "home_run": {
+      "n": 2401,
+      "slopeAtT+10s": 0.04354714561834806,
+      "slopeAtT+60s": 0.0564323400534202
+    },
+    "sac_bunt": {
+      "n": 57,
+      "slopeAtT+10s": 0.460880150937413,
+      "slopeAtT+60s": 0.5562256635519219
+    },
+    "sac_fly": {
+      "n": 407,
+      "slopeAtT+10s": 0.24466930651874863,
+      "slopeAtT+60s": 0.21956733510676588
+    },
+    "single": {
+      "n": 4129,
+      "slopeAtT+10s": 0.7271329478242272,
+      "slopeAtT+60s": 0.7757994237113611
+    },
+    "strikeout": {
+      "n": 4818,
+      "slopeAtT+10s": 0.5408054621577003,
+      "slopeAtT+60s": 0.5800837878700402
+    },
+    "triple": {
+      "n": 228,
+      "slopeAtT+10s": 0.5877030964572387,
+      "slopeAtT+60s": 0.6545951815634768
+    },
+    "walk": {
+      "n": 1433,
+      "slopeAtT+10s": 0.5239926204372992,
+      "slopeAtT+60s": 0.5997047613281126
+    }
+  },
+  "continuation": {
+    "-10s->T": 0.03753985998876462,
+    "T->+10s": 0.01754929540742128,
+    "+10s->+30s": 0.002949626418278924,
+    "+30s->+120s": 0.0025964722482137927,
+    "+120s->+300s": 0.0011973350835291362
+  }
+}

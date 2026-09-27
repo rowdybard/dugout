@@ -1,0 +1,110 @@
+{
+  "splits": {
+    "train": "2021-2024",
+    "valid": "2025",
+    "test": "2026"
+  },
+  "features": [
+    "inning",
+    "is_top",
+    "outs",
+    "on1",
+    "on2",
+    "on3",
+    "score_diff",
+    "abs_score_diff",
+    "extra",
+    "outs_remaining_home",
+    "outs_remaining_away",
+    "elo_diff",
+    "home_sp_k",
+    "home_sp_bb",
+    "home_sp_hr",
+    "away_sp_k",
+    "away_sp_bb",
+    "away_sp_hr",
+    "pitcher_pitches",
+    "pitcher_tto",
+    "starter_in",
+    "pitcher_k",
+    "pitcher_bb",
+    "pitcher_hr",
+    "batter_obp",
+    "batter_hr",
+    "pitching_team_home"
+  ],
+  "valid": {
+    "full": {
+      "n": 187029,
+      "brier": 0.15466228841469903,
+      "logloss": 0.4622030183178838
+    },
+    "stateOnly": {
+      "n": 187029,
+      "brier": 0.15547787974254595,
+      "logloss": 0.4626210318660247
+    },
+    "eloOnlyPregame": {
+      "n": 187029,
+      "brier": 0.24435653324791703,
+      "logloss": 0.6816071384054362
+    },
+    "constant": {
+      "n": 187029,
+      "brier": 0.2493590580880295,
+      "logloss": 0.6918649620567056
+    }
+  },
+  "test": {
+    "full": {
+      "n": 183299,
+      "brier": 0.15910864486104218,
+      "logloss": 0.4731745011759795
+    },
+    "stateOnly": {
+      "n": 183299,
+      "brier": 0.1589690007694669,
+      "logloss": 0.47347431142595237
+    },
+    "eloOnlyPregame": {
+      "n": 183299,
+      "brier": 0.2468731887142835,
+      "logloss": 0.6868441381500188
+    },
+    "constant": {
+      "n": 183299,
+      "brier": 0.24978272660103443,
+      "logloss": 0.6927125715497054
+    }
+  },
+  "bestIteration": 225,
+  "featureGain": {
+    "score_diff": 4136850.0,
+    "elo_diff": 171154.3,
+    "home_sp_k": 107999.2,
+    "outs_remaining_home": 103564.1,
+    "away_sp_hr": 91919.2,
+    "away_sp_bb": 87851.2,
+    "outs_remaining_away": 86733.1,
+    "home_sp_bb": 85089.2,
+    "away_sp_k": 82842.5,
+    "home_sp_hr": 68555.1,
+    "inning": 52361.7,
+    "is_top": 22242.4,
+    "outs": 19789.7,
+    "on3": 13702.7,
+    "on2": 13275.7,
+    "abs_score_diff": 7864.5,
+    "on1": 6581.9,
+    "pitcher_k": 4356.7,
+    "starter_in": 3342.5,
+    "pitching_team_home": 1673.8,
+    "pitcher_bb": 1399.0,
+    "pitcher_hr": 609.3,
+    "extra": 180.9,
+    "pitcher_pitches": 70.4,
+    "pitcher_tto": 0.0,
+    "batter_obp": 0.0,
+    "batter_hr": 0.0
+  }
+}

@@ -69,6 +69,15 @@ Resting at the best price with the maker rebate (0.0125·p·(1−p)); markout in
 - Real fills fall between the two models, so the net result is decided by queue position, how fast quotes are pulled after events, and reward share. **Only a small live test can measure those.**
 - Polymarket US also pays **liquidity rewards** on top of this, per program, for resting size near the best price (docs.polymarket.us/incentives/liquidity; polymarket.us/rewards): NFL moneyline live $11,000, CFB $1,050–4,500, MLB live $600–1,000. Rewards are sampled every second, so they can outweigh small negative markouts, but our share depends on how much competing size is resting.
 
+## MLB: model vs market, and reaction speed
+- **Model:** the MLB win-probability model v1 (LightGBM, trained 2021–24, validated 2025, tested 2026; `research/models/mlb/`) scores Brier 0.159 on 2026. Team strength, starters, fatigue and batter layers add ~nothing over game state alone (0.1591 vs 0.1590).
+- **Model vs market at the same moments** (147k plate-appearance starts, 1,973 games): **market 0.1560**, model 0.1576, the average of both 0.1560. The market is at least as good as the model.
+- **Trading disagreements** (first signal per game, hold to settlement): −3.8% to +0.8% by threshold, every confidence interval spanning zero. No edge.
+- **Speed** (1,190 densely priced games, 90k plate appearances). T is the official MLB Stats API end time of each plate appearance:
+  - On big plate appearances (≥5 points of win probability), the market has made **50% of its move by T**, **82% by T+5 s** and **92% by T+10 s**.
+  - It also moves in the right direction 10–30 s *before* T. Home runs are fully priced before T, because the scorer logs the play after the trot.
+  - The free Stats API is published after T, so **a bot using free MLB data always arrives after the move.** No speed edge without a faster private feed.
+
 ## MLB live (1,973 games, 2026 to Aug 25)
 - Live prices are well calibrated (slope 1.04, Brier 0.151).
 - Longshots are overpriced: sides under 10¢ lose 48%, and 10–20¢ lose 13%.
@@ -76,6 +85,7 @@ Resting at the best price with the maker rebate (0.0125·p·(1−p)); markout in
 - No price band is profitable to hold.
 
 ## What this means (so far)
+0. **Bottom line (Sep 27):** taking the posted price with public information loses on NFL and MLB on every axis tested: scalping, calibration, model disagreement, speed, pregame and cross-venue. The credible path is **market making**: rebates plus liquidity rewards, focused on college football and pregame windows. It must be proven with a small real-money pilot, because queue position and reward share can't be simulated.
 1. **NFL as a taker is efficient on every axis tested:** scalping, calibration, model disagreement and speed. There is no retail edge from public data.
 2. Stop tuning in-game scalping. The data says it cannot beat taker costs.
 3. Remaining candidate edges:
