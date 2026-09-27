@@ -79,7 +79,8 @@ def analyze(league: str, catalog: pd.DataFrame, since: int) -> dict:
             continue
         h = h.sort_values(["ts", "seq"]).groupby("ts").tail(1)
         h = h[(h.long > 0) & (h.long < 1) & (h.short > 0) & (h.short < 1)]
-        if len(h) < 100 or h.ts.diff().median() > 5:
+        live_gaps = h[(h.ts >= m.start_ts) & (h.ts <= m.start_ts + 3 * 3600)].ts.diff()
+        if len(h) < 100 or live_gaps.count() < 50 or live_gaps.median() > 5:  # pregame is naturally sparse
             continue
         end = m.finished_ts if pd.notna(m.finished_ts) else (m.market_end_ts if pd.notna(m.market_end_ts) else h.ts.max())
         h = h[h.ts <= end]

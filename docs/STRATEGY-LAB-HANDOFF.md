@@ -189,7 +189,13 @@ Last updated: 2026-09-27 (evening). Steps 1–2 are done. Step 3 (data lake) is 
   - `fetch_kalshi.py` (optional): public trades
   - `align.py`: one timeline per sport with state, ask/bid/spread and outcome
   - `research/data/manifest.json`
-- [ ] **Step 4: Decisive studies** (`research/studies/`):
+- [ ] **Step 4: Decisive studies.** Mostly done Sep 27; see [`research/studies/report.md`](../research/studies/report.md).
+  - **Headline:** taking the posted price (taker) loses everywhere tested. Scalping loses −9% to −11% per trade in NFL and MLB; markets are well calibrated; the NFL price reacts within about 15 s; NFL pregame closes match the sportsbooks.
+  - **The one structural edge:** Polymarket US pays makers a 0.0125·p·(1−p) rebate plus liquidity-program rewards (target = aggregate book size; periods day-of and live).
+  - Maker markouts before rewards are mildly positive in CFB and pregame, and negative in NFL live.
+  - **Price-history density:** 1-minute until mid-May 2026 (MLB) or Aug 2026 (NFL/CFB), then ~1 s. Timing studies must use the dense games only.
+  - Open leads: CFB favourite-longshot (favourites +2.5% [−1.4, +6.6] pregame), MLB live reaction timing, the live feed-latency probe (`research/market-history/live_lag_probe.py`, run on Sep 27).
+  - Original sub-items:
   - `drop_reversion.py`: does Astra's dip strategy make money after fees?
   - `calibration.py`: is the market biased?
   - `reaction.py`: over- or under-reaction by play type, and lag in seconds
