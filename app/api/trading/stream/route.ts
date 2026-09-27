@@ -1,4 +1,6 @@
-import { profile } from '@/lib/server/storage';
+import { env } from 'cloudflare:workers';
+import { profile, sameOrigin } from '@/lib/server/storage';
+import { streamOwnerIssue, type SiteOwnerBindings } from '@/lib/server/owner-access';
 import { getCatalog } from '@/lib/server/ingestion';
 import { marketStream } from '@/lib/server/polymarket-market-stream';
 import { botUniverse } from '@/lib/bot/engine';
@@ -6,6 +8,9 @@ import { replayData } from '@/lib/server/replay';
 import type {StreamSelection} from '@/lib/trading/stream-types';
 export async function GET(req:Request) {
   try {
+    sameOrigin(req);
+    const denied=streamOwnerIssue(req,env as unknown as SiteOwnerBindings);
+    if(denied)return denied;
     if(await replayData())return Response.json({error:'Recorded development preview; no live stream.'},{status:409});
     const params=new URL(req.url).searchParams,slug=params.get('slug'),bot=params.get('scope')==='bot';
     if(!bot&&(!slug||!/^[a-zA-Z0-9_.-]+$/.test(slug)))return Response.json({error:'Choose an MLB or NFL market.'},{status:400});

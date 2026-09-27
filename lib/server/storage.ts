@@ -36,8 +36,14 @@ export async function cached<T>(key:string,ttl:number,load:()=>Promise<T>):Promi
  if(!winner)throw new Error('The shared cache changed before this result could be saved. Retry with a fresh request.');
  return winner.value;
 }
+/** The hosting boundary's authenticated identity. There is no shared fallback account. */
+export function requireUserId(req:Request):string{
+ const id=req.headers.get('oai-authenticated-user-id');
+ if(!id||!/^[a-zA-Z0-9_-]{8,160}$/.test(id))throw Object.assign(new Error('Sign in to your private Dugout account.'),{name:'AuthenticationRequired',status:401});
+ return id;
+}
 export async function profile(req:Request){
- const id=req.headers.get('oai-authenticated-user-id')||'private-owner';
+ const id=requireUserId(req);
  const initial:Profile={cash:100,positions:[],watches:[],equity:[{time:Date.now(),price:100}],config:DEFAULT_CONFIG};
  await db().prepare('INSERT OR IGNORE INTO profiles(id,value,version) VALUES(?,?,0)').bind(id,JSON.stringify(initial)).run();
  const row=await db().prepare('SELECT value,version FROM profiles WHERE id=?').bind(id).first<{value:string;version:number}>();
@@ -55,4 +61,13 @@ export async function saveProfile(p:Awaited<ReturnType<typeof profile>>){
  // Never claim a newer revision until the compare-and-swap succeeded.
  p.version=revision;p.data.revision=revision;
 }
-export function sameOrigin(req:Request){const origin=req.headers.get('origin');if(origin&&origin!==new URL(req.url).origin)throw new Error('Request origin mismatch.');}
+/**
+ * Cross-site request guard. A present Origin must match. A request without Origin is accepted only for safe
+ * methods (GET/HEAD, which do not change state) or when the browser attests Sec-Fetch-Site: same-origin.
+ */
+export function sameOrigin(req:Request){
+ const origin=req.headers.get('origin'),site=req.headers.get('sec-fetch-site');
+ if(origin){if(origin!==new URL(req.url).origin||site==='cross-site'||site==='same-site')throw new Error('Request origin mismatch.');return;}
+ if(['GET','HEAD'].includes(req.method.toUpperCase())||site==='same-origin')return;
+ throw new Error('Request origin mismatch.');
+}

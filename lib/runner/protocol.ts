@@ -39,4 +39,8 @@ export async function verifyRunnerRequest(request:SignableRequest,secret:string,
   return {owner,epoch,nonce,timestamp,body,path};
 }
 export function json<T>(body:string):T {try{return JSON.parse(body) as T;}catch{throw new RunnerError(400,'Invalid JSON request.');}}
-export function runnerError(error:unknown):Response{return Response.json({error:error instanceof RunnerError?error.message:'Runner operation failed.'},{status:error instanceof RunnerError?error.status:500,headers:{'Cache-Control':'no-store'}});}
+export function runnerError(error:unknown):Response{
+  // A missing sign-in (lib/server/storage.ts requireUserId) is a 401, not a server failure.
+  const auth=error instanceof Error&&error.name==='AuthenticationRequired';
+  return Response.json({error:error instanceof RunnerError||auth?(error as Error).message:'Runner operation failed.'},{status:error instanceof RunnerError?error.status:auth?401:500,headers:{'Cache-Control':'no-store'}});
+}

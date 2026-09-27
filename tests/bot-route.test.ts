@@ -22,7 +22,9 @@ const hooks=registerHooks({resolve(specifier,context,next){
 }});
 const {POST,GET}=await import('../app/api/bot/route.ts');
 hooks.deregister();
-const post=(body:object)=>POST(new Request('https://test.invalid/api/bot',{method:'POST',headers:{origin:'https://test.invalid','content-type':'application/json'},body:JSON.stringify(body)}));
+// The hosting boundary's signed-in identity; there is no anonymous shared account.
+const USER={'oai-authenticated-user-id':'synthetic-bot-user'};
+const post=(body:object,headers:Record<string,string>=USER)=>POST(new Request('https://test.invalid/api/bot',{method:'POST',headers:{origin:'https://test.invalid','content-type':'application/json',...headers},body:JSON.stringify(body)}));
 
 test('real bot route starts a $10 session during total market outage, scans, pauses, resumes and stops',async()=>{
   reset();const response=await post({action:'start',bankroll:10,leagues:['MLB']});
@@ -33,18 +35,26 @@ test('real bot route starts a $10 session during total market outage, scans, pau
   for(const [action,status] of [['pause','paused'],['resume','running'],['stop','stopped']]){
     const result=await body(await post({action,sessionId}));assert.equal(result.session.status,status);assert.equal(result.session.cash,10);
   }
-  const saved=await body(await GET(new Request('https://test.invalid/api/bot')));
+  const saved=await body(await GET(new Request('https://test.invalid/api/bot',{headers:USER})));
   assert.equal(saved.session.id,sessionId);assert.equal(saved.session.status,'stopped');assert.equal(saved.session.positions.length,0);
 });
 test('duplicate start cannot reset the active bankroll and a wrong-session control cannot change it',async()=>{
   reset();const started=await body(await post({action:'start',bankroll:10,leagues:['MLB']}));
   assert.equal((await post({action:'start',bankroll:25,leagues:['MLB']})).status,400);
   assert.equal((await post({action:'stop',sessionId:crypto.randomUUID()})).status,400);
-  const current=await body(await GET(new Request('https://test.invalid/api/bot')));
+  const current=await body(await GET(new Request('https://test.invalid/api/bot',{headers:USER})));
   assert.equal(current.session.id,started.session.id);assert.equal(current.session.cash,10);assert.equal(current.session.status,'running');
 });
 test('recorded development data cannot start a current paper bot',async()=>{
   reset();state.replay=true;
   const response=await post({action:'start',bankroll:10,leagues:['MLB']});assert.equal(response.status,400);
   assert.match((await body(response)).error,/recorded development/);assert.equal(state.catalogCalls,0);
+});
+
+test('anonymous requests are refused instead of sharing a fallback account',async()=>{
+  reset();
+  const anonymous=await post({action:'start',bankroll:10,leagues:['MLB']},{});
+  assert.notEqual(anonymous.status,200);assert.match((await body(anonymous)).error,/Sign in/);
+  const spoofed=await post({action:'start',bankroll:10,leagues:['MLB']},{'oai-authenticated-user-id':'private owner;x'});
+  assert.notEqual(spoofed.status,200);
 });

@@ -1,4 +1,6 @@
+import { env } from 'cloudflare:workers';
 import { readCached, sameOrigin } from '@/lib/server/storage';
+import { streamOwnerIssue, type SiteOwnerBindings } from '@/lib/server/owner-access';
 import { marketStream } from '@/lib/server/polymarket-market-stream';
 import { getTennisCatalog } from '@/lib/tennis/data';
 import { readTennisSession } from '@/lib/tennis/server';
@@ -9,6 +11,8 @@ import type { TennisMarket } from '@/lib/tennis/types';
 export async function GET(req: Request) {
   try {
     sameOrigin(req);
+    const denied = streamOwnerIssue(req, env as unknown as SiteOwnerBindings);
+    if (denied) return denied;
     // This reuses the same authenticated owner and persisted ledger as the paper API.
     const { session } = await readTennisSession(req);
     const slug = new URL(req.url).searchParams.get('slug');

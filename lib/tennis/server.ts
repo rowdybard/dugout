@@ -2,15 +2,17 @@ import {env} from 'cloudflare:workers';
 import {readRunnerOwnedSession,type RunnerBindings} from '../runner/sites-proxy';
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
+import {siteOwnerEnabled,type SiteOwnerBindings} from '../server/owner-access';
 import {createTennisSession,stepTennisSession,applyTennisAction} from './engine';
 import {defaultLiveTennisConfig,normalizeTennisConfig} from './rules';
 import {normalizePositionExitRules} from './football-context';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
 
-export function tennisRuntime():TennisRuntime {
+/** Browser-mode runtime. The signed live stream is offered only to the pinned site owner. */
+export function tennisRuntime(ownerId:string):TennisRuntime {
   return {mode:'browser',intervalMs:2500,backgroundConnected:false,
-    streamConfigured:!!polymarketSecrets(env as unknown as Record<string,unknown>),
+    streamConfigured:!!polymarketSecrets(env as unknown as Record<string,unknown>)&&siteOwnerEnabled(ownerId,env as unknown as SiteOwnerBindings),
     description:'Paper checks run while this page is open and visible. Keep it open to manage exits.'};
 }
 export async function readTennisSession(req:Request):Promise<{ownerId:string;session:TennisSession;stored:boolean}> {
