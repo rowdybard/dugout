@@ -45,6 +45,25 @@ Buying at the last executable quote at least 5 minutes before start and holding 
 - **NFL (231 games): Polymarket's close equals the sportsbook close.** The home-side gap versus the de-vigged nflverse closing moneyline is +0.2¢ [−0.5, +0.7]. Home teams lost money in both periods (−12.5%, −21%), but sportsbooks priced them the same way, and 2025–26 home teams simply underperformed (48% wins versus 55% priced). Treat it as season noise, **not a Polymarket edge**.
 - **College football (632 games): strong favourite-longshot bias.** Underdogs lose −33% [−50, −13] in 2026 (sides priced under 15¢ lose 47%). Buying favourites is **+2.5% [−1.4, +6.6]** after fees (bands: 70–85¢ +3.1%, 85–100¢ +1.3%). This is the most promising lead so far, but not yet significant. About 60 new games a week will settle it.
 
+## MLB in-game scalping (1,973 games, about 1M simulated trades)
+Same result as the NFL:
+- **Dip then recovery (Astra-like), 2-minute hold: −10.2% [−10.8, −9.5]** (n=7,591). Any dip: −11.4%.
+- Momentum (buying rises) is the least bad: −7.1% at 2 min and −5.7% at 10 min. Before fees it is only −0.7% at 10 min, so MLB prices slightly *under*-react. Still negative after costs.
+- Random control: −9.7%.
+
+## Maker (resting orders) markout, before liquidity rewards (`maker_markout.py`)
+Resting at the best price with the maker rebate (0.0125·p·(1−p)); markout in cents per contract, 60 s after the fill. Two fill models bracket reality: *optimistic* (we're filled whenever our price level is consumed) and *conservative* (filled only when the price moves through us).
+
+| Market | Optimistic | Conservative | Fills per game |
+|---|---|---|---|
+| NFL live (23 dense games) | −0.47¢ [−0.59, −0.34] | −1.22¢ | 300–400 |
+| CFB live (236 games) | **+0.19¢ [+0.12, +0.26]** | −1.34¢ | 240–540 |
+| CFB pregame | **+0.57¢ [+0.32, +0.79]** | −0.41¢ | 6–33 |
+
+- NFL order flow is toxic: informed takers hit resting orders just before moves.
+- College football is milder. Pregame is the most benign.
+- Polymarket US also pays **liquidity rewards** on top of this, per program, for resting size near the best price (docs.polymarket.us/incentives/liquidity; polymarket.us/rewards): NFL moneyline live $11,000, CFB $1,050–4,500, MLB live $600–1,000. Rewards are sampled every second, so they can outweigh small negative markouts, but our share depends on how much competing size is resting.
+
 ## MLB live (1,973 games, 2026 to Aug 25)
 - Live prices are well calibrated (slope 1.04, Brier 0.151).
 - Longshots are overpriced: sides under 10¢ lose 48%, and 10–20¢ lose 13%.
