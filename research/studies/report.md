@@ -54,14 +54,19 @@ Same result as the NFL:
 ## Maker (resting orders) markout, before liquidity rewards (`maker_markout.py`)
 Resting at the best price with the maker rebate (0.0125·p·(1−p)); markout in cents per contract, 60 s after the fill. Two fill models bracket reality: *optimistic* (we're filled whenever our price level is consumed) and *conservative* (filled only when the price moves through us).
 
-| Market | Optimistic | Conservative | Fills per game |
+| Market (dense games) | Optimistic | Conservative | Fills per game |
 |---|---|---|---|
-| NFL live (23 dense games) | −0.47¢ [−0.59, −0.34] | −1.22¢ | 300–400 |
-| CFB live (236 games) | **+0.19¢ [+0.12, +0.26]** | −1.34¢ | 240–540 |
-| CFB pregame | **+0.57¢ [+0.32, +0.79]** | −0.41¢ | 6–33 |
+| MLB live (1,043) | −0.22¢ [−0.24, −0.21] | −1.11¢ | 215–336 |
+| MLB pregame | +0.12¢ [+0.09, +0.15] | −0.00¢ | 4–6 |
+| NFL live (72) | −0.40¢ [−0.47, −0.33] | −1.13¢ | 226–314 |
+| NFL pregame | −0.14¢ | −0.17¢ | 3–4 |
+| CFB live (383) | **+0.14¢ [+0.08, +0.19]** | −1.25¢ | 192–413 |
+| CFB pregame | **+0.48¢ [+0.25, +0.68]** | −0.38¢ | 5–25 |
 
-- NFL order flow is toxic: informed takers hit resting orders just before moves.
-- College football is milder. Pregame is the most benign.
+- NFL live order flow is the most toxic: informed takers hit resting orders just before moves.
+- MLB live is mildly negative.
+- College football is the only market that is positive under the optimistic fill model, both live and pregame. Pregame is the most benign everywhere.
+- Real fills fall between the two models, so the net result is decided by queue position, how fast quotes are pulled after events, and reward share. **Only a small live test can measure those.**
 - Polymarket US also pays **liquidity rewards** on top of this, per program, for resting size near the best price (docs.polymarket.us/incentives/liquidity; polymarket.us/rewards): NFL moneyline live $11,000, CFB $1,050–4,500, MLB live $600–1,000. Rewards are sampled every second, so they can outweigh small negative markouts, but our share depends on how much competing size is resting.
 
 ## MLB live (1,973 games, 2026 to Aug 25)
