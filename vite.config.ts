@@ -35,6 +35,35 @@ const localBindingConfig = {
     : [],
 };
 
+/**
+ * Self-hosting on Cloudflare behind Cloudflare Access (docs/CLOUDFLARE-HOSTING.md): `DUGOUT_HOSTING=cloudflare`
+ * builds the site as the owner's own Worker. Every request is checked for a valid Access token in
+ * worker/cloudflare-entry.ts. Without the variable, the build stays the ChatGPT Sites build.
+ */
+const cloudflareHosting = process.env.DUGOUT_HOSTING === "cloudflare";
+const selfHostedConfig = {
+  name: process.env.DUGOUT_WORKER_NAME || "dugout",
+  main: "./worker/cloudflare-entry.ts",
+  compatibility_flags: ["nodejs_compat"],
+  workers_dev: true,
+  preview_urls: false,
+  observability: { enabled: true, head_sampling_rate: 0.1 },
+  d1_databases: [
+    {
+      binding: "DB",
+      database_name: process.env.DUGOUT_D1_NAME || "dugout",
+      database_id:
+        process.env.DUGOUT_D1_DATABASE_ID || SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+      // Relative to dist/server/wrangler.json; the Sites plugin copies drizzle/ to dist/.openai/drizzle at build.
+      migrations_dir: "../.openai/drizzle",
+    },
+  ],
+  vars: {
+    ACCESS_TEAM_DOMAIN: process.env.ACCESS_TEAM_DOMAIN || "",
+    ACCESS_AUD: process.env.ACCESS_AUD || "",
+  },
+};
+
 export default defineConfig(async () => {
   // Use Miniflare's local Request.cf placeholder unless fetching is requested.
   process.env.CLOUDFLARE_CF_FETCH_ENABLED ??= "false";
@@ -57,11 +86,11 @@ export default defineConfig(async () => {
     },
     plugins: [
       vinext(),
-      sites({ mockAuth: !managedLinux }),
+      sites({ mockAuth: !managedLinux && !cloudflareHosting }),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
-        config: localBindingConfig,
+        config: cloudflareHosting ? selfHostedConfig : localBindingConfig,
       }),
     ],
   };

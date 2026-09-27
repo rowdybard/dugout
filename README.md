@@ -78,7 +78,7 @@ No checkout-local execution profile is included in a source ZIP. `scripts/execut
 
 ## Hosting and credentials
 
-The current dashboard is [owner-private on Sites](https://dugout-signals.rowdybard.chatgpt.site/). `.openai/hosting.json` records that existing project's binding names and project ID; it does not grant access. The background runner has its own `services/runner/wrangler.jsonc`.
+The current dashboard is [owner-private on Sites](https://dugout-signals.rowdybard.chatgpt.site/). To move it to your own Cloudflare account with invite-only Cloudflare Access (emailed code or Google sign-in, remembered devices), see [docs/CLOUDFLARE-HOSTING.md](docs/CLOUDFLARE-HOSTING.md). `.openai/hosting.json` records that existing project's binding names and project ID; it does not grant access. The background runner has its own `services/runner/wrangler.jsonc`.
 
 The Sites backend signs commands to the runner. The browser receives neither the signing secret nor a choice of runner owner. Migrated accounts are fenced against the old database writer; a runner outage does not turn browser trading back on. Preserve the existing Durable Object namespace and journal when updating a deployment.
 
