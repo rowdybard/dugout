@@ -25,6 +25,7 @@ import {TennisMatchChart} from './match-chart';
 import {GamePicker} from './game-picker';
 import {RunnerSetup} from './runner-setup';
 import {DecisionCard} from './decision-card';
+import {EngineCard} from './engine-card';
 
 import {describeTennisRules} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
@@ -187,7 +188,7 @@ export function TennisDashboard() {
 
       <section className="tennis-command" aria-label="Paper bot controls">
 
-        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.decisionEngine==='local-move-v1'?'LOCAL DECISION ENGINE':session?.config.strategy==='auto'?'LEGACY AUTO':session?.config.strategy==='momentum'?'LEGACY RISE':'LEGACY RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
+        <div className="tennis-command-left"><div className="tennis-status-row"><span className="tennis-section-label">{session?.config.evidenceGate==='evidence-v1'?'EVIDENCE DECISION ENGINE':session?.config.decisionEngine==='local-move-v1'?'LOCAL DECISION ENGINE':session?.config.strategy==='auto'?'LEGACY AUTO':session?.config.strategy==='momentum'?'LEGACY RISE':'LEGACY RECOVERY'} · PAPER BOT</span><span className="tennis-status"><span className={`tennis-dot ${isRunning&&!tickStale?'is-live':'is-waiting'}`}/>{status}</span></div>
 
           <div className="tennis-controls">{isIdle?<button className="tennis-primary" disabled={bot.busy||migrating||!session?.config.focusSlug||entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)} onClick={()=>void startBot()}><Play size={17}/>{bot.busy?'Starting…':'Start paper bot'}</button>:isStopped?<button className="tennis-primary" disabled={bot.busy||migrating||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New paper run</button>:<button className="tennis-primary" disabled={bot.busy||migrating||!session||session.status==='stopping'||(isPaused&&!session.config.focusSlug)} onClick={()=>{if(isPaused)void startBot();else void bot.perform({action:'pause',commandId:tennisCommandId()});}}>{bot.busy?<LoaderCircle size={17}/>:isPaused?<Play size={17}/>:<Pause size={17}/>} {isPaused?'Start paper bot':'Pause bot'}</button>}
 
@@ -206,6 +207,7 @@ export function TennisDashboard() {
 
       </section>
 
+      {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} now={now}/>}
       <RunnerSetup runtime={bot.runtime} flat={open.length===0&&!session?.pending} onComplete={bot.reloadAccount}/>
       <section className="tennis-rule-summary" aria-label="Bot game focus"><b>{session?.config.focusSlug?`Bot focus: ${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}`:'Saved game'}`:'Choose one game for the bot'}</b><p>{session?.config.focusSlug?'New entries are limited to this game. Both teams are evaluated; existing positions still receive exit checks.':'The chart is for watching. Focus a game below before starting the bot.'}</p>{followedMarket&&session?.config.focusSlug!==followedMarket.slug&&<button className="tennis-secondary" disabled={bot.busy||!session||migrating} onClick={()=>void setGameFocus(followedMarket.slug)}>Focus bot on {followedMarket.yesName} vs. {followedMarket.noName}</button>}</section>
 
@@ -219,7 +221,7 @@ export function TennisDashboard() {
 
       {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Paper entry':'Paper exit'} queued · waiting for a fresh book after {session.config.executionDelayMs/1000}s execution delay.</div>}
 
-      {open.length>0&&<section className="tennis-position-list" aria-label="Open paper positions"><h2 className="tennis-open-title">The bot’s open trade</h2>{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-section-label">{position.league} · {position.side} · PAPER</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} remaining cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for fresh exit value':partial?'Only part can sell now':'Net P/L if filled now'}</small></div><span className="tennis-status">{session?.pending?.action==='SELL'?'Bot is exiting':'Bot is managing'}</span></article>;})}</section>}
+      {open.length>0&&<section className="tennis-position-list" aria-label="Open paper positions"><h2 className="tennis-open-title">The bot’s open trade</h2>{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-section-label">{position.league} · {position.side} · PAPER</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} remaining cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for fresh exit value':partial?'Only part can sell now':'Net P/L if filled now'}</small></div><span className="tennis-status">{session?.pending?.action==='SELL'?'Bot is exiting':position.exitPolicy==='maker'?'Market-making inventory':position.exitPolicy==='hold-to-settlement'?'Holding to the final':'Bot is managing'}</span></article>;})}</section>}
 
       <section className="tennis-activity" aria-label="Paper balance history"><div className="tennis-activity-head"><h2>Paper balance</h2><span className="tennis-section-label">Fees included</span></div><TennisPriceChart points={session?.equity??[]} currency/><div className="tennis-feed-note"><span>{closed.length} closed positions</span><span>{session?signed(pnl):'—'} since start{incompleteMark?' · some holdings unpriced':''}</span></div></section>
 

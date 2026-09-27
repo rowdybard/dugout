@@ -24,10 +24,12 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
   const pausedFlat=session.status==='paused'&&!held&&!session.pending;
   const usage=runtime?.mode==='service'?runtime.usage:undefined;
   const budgetReached=!!usage&&usage.day===new Date(now).toISOString().slice(0,10)&&usage.estimatedRowsWritten>=usage.entryPauseAt;
+  const quoting=!!session.maker&&(!!session.maker.quotes.YES||!!session.maker.quotes.NO);
+  const holdLabel=held?.exitPolicy==='hold-to-settlement'?'Holding to final':held?.exitPolicy==='maker'?'Market making':'Holding';
   const state=runtime?.mode==='migrating'?'Setup paused':session.pending?.action==='SELL'||session.exitRequested||session.status==='stopping'?'Exiting':
-    held?(session.status==='paused'?'Holding · entries paused':'Holding'):session.pending?.action==='BUY'?'Buying':
+    held?(session.status==='paused'?`${holdLabel} · entries paused`:holdLabel):session.pending?.action==='BUY'?'Buying':
     pausedFlat?'Paused':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
-    checkStale?'Waiting for a check':forming?'Setup forming':'Watching';
+    checkStale?'Waiting for a check':quoting?'Market making':forming?'Setup forming':'Watching';
   const reason=runtime?.mode==='migrating'?'Entries are paused while the saved account moves to the background runner.':
     pausedFlat?(budgetReached?`Daily storage budget reached (${usage!.estimatedRowsWritten.toLocaleString()} / ${usage!.entryPauseAt.toLocaleString()} estimated rows). Entries remain paused; the daily allowance renews at 00:00 UTC. Resetting the paper balance will not clear it.`:
       /paused/i.test(session.lastReason)?`${session.lastReason} Press Start when ready.`:`${session.lastReason} Entries are paused; press Start when ready.`):
