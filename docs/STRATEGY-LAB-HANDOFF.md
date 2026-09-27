@@ -200,7 +200,12 @@ Last updated: 2026-09-27 (evening). Steps 1–2 are done. Step 3 (data lake) is 
   - `calibration.py`: is the market biased?
   - `reaction.py`: over- or under-reaction by play type, and lag in seconds
   - `report.md`: plain-English findings plus a summary Chad can read
-- [ ] **Step 5: MLB models:**
+- [x] **Step 5: MLB models, v1** (Sep 27; `research/models/mlb/`).
+  - Brier 0.159 on held-out 2026; team, pitcher and fatigue layers add ~nothing over game state.
+  - The market is at least as accurate (0.1560 vs 0.1576), and fair-value trades are noise.
+  - Reaction: the price has made 92% of a big plate appearance's move 10 s after the official Stats API timestamp, so free-feed speed trading is dead.
+  - **Decision pending from the owner:** pivot to a market-making pilot (see report "Bottom line").
+  - Original plan items:
   - win-expectancy base
   - Elo plus starting pitcher
   - live layer: pitch count, times through the order, bullpen fatigue, who's due up, platoon, park and weather
