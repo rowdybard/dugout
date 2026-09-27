@@ -28,6 +28,7 @@ test('football drive context maps possession separately from field territory and
   // The provider uses down=0 during transitions; it is not a playable zeroth down.
   const transition=normalizeTennisEvent({...event,eventState:{...event.eventState,footballState:{...footballState,driveState:{...footballState.driveState,down:0,yfd:0}}}},'CFB',NOW)[0];
   assert.equal(transition.football?.down,null);assert.equal(transition.football?.yardsToGo,null);
+  assert.equal(transition.football?.phase,'between-plays');
 });
 
 test('missing or invalid drive data stays unknown instead of inventing a team or down',()=>{

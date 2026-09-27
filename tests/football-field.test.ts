@@ -11,6 +11,15 @@ function market(patch:Partial<FootballFieldMarket>={}):FootballFieldMarket{retur
 };}
 function drive(patch:Partial<NonNullable<FootballFieldMarket['football']>>){const m=market();return market({football:{...m.football!,...patch}});}
 
+test('between-play state hides stale scrimmage and first-down markers without inventing a kick type',()=>{
+  const m=drive({phase:'between-plays',down:null,yardsToGo:null});
+  const assessment:FootballAssessment={status:'transition',reason:'Between scrimmage plays.',reportTime:now-2000,receiptTime:now-1000,reportAgeMs:2000,receiptAgeMs:1000};
+  const v=footballFieldView(m,now,assessment);
+  assert.equal(v.freshness,'transition');assert.equal(v.lineOfScrimmage,null);assert.equal(v.firstDownLine,null);
+  assert.equal(v.possession,null);assert.equal(v.distanceLabel,'Between scrimmage plays');
+  assert.equal(footballFieldView(m,now+46000,assessment).freshness,'stale');
+});
+
 test('YES goal stays on the left; YES advances right from its own territory',()=>{
   const v=footballFieldView(market(),now);assert.equal(v.lineOfScrimmage,35);assert.equal(v.firstDownLine,42);assert.equal(v.direction,1);assert.equal(v.possession,'YES');assert.equal(v.distanceLabel,'2nd & 7');
 });

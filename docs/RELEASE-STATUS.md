@@ -4,6 +4,8 @@ Evidence date: September 26, 2026. This records observations and test results; i
 
 ## Accepted-feed status correction
 
+Scoring follow-up: explicit provider down zero now has a separate between-plays state and ordered scoreboard record; it does not fabricate a kick/TD label or playable down. Regression tests cover pending-buy cancellation, next-drive recovery and a new local automatic simulated fill, stale transitions, equal-time conflicts and hidden field markers. The complete 577-test suite passed, including empty-tick transition aging. These synthetic fills are not live automatic fills.
+
 - Observed a newly fetched REST response containing an older, different book than the accepted WebSocket book. The ordering guard rejected it correctly, but runtime health previously reported the rejected receipt's age as quote freshness.
 - Runtime quote age now derives from the accepted focused/held book; football report age derives from saved verified report evidence. The UI distinguishes these from runner updates and never substitutes chart timestamps. Flat paused/idle/stopped sessions have explicit labels.
 - The WebSocket handshake deadline is cancelled after upgrade, and the subscription explicitly requests unbatched updates. The old lifetime timeout and the fix have regression coverage. Older, conflicting books remain rejected; spread and freshness checks are unchanged.

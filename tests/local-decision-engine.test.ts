@@ -59,6 +59,22 @@ test('delayed entry rejects lost depth, wide spread and changed football context
   }
 });
 
+test('scoring transition cancels a pending local buy; the next verified drive can form a new automatic entry',()=>{
+  const queuedMove=queued('YES',true),time=queuedMove.quote.receivedAt+1000;
+  const transition=input(time,.75,'YES',true);transition.market.score='7-14';
+  transition.market.football={...transition.market.football!,phase:'between-plays',down:null,yardsToGo:null,fieldPosition:null};
+  let session=stepTennisSession(queuedMove.session,[transition],time);
+  assert.equal(session.pending,null);assert.equal(session.cash,100);assert.equal(session.ledger.length,0);
+  assert.equal(session.footballReports![SLUG].assessment.status,'transition');
+  assert.equal(stepTennisSession(session,[],time+46000).footballReports![SLUG].assessment.status,'stale');
+  let confirmed:TennisInput|undefined;
+  for(const [offset,bid] of trajectory){const quote=input(time+65000+offset*1000,bid,'YES',true);quote.market.score='7-14';session=stepTennisSession(session,[quote],quote.receivedAt);if(session.pending){confirmed=quote;break;}}
+  assert.equal(session.pending?.action,'BUY',session.lastReason);
+  const later=structuredClone(confirmed!);later.receivedAt+=1000;later.market.observedAt=later.receivedAt;later.market.contextUpdatedAt=later.receivedAt;later.book.time=new Date(later.receivedAt).toISOString();
+  session=stepTennisSession(session,[later],later.receivedAt);
+  assert.equal(session.positions[0]?.status,'open',session.lastReason);assert.equal(session.ledger[0]?.action,'BUY');
+});
+
 test('held positions keep collecting independent history and original exit limits after a rule change',()=>{
   const {session,quote}=filled('YES',true),plan=structuredClone(session.positions[0].exitPlan),time=quote.receivedAt+1;
   const updated=applyTennisAction(session,{action:'update-rules',sessionId:session.id,expectedRulesRevision:0,commandId:'synthetic-new-risk',rules:{stopReturn:.25,maxHoldMs:600000,executionDelayMs:30000,focusSlug:'different-synthetic-game'}},[],time);

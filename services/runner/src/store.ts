@@ -76,7 +76,7 @@ export class RunnerStore {
   state():RunnerState{
     const session=this.session(),meta=this.active();if(!session||!meta)throw new RunnerError(409,'Runner migration is not active.');
     const now=Date.now(),slug=session.positions.find(p=>p.status==='open')?.slug??session.pending?.slug??session.config.focusSlug;
-    const quote=slug?session.quotes?.[slug]:undefined,report=slug?session.footballReports?.[slug]?.report:undefined;
+    const quote=slug?session.quotes?.[slug]:undefined,context=slug?session.footballReports?.[slug]:undefined,report=context?.transition??context?.report;
     const age=(time:number|undefined|null)=>typeof time==='number'&&Number.isFinite(time)&&time>=0&&time<=now?now-time:null;
     return {session,runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
   }

@@ -12,7 +12,7 @@ export function FootballField({market,now,assessment,contextCheck}:{market:Footb
   const check=contextCheckView(contextCheck,now,{freshness:field.freshness,live:market.live,ended:market.ended});
   if(!field.supported)return null;
   const fresh=field.freshness==='fresh';
-  const reportLabel=fresh?'Fresh report':field.freshness==='conflicting'?'Conflicting reports':field.freshness==='stale'?'Stale report':'Report unverified';
+  const reportLabel=fresh?'Fresh report':field.freshness==='transition'?'Between plays':field.freshness==='conflicting'?'Conflicting reports':field.freshness==='stale'?'Stale report':'Report unverified';
   const summary=`Reported football field. ${market.yesName} goal on the left; ${market.noName} goal on the right. ${field.positionLabel}. ${field.possessionLabel}. ${field.distanceLabel}. ${field.ageLabel}. ${reportLabel}.${field.issue?` ${field.issue}`:''}`;
   const markerOpacity=fresh?1:.55;
   return <section aria-label="Reported football field" style={{margin:'14px 0',padding:'14px',border:'1px solid #344d3d',borderRadius:14,background:'#12281e',color:'#edf6ee'}}>

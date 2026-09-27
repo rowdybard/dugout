@@ -13,7 +13,7 @@ export function recordContextCheck(previous:ContextCheckState|undefined,result:C
 
 const ageText=(ms:number)=>ms<60_000?`${Math.floor(ms/1000)}s`:ms<3_600_000?`${Math.floor(ms/60_000)}m ${Math.floor(ms%60_000/1000)}s`:`${Math.floor(ms/3_600_000)}h ${Math.floor(ms%3_600_000/60_000)}m`;
 
-export function contextCheckView(check:ContextCheckState|undefined,now:number,report:{freshness:'fresh'|'stale'|'unknown'|'conflicting';live:boolean;ended:boolean}){
+export function contextCheckView(check:ContextCheckState|undefined,now:number,report:{freshness:'fresh'|'stale'|'unknown'|'conflicting'|'transition';live:boolean;ended:boolean}){
   const timestamp=check?.successfulCheckAt;
   // Small server/client clock differences should not render a negative age.
   const ageMs=typeof timestamp==='number'&&Number.isFinite(timestamp)&&timestamp>=0&&Number.isFinite(now)&&timestamp<=now+30_000?Math.max(0,now-timestamp):null;
@@ -24,6 +24,7 @@ export function contextCheckView(check:ContextCheckState|undefined,now:number,re
     :!report.live?'Waiting for the game to be in play.'
     :report.freshness==='conflicting'?'Waiting for the game reports to agree.'
     :report.freshness==='unknown'?'Waiting for a verified game report.'
+    :report.freshness==='transition'?'Scoreboard received. Waiting for the next scrimmage down; no first-down line applies yet.'
     :ageMs===null?'Waiting for a successful game-feed check.'
     :report.freshness==='stale'?ageMs<=15_000?'Game feed checked; waiting for a newer play report.':'Waiting for the next game-feed check.'
     :'Markers update when the provider sends a new play report.';

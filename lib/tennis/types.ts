@@ -9,6 +9,8 @@ export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
 export type FootballContext={
   possessionTeam:string|null;down:number|null;yardsToGo:number|null;
   possessionTeamId?:string|null;
+  /** Explicit provider down=0; no touchdown/kick type is inferred. */
+  phase?:'between-plays';
   fieldPosition:{team:string;yard:number;teamId?:string}|null;timeouts:{team:string;remaining:number}[];
 };
 export type FootballReport={
@@ -16,8 +18,9 @@ export type FootballReport={
   score:string;period:string;clock:string;possessionTeamId:string;down:number;yardsToGo:number;
   fieldPosition:{teamId:string;yard:number};
 };
-export type FootballAssessment={status:'fresh'|'stale'|'unknown'|'conflicting';reason:string;reportTime:number|null;receiptTime:number;reportAgeMs:number|null;receiptAgeMs:number};
-export type FootballReportState={report?:FootballReport;assessment:FootballAssessment;conflictedAt?:number};
+export type FootballAssessment={status:'fresh'|'stale'|'unknown'|'conflicting'|'transition';reason:string;reportTime:number|null;receiptTime:number;reportAgeMs:number|null;receiptAgeMs:number};
+export type FootballTransition=Pick<FootballReport,'eventId'|'yesTeamId'|'noTeamId'|'reportTime'|'receiptTime'|'score'|'period'|'clock'>&{phase:'between-plays'};
+export type FootballReportState={report?:FootballReport;transition?:FootballTransition;assessment:FootballAssessment;conflictedAt?:number};
 export type PositionExitRules={targetReturn:number;stopReturn:number;maxHoldMs:number;source:'entry'|'legacy-snapshot'};
 export type ShadowExit={
   positionId:string;slug:string;side:TradeSide;reason:'POSSESSION_LOST'|'FOURTH_DOWN';

@@ -51,6 +51,28 @@ test('regressing and equal-time conflicting facts are quarantined until a strict
   assert.equal(assessFootballContext(input(NOW+2000).market,NOW+2000,blocked).assessment.status,'fresh');
 });
 
+test('explicit between-play reports retain scoreboard authority and recover on the next verified down',()=>{
+  const before=assessFootballContext(input().market,NOW),transition=input(NOW+1000);
+  transition.market.score='7-14';transition.market.football={...transition.market.football!,phase:'between-plays',down:null,yardsToGo:null,fieldPosition:null};
+  const checked=assessFootballContext(transition.market,NOW+1000,before);
+  assert.equal(checked.assessment.status,'transition');assert.equal(checked.transition?.score,'7-14');
+  assert.equal(checked.report?.score,'7-7','Do not fabricate a playable down from a score update.');
+  assert.equal(assessFootballContext(transition.market,NOW+47000,checked).assessment.status,'stale');
+  assert.equal(assessFootballContext(input().market,NOW+2000,checked).assessment.status,'conflicting');
+  const next=offense(input(NOW+2000),'B',1);next.market.score='7-14';
+  const recovered=assessFootballContext(next.market,NOW+2000,checked);
+  assert.equal(recovered.assessment.status,'fresh');assert.equal(recovered.transition,undefined);assert.equal(recovered.report?.down,1);
+});
+
+test('same-time scoring transition conflicts remain quarantined and unknown down is not a verified transition',()=>{
+  const transition=input();transition.market.football!.phase='between-plays';transition.market.football!.down=null;
+  const initial=assessFootballContext(transition.market,NOW);
+  const conflict=structuredClone(transition);conflict.market.score='7-14';
+  assert.equal(assessFootballContext(conflict.market,NOW,initial).assessment.status,'conflicting');
+  delete transition.market.football!.phase;
+  assert.equal(assessFootballContext(transition.market,NOW).assessment.status,'unknown');
+});
+
 test('new policy quality-gates football while older saved exports retain price-only semantics',()=>{
   const legacy={...defaultTennisConfig()};delete legacy.decisionPolicy;
   assert.equal(normalizeTennisConfig(legacy).decisionPolicy,'price-v1');

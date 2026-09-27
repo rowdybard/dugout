@@ -147,6 +147,8 @@ Before proposing a buy, and again before its delayed fill, the engine requires:
 
 Rejected checks produce reasons. A fresh price alone never forces a trade.
 
+An explicit provider `driveState.down = 0` is recorded as a **between-plays transition**, with its score, period, clock, team identity and original timestamps. It is not a malformed normal down or proof of a specific kick/touchdown. The transition advances the report-ordering watermark, hides scrimmage/first-down markers, and blocks/cancels new entry attempts until a newer complete drive arrives. Ordinary position exits continue. Old or conflicting reports cannot reverse that transition; its evidence still expires after 45 seconds. A missing down without explicit zero remains unknown.
+
 ### Current policy: local move analysis
 
 The optional `config.decisionEngine: 'local-move-v1'` field selects [opportunity.ts](../lib/tennis/opportunity.ts). It evaluates both YES and NO using only evidence available at the current receipt. The `strategy: auto` field remains for schema compatibility; this branch does **not** run the old recovery-versus-momentum chooser. No model, remote inference, broadcast listening or paid AI call occurs.

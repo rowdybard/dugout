@@ -6,7 +6,7 @@ export type FootballFieldView={
   supported:boolean;lineOfScrimmage:number|null;firstDownLine:number|null;
   possession:'YES'|'NO'|null;direction:1|-1|null;goalToGo:boolean;
   positionLabel:string;possessionLabel:string;distanceLabel:string;
-  freshness:'fresh'|'stale'|'unknown'|'conflicting';reportAgeMs:number|null;receiptAgeMs:number|null;
+  freshness:'fresh'|'stale'|'unknown'|'conflicting'|'transition';reportAgeMs:number|null;receiptAgeMs:number|null;
   ageLabel:string;issue:string|null;
 };
 
@@ -24,7 +24,7 @@ export function footballFieldView(market:FootballFieldMarket,now:number,assessme
   // A retained location can still have recent timestamps after a newer report
   // was rejected. Its assessment must prevent a fresh/solid field claim.
   // A previously fresh assessment can never stop these timestamps from aging.
-  const freshness=assessment&&assessment.status!=='fresh'?assessment.status:clockFreshness;
+  const freshness=assessment?.status==='transition'&&clockFreshness!=='fresh'?clockFreshness:assessment&&assessment.status!=='fresh'?assessment.status:clockFreshness;
   const assessmentIssue=assessment&&assessment.status!=='fresh'?assessment.reason:null;
   const result:FootballFieldView={supported:market.league==='NFL'||market.league==='CFB',lineOfScrimmage:null,firstDownLine:null,
     possession:null,direction:null,goalToGo:false,positionLabel:'Field position unavailable',possessionLabel:'Possession not verified',distanceLabel:'Down & distance unavailable',
@@ -34,6 +34,8 @@ export function footballFieldView(market:FootballFieldMarket,now:number,assessme
   const identity=market.footballIdentity,drive=market.football;
   if(!identity?.yesTeamId?.trim()||!identity.noTeamId?.trim()||identity.yesTeamId===identity.noTeamId||!drive)
     return unavailable('Waiting for verified team identities and a field report.');
+  if(drive.phase==='between-plays')return {...result,distanceLabel:'Between scrimmage plays',possessionLabel:'Next possession awaiting confirmation',
+    issue:assessmentIssue??'The feed reports no active scrimmage down. Kick or scoring-play type is not supplied; field lines stay hidden until the next verified down.'};
   const teamSide=(id:string|undefined|null)=>id===identity.yesTeamId?'YES':id===identity.noTeamId?'NO':null;
   const teamName=(side:'YES'|'NO')=>side==='YES'?market.yesName:market.noName;
   const possession=teamSide(drive.possessionTeamId);

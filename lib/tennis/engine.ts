@@ -568,9 +568,10 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       resetFootballSetup(session,input.market.slug,'Score, possession or quarter changed. Confirming a new setup.');
   }
   // A missing market update cannot preserve yesterday's fresh assessment.
-  for(const [slug,state] of Object.entries(session.footballReports))if(!current.some(input=>input.market.slug===slug&&input.source!=='REPLAY')&&state.report){
-    state.assessment={...state.assessment,reportAgeMs:now-state.report.reportTime,receiptAgeMs:now-state.report.receiptTime};
-    if(state.assessment.status==='fresh'&&(now-state.report.reportTime>45000||now-state.report.receiptTime>45000))
+  for(const [slug,state] of Object.entries(session.footballReports))if(!current.some(input=>input.market.slug===slug&&input.source!=='REPLAY')&&(state.transition??state.report)){
+    const report=(state.transition??state.report)!;
+    state.assessment={...state.assessment,reportAgeMs:now-report.reportTime,receiptAgeMs:now-report.receiptTime};
+    if(['fresh','transition'].includes(state.assessment.status)&&(now-report.reportTime>45000||now-report.receiptTime>45000))
       state.assessment={...state.assessment,status:'stale',reason:'The football report is older than 45 seconds. Waiting for fresh context.'};
   }
   session.coverage ??= {};

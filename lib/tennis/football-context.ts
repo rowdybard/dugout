@@ -15,7 +15,8 @@ export function assessFootballContext(market:TennisMarket,now:number,previous?:F
     ({...previous,assessment:assessment(status,reason),...(conflictedAt!==undefined?{conflictedAt}:{})});
   if(!Number.isFinite(now)||!Number.isFinite(receiptTime)||receiptTime>now||reportTime===null||!Number.isFinite(reportTime)||reportTime>now||reportTime>receiptTime)
     return reject('unknown','Waiting for verified game-report and receipt times. Fresh quotes do not refresh game context.');
-  if(previous?.report&&(reportTime<previous.report.reportTime||receiptTime<previous.report.receiptTime))
+  const frontier=previous?.transition??previous?.report;
+  if(frontier&&(reportTime<frontier.reportTime||receiptTime<frontier.receiptTime))
     return reject('conflicting','An older game report arrived after a newer one. Waiting for consistent context.');
   if(previous?.conflictedAt!==undefined&&reportTime<=previous.conflictedAt)
     return reject('conflicting','Game facts disagreed at the same report time. Waiting for a newer report.');
@@ -24,6 +25,19 @@ export function assessFootballContext(market:TennisMarket,now:number,previous?:F
     return reject('unknown','Waiting for explicit team identities and reported football context.');
   const teamIds=[identity.yesTeamId,identity.noTeamId];
   const teamName=(id:string)=>id===identity.yesTeamId?market.yesName:market.noName;
+  if(frontier&&(frontier.eventId!==market.eventId||frontier.yesTeamId!==identity.yesTeamId||frontier.noTeamId!==identity.noTeamId))
+    return reject('conflicting','The game or outcome team mapping changed. New entries are blocked.');
+  const scoreboard=!!market.score&&/^\d+\s*-\s*\d+$/.test(market.score)&&!!market.period&&/^(Q[1-4]|OT\d*|\d+OT)$/.test(market.period)&&!!market.clock&&/^\d{1,2}:[0-5]\d$/.test(market.clock);
+  if(frontier?.reportTime===reportTime&&(frontier.score!==market.score||frontier.period!==market.period||frontier.clock!==market.clock||!!previous?.transition!==(drive.phase==='between-plays')))
+    return reject('conflicting','Game facts disagreed at the same report time. Waiting for a newer report.',reportTime);
+  if(drive.phase==='between-plays'&&scoreboard){
+    const stale=now-reportTime>FOOTBALL_CONTEXT_MAX_AGE_MS||now-receiptTime>FOOTBALL_CONTEXT_MAX_AGE_MS;
+    const transition={eventId:market.eventId,yesTeamId:identity.yesTeamId,noTeamId:identity.noTeamId,reportTime,receiptTime,
+      score:market.score!,period:market.period!,clock:market.clock!,phase:'between-plays' as const};
+    return {...previous,transition,assessment:assessment(stale?'stale':'transition',stale?
+      'The between-plays report is older than 45 seconds. Waiting for a newer game report.':
+      `Score ${market.score}. Between scrimmage plays; waiting for the next verified down. Kick or scoring-play type is not supplied by this feed.`)};
+  }
   if(!drive.possessionTeamId||!teamIds.includes(drive.possessionTeamId)||drive.possessionTeam!==teamName(drive.possessionTeamId))
     return reject('unknown','Reported possession does not match the verified teams.');
   const field=drive.fieldPosition;

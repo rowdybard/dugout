@@ -59,6 +59,7 @@ Read the current decision before changing anything:
 - **Drop is not distinct from volatility:** the move is too small compared with recent price noise. It is checking but has no qualifying setup.
 - **Football report older than 45 seconds:** prices may be live, but game facts are too old for entry. The app cannot invent a newer play.
 - **Older provider book:** a newly delivered response contains older prices than the bot already saw. It waits for a current book.
+- **Between scrimmage plays:** the provider explicitly reports no active down, as can happen around scoring or kicks. The score stays visible, field lines are hidden, and entries wait for the next verified down. The feed does not identify every kick or touchdown, so the app does not invent a play label.
 
 Do not reset the balance or loosen rules to make a trade appear. If **Runner update** stops advancing while running, use Reconnect and tell the owner the game, time and message. A different chart does not change the named **Bot game**.
 

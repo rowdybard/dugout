@@ -31,6 +31,7 @@ function footballContext(raw:unknown,sides:Raw[]):FootballContext|null{
   const field=object(drive.fieldPosition),territory=teamName(field.teamId),yard=integer(field.yard,0,50);
   const down=integer(drive.down,1,4);
   return {possessionTeam:teamName(drive.possessionTeamId),down,
+    ...(tennisNumber(drive.down)===0?{phase:'between-plays' as const}:{}),
     possessionTeamId:teamName(drive.possessionTeamId)?String(drive.possessionTeamId):null,
     yardsToGo:down!==null?integer(drive.yfd,0,100):null,
     fieldPosition:territory&&yard!==null?{team:territory,yard,teamId:String(field.teamId)}:null,
