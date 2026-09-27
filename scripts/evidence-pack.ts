@@ -3,6 +3,8 @@
  *
  *   node --experimental-strip-types scripts/evidence-pack.ts export [out.json]   # bundled pack -> JSON (starting point for research edits)
  *   node --experimental-strip-types scripts/evidence-pack.ts validate pack.json   # schema check, SHA-256 to pin, changes vs bundled
+ *   node --experimental-strip-types scripts/evidence-pack.ts add pack.json results.json <new-version>
+ *       # merge a study's evidence row(s) into the pack (same id replaces), under a new version
  *
  * Publishing is done from the PC with research/datastore/lake.py put-pack (after validate).
  */
@@ -11,7 +13,7 @@ import {BUNDLED_PACK,parsePack} from '../lib/decision/pack.ts';
 import {createEngine} from '../lib/decision/engine.ts';
 import {sha256Hex} from '../lib/decision/sources.ts';
 
-const [command,path]=process.argv.slice(2);
+const [command,path,extra,newVersion]=process.argv.slice(2);
 
 if(command==='export'){
   const text=`${JSON.stringify(BUNDLED_PACK,null,1)}\n`;
@@ -34,7 +36,21 @@ if(command==='export'){
   for(const id of before.keys())if(!after.has(id))console.log(`  - ${id} (removed; losing rows should stay so the engine keeps refusing them)`);
   const proven=pack.evidence.filter(row=>row.status==='proven');
   if(proven.length)console.log(`  ! ${proven.length} proven row(s): ${proven.map(r=>r.id).join(', ')}. Real money uses them only when this exact file is pinned.`);
+}else if(command==='add'&&path&&extra&&newVersion){
+  const parsed=parsePack(JSON.parse(readFileSync(path,'utf8')));
+  if(!parsed.ok){console.error(`INVALID pack: ${parsed.error}`);process.exit(1);}
+  // A study's results file carries its row under `evidence`; a bare row or a list of rows also works.
+  const input=JSON.parse(readFileSync(extra,'utf8'));
+  const rows=(Array.isArray(input)?input:input&&typeof input==='object'&&'evidence' in input&&!('status' in input)?[input.evidence]:[input]).filter(Boolean);
+  if(!rows.length){console.error(`No evidence row in ${extra}${input?.note?`: ${input.note}`:''}.`);process.exit(1);}
+  if(!/^[A-Za-z0-9._-]{1,80}$/.test(newVersion)||newVersion===parsed.pack.version){console.error('Give a new version (letters, digits, . _ -), different from the current one: a version always means the same rules.');process.exit(2);}
+  const ids=new Set(rows.map((row:{id:string})=>row.id));
+  const next=parsePack({...parsed.pack,version:newVersion,generatedAt:new Date().toISOString(),evidence:[...parsed.pack.evidence.filter(row=>!ids.has(row.id)),...rows]});
+  if(!next.ok){console.error(`INVALID after adding: ${next.error}`);process.exit(1);}
+  writeFileSync(path,`${JSON.stringify(next.pack,null,1)}\n`);
+  for(const row of rows as {id:string;status:string}[])console.log(`  ${parsed.pack.evidence.some(old=>old.id===row.id)?'~':'+'} ${row.id} [${row.status}]`);
+  console.log(`Wrote ${path} as ${newVersion}. Next: validate it, then publish with research/datastore/lake.py put-pack.`);
 }else{
-  console.error('Usage: evidence-pack.ts export [out.json] | validate <pack.json>');
+  console.error('Usage: evidence-pack.ts export [out.json] | validate <pack.json> | add <pack.json> <results.json> <new-version>');
   process.exit(2);
 }

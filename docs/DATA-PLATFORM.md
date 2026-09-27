@@ -109,5 +109,6 @@ All three pieces are built. None of them collects anything until the lake exists
    - Play-by-play for MLB and NFL still comes from the PC fetchers.
 2. **Live book recorder:** `lib/datastore/recorder.ts`, running in the runner.
    - Every accepted order book (top 10 levels a side, plus game status) is written about once a minute to `live-books/date=…/league=…/<slug>/`, and appears in `lake.py` as the `live_books` table.
+   - Football records also carry the drive state, the YES and NO team ids, the away/home ordering and the report time. That's enough for `research/studies/drive_entry.py live` to study live drives, including college games, which have no public play-by-play in the lake.
    - It switches on when the runner gets an R2 binding named `LAKE` (see `services/runner/README.md`).
 3. **Forward-test ledgers:** these stream to the `forward-test-data` branch.

@@ -59,11 +59,24 @@ test('exploring is paper-only, needs a pre-registered hypothesis, and stops once
   // Once research publishes a row for this strategy, its own result decides.
   const row=(status:Evidence['status']):Evidence=>({id:`drive-${status}`,title:'Comeback drives',status,sports:['NFL','CFB'],phases:['live'],styles:['taker-scalp'],strategies:['comeback-drive'],
     estimate:{mean:status==='dropped'?-0.05:0.04,lo:-0.1,hi:0.1,unit:'return'},sample:'test',source:'test',plain:'test'});
-  for(const [status,code] of [['dropped','DROPPED'],['lead','DROPPED']] as const){
-    // The general NFL scalping loser still ties against a lead: losers win ties.
+  for(const [status,code] of [['dropped','DROPPED'],['lead','LEAD_PAPER']] as const){
+    // Its own result supersedes the general NFL scalping result, which measured other entry rules.
     const engine=createEngine({pack:{...BUNDLED_PACK,version:`t-${status}`,evidence:[...BUNDLED_PACK.evidence,row(status)]},trust:'bundled'});
-    assert.equal(drive(engine.plan(ctx(),{mode:'paper',explore:['comeback-drive']}))!.verdict.code,code,status);
+    const verdict=drive(engine.plan(ctx(),{mode:'paper',explore:['comeback-drive']}))!.verdict;
+    assert.equal(verdict.code,code,status);assert.equal(verdict.deciding?.id,`drive-${status}`);
+    assert.ok(verdict.evidence.some(item=>item.id==='nfl-live-scalp'),'the general row is still listed');
+    // Other scalps are unaffected by a strategy-specific row.
+    assert.equal(engine.decide({sport:'NFL',phase:'live',style:'taker-scalp',mode:'paper',ask:0.21,bid:0.2}).code,'DROPPED');
   }
+  // A finding about a narrower slice (here a price band) still applies to every strategy.
+  const band:Evidence={id:'nfl-live-cheap-scalp',title:'Cheap NFL scalps',status:'dropped',sports:['NFL'],phases:['live'],styles:['taker-scalp'],price:{min:0,max:0.25},
+    estimate:{mean:-0.2,lo:-0.3,hi:-0.1,unit:'return'},sample:'test',source:'test',plain:'test'};
+  const narrow=createEngine({pack:{...BUNDLED_PACK,version:'t-band',evidence:[...BUNDLED_PACK.evidence,row('lead'),band]},trust:'bundled'});
+  assert.equal(drive(narrow.plan(ctx(),{mode:'paper',explore:['comeback-drive']}))!.verdict.deciding?.id,'nfl-live-cheap-scalp');
+  // A named row whose condition cannot be checked does not displace the general result.
+  const unknown={...row('lead'),id:'drive-unknown',conditions:[{feature:'signal.weather',op:'eq' as const,value:'clear'}]};
+  const cautious=createEngine({pack:{...BUNDLED_PACK,version:'t-unknown',evidence:[...BUNDLED_PACK.evidence,unknown]},trust:'bundled'});
+  assert.equal(drive(cautious.plan(ctx(),{mode:'paper',explore:['comeback-drive']}))!.verdict.code,'DROPPED');
   const cfb=createEngine({pack:{...BUNDLED_PACK,version:'t-lead-cfb',evidence:[...BUNDLED_PACK.evidence,row('lead')]},trust:'bundled'});
   assert.equal(drive(cfb.plan(ctx({sport:'CFB'}),{mode:'paper',explore:['comeback-drive']}))!.verdict.code,'LEAD_PAPER');
 });

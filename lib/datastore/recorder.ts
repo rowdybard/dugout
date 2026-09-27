@@ -14,7 +14,13 @@ export type BookRecord={
   t:number;src:string;sourceTime:number|null;slug:string;league:string;state:string;
   live:boolean;ended:boolean;score:string|null;period:string|null;clock:string|null;
   bids:[number,number][];asks:[number,number][];
-  football?:{possession:string|null;down:number|null;yardsToGo:number|null;fieldTeam:string|null;yard:number|null};
+  /** Provider game-report time (ms); game facts age separately from books. */
+  reportTime?:number|null;
+  /** Team sports: whether YES is the away or home team (scores read "away-home"). */
+  yesOrdering?:'away'|'home'|null;
+  football?:{possession:string|null;down:number|null;yardsToGo:number|null;fieldTeam:string|null;yard:number|null;
+    /** Team ids for YES and NO, so possession and field side map to a side. */
+    yesTeamId?:string;noTeamId?:string;betweenPlays?:boolean};
 };
 
 export const RECORDER_DEPTH=10;
@@ -26,7 +32,11 @@ export function bookRecord(input:TennisInput):BookRecord {
   return {t:input.receivedAt,src:input.source,sourceTime:input.sourceTime??null,slug:market.slug,league:market.league,state:input.book.state,
     live:market.live,ended:market.ended,score:market.score,period:market.period,clock:market.clock??null,
     bids:levels([...input.book.bids].sort((a,b)=>b.price-a.price)),asks:levels([...input.book.asks].sort((a,b)=>a.price-b.price)),
-    ...(football?{football:{possession:football.possessionTeamId??null,down:football.down,yardsToGo:football.yardsToGo,fieldTeam:football.fieldPosition?.teamId??null,yard:football.fieldPosition?.yard??null}}:{})};
+    reportTime:market.contextUpdatedAt,
+    ...(market.yesOrdering!==undefined?{yesOrdering:market.yesOrdering}:{}),
+    ...(football?{football:{possession:football.possessionTeamId??null,down:football.down,yardsToGo:football.yardsToGo,fieldTeam:football.fieldPosition?.teamId??null,yard:football.fieldPosition?.yard??null,
+      ...(market.footballIdentity?{yesTeamId:market.footballIdentity.yesTeamId,noTeamId:market.footballIdentity.noTeamId}:{}),
+      ...(football.phase==='between-plays'?{betweenPlays:true}:{})}}:{})};
 }
 
 export class BookRecorder {

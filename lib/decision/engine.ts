@@ -105,6 +105,8 @@ const inBand=(price:number,band:{min:number;max:number})=>price>band.min+EPSILON
 /** Price- or role-specific findings outrank the general result for the same regime. */
 const specificity=(item:Evidence)=>(item.price?2:0)+(item.role?1:0)+(item.conditions?.length??0)+(item.strategies?1:0);
 const mostSpecific=(items:Evidence[])=>[...items].sort((a,b)=>specificity(b)-specificity(a))[0]??null;
+/** A regime-wide average: no price band, role, conditions or strategy restriction. */
+const blanket=(row:Evidence)=>!row.price&&!row.role&&!row.conditions?.length&&!row.strategies;
 /** Descending order that treats equal infinities as ties. */
 const descending=(a:number,b:number)=>a===b?0:a>b?-1:1;
 
@@ -166,8 +168,13 @@ export function createEngine(options:EngineOptions={}):Engine {
       return verdict('block','NOT_EXECUTABLE',`The ${Math.round(costs!.spread*100)}¢ spread is wider than the 5¢ the research counts as a real price.`,extra);
     const input:MatchInput={sport:ctx.market.sport,phase,style:proposal.style,strategy:proposal.strategy,price,role,
       read:name=>readFeature(features,name,ctx,proposal.side)};
-    const matched=evidence.map(row=>({row,result:matchRow(row,input)})).filter(m=>m.result!=='no');
-    const all=matched.map(m=>m.row),full={...extra,evidence:all};
+    const found=evidence.map(row=>({row,result:matchRow(row,input)})).filter(m=>m.result!=='no');
+    const all=found.map(m=>m.row),full={...extra,evidence:all};
+    // Once a row measured for this strategy certainly applies, it replaces BLANKET regime averages (no price band,
+    // role or conditions), which measured other entry rules. Findings about a narrower slice (a price band, a role, a
+    // game situation) still apply to every strategy that trades in it.
+    const own=found.some(m=>m.result==='match'&&m.row.strategies?.includes(proposal.strategy));
+    const matched=own?found.filter(m=>!blanket(m.row)):found;
     // Losers win ties, and a losing row that cannot be ruled out still blocks.
     const dropped=matched.filter(m=>m.row.status==='dropped').map(m=>m.row);
     if(dropped.length){

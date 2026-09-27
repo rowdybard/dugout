@@ -23,6 +23,12 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
   - An unknown condition never permits a trade.
   - Unmeasured regimes are refused.
   - `proven` means real money may be used; `lead` means paper only. Resting-order leads may also run as a capped real-money `pilot`.
+  - Once a row measured for a strategy itself applies, it replaces **blanket** regime averages (rows with no price band, role or conditions, which measured other entry rules). Findings about a narrower slice, such as "CFB underdogs" or "MLB sides under 10¢", still bind every strategy.
+- **Exploring (paper only):** a strategy with a written, pre-registered `hypothesis` may trade on paper where no study covers it yet, or where only a blanket average for other rules exists. The verdict is `EXPLORE_PAPER`.
+  - It is never pilot or real money.
+  - It ranks below any measured result.
+  - It stops as soon as a pack carries a row naming the strategy; that result then decides.
+  - Accounts opt in with `config.explore`.
 - **Sizing:**
   - Real money stakes ¼ Kelly on the evidence's **lower** bound, so a result whose range touches zero stakes nothing.
   - Paper and pilot trades use a fixed small stake.
@@ -42,6 +48,7 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
 | `pack.ts` | Evidence-pack schema and validation, the bundled pack, and the untrusted-pack restriction |
 | `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`) and the market-implied baseline |
 | `strategies.ts` | Built-in strategies: `favourite-hold`, `model-edge-hold`, `maker-quote`, plus the `random-side-control` control |
+| `sports/` | Sport modules: features and strategies for one sport, plugged into the same engine. `football.ts` holds the live football features and `comeback-drive`. |
 | `sizing.ts`, `risk.ts`, `costs.ts` | Stakes, kill switches, fees and break-even |
 | `sources.ts`, `host.ts` | Streaming packs in: from a URL or an R2 binding, with a SHA-256 pin and fallback to the last good pack |
 | `forward.ts`, `polymarket.ts` | Forward test and read-only Polymarket US parsing |
@@ -56,7 +63,7 @@ Every research output has a place to plug in. None of them require engine code c
 | A situation variable | a **feature** (`features.ts`, or `createEngine({features})`) | `twoMinuteWarning`, `bullpenInnings`, `lineMove60m` |
 | An outside fact (news, injuries, lineups, weather) | a **signal** in the context, read as `signal.<name>` | `signals: {starterScratched: true}` plus the row condition `{"feature":"signal.starterScratched","op":"eq","value":true}` |
 | A trained model | a **model spec** in the pack's `models` | `{"kind":"logistic-v1","id":"mlb-wp","sports":["MLB"],"phases":["live"],"intercept":…,"weights":{"scoreDiff":…}}`. `model-edge-hold` proposes when it beats break-even, and evidence still decides. |
-| A new way to trade | a **strategy** (`strategies.ts`) | propose-only; the gate, sizing and risk apply automatically |
+| A new way to trade | a **strategy** (`strategies.ts`, or a sport module in `sports/`) | propose-only; the gate, sizing and risk apply automatically. With a `hypothesis` it can be explored on paper before it is measured. |
 | Where resting orders are safe | **maker** evidence rows | read by `quotePolicy` and `maker-quote` |
 
 **Delivery:**
@@ -81,13 +88,15 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
 | **CFB pregame favourites** | **PAPER ONLY** | **+2.5% [−1.4%, +6.6%]** |
 | Resting orders: NFL/MLB live, NFL pregame | NO | negative markout |
 | **Resting orders: CFB live/pregame, MLB pregame** | **paper or capped pilot** | +0.12¢ to +0.48¢ per contract, before rewards (optimistic fills) |
+| **Comeback drives, NFL and CFB live** | **PAPER TEST** (exploring) | not measured yet; `research/studies/drive_entry.py` measures it on the PC |
 
 "Favourites" here isn't the insight. Favourites win about as often as their price says everywhere except college, where **underdogs are overpriced** (people overpay for longshots). Even that lead isn't proven yet, and the forward test below will settle it.
 
 ## Who asks it
 
 - **The paper bot.** New accounts, and any account after Start/Resume, run on the engine (`evidenceGate: 'evidence-v1'`, `maker: 'paper-v1'`). The adapter is `lib/tennis/engine-plan.ts`.
-  - **Every tick, it asks `engine.plan()` for the focused game,** whether pregame or live, in any supported league: ATP, WTA, NFL, CFB, MLB.
+  - **Every tick, it asks `engine.plan()` for the focused game,** whether pregame or live, in any supported league: ATP, WTA, NFL, CFB, MLB. Live football plans include the verified game state.
+  - **Drive trades:** a `comeback-drive` action becomes a delayed paper entry. It is re-checked on the next report: still the same drive, still the setup, still permitted. The bot then sells when the drive ends (see [Live football](#live-football-comeback-drives)).
   - **Taker holds:** the best taker-hold action becomes a delayed paper entry, re-checked on a later book (phase, execution limits and evidence). It then **holds to settlement**, and only settlement, Stop or the account loss limit closes it.
   - **Paper market making:** where resting orders are permitted, the bot rests a buy at each side's best bid, a two-sided quote (`lib/tennis/maker.ts`).
     - **Fills are conservative:** a quote fills only when the price trades through it.
@@ -106,6 +115,26 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
 
 - **The forward test.** It uses the engine's paper plan from `favourite-hold`, as described in the next section.
 - **Real money** ([`lib/live/`](../lib/live/README.md)) is built and tested against a simulated exchange, but **deliberately not connected**. Connecting the runner to real orders is the owner's decision. The coding agent's safety check stopped that step, and the README lists exactly what it needs.
+
+## Live football: comeback drives
+
+This is the owner's idea: when a team is down 0-17 but about to score, buy it, hold for the drive, then take the profit or the loss.
+
+- **Rule** (`comeback-drive`, fixed before any test; `COMEBACK_DRIVE` in `lib/decision/sports/football.ts`):
+  - **Entry:** the team with the ball trails by 3 to 24, is inside the opponent's 30, and is on 1st to 3rd down, with at least 5 minutes left.
+  - **Exit:** sell when the drive ends: a score, a change of possession, or the end of the half.
+  - **Backstops:** a 35% net-loss stop and a 12-minute limit.
+  - **Other rules:** one entry per drive. If the game feed goes silent for 2 minutes, sell rather than hold blind.
+- **Game facts:**
+  - They come only from a **fresh, verified** game report: possession, down, distance, field position, score and quarter (`lib/tennis/football-context.ts`). Anything stale, between plays or conflicting means no entry.
+  - Scores map to YES and NO through the teams' away/home ordering.
+  - The game clock's direction is being verified on a live game. Until then the rule counts whole quarters left, so it doesn't enter in the 4th quarter.
+- **"Unless holding longer is ideal":** at the drive's end the bot asks the engine whether the evidence supports holding that side to the final. It holds only on a measured `lead` or `proven` hold, never on an explored idea. Today there is none, so it sells.
+- **Why paper only:** NFL in-game scalping (dip and momentum entries, and random entries) lost about 10% a trade after fees and spread. That's the bar this rule has to clear. CFB in-game trading hasn't been studied.
+- **Settling it:**
+  - Run `python research/studies/drive_entry.py nfl` on the PC. It uses NFL price history joined to play-by-play, with random and opposite-side controls and a hold-to-final comparison. It writes an evidence row, `dropped` or `lead`.
+  - Once the runner has recorded games with the drive state, run `drive_entry.py live --league cfb` (or `nfl`).
+  - Merge the row with `scripts/evidence-pack.ts add pack.json research/studies/results/drive-entry-nfl.json <new-version>`, then validate and publish. The row's own result then replaces exploring.
 
 ## Forward test: CFB pregame favourites
 

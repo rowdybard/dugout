@@ -22,7 +22,8 @@ test('records top-10 depth best-first with game status', () => {
   assert.equal(record.bids.length,10);assert.equal(record.asks.length,10);
   assert.deepEqual(record.bids[0],[.6,100]);assert.deepEqual(record.asks[0],[.61,200]);
   assert.ok(record.bids.every((level,i)=>i===0||level[0]<record.bids[i-1][0]));
-  assert.deepEqual(record.football,{possession:'1',down:3,yardsToGo:4,fieldTeam:'2',yard:31});
+  assert.deepEqual(record.football,{possession:'1',down:3,yardsToGo:4,fieldTeam:'2',yard:31,yesTeamId:'1',noTeamId:'2'});
+  assert.equal(record.reportTime,T);
   assert.equal(record.score,'7-3');assert.equal(record.src,'REST');
 });
 
