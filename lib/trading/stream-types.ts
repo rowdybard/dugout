@@ -150,7 +150,7 @@ export function selectTennisStreamMarkets(
   requestedSlug: string | null = null,
 ): TennisStreamSelectionResult {
   const isTennis = (market: TennisStreamCandidate) =>
-    (['ATP','WTA','NFL','CFB'].includes(market.league)) && /^[a-zA-Z0-9._:-]{1,250}$/.test(market.slug);
+    (['ATP','WTA','NFL','CFB','MLB'].includes(market.league)) && /^[a-zA-Z0-9._:-]{1,250}$/.test(market.slug);
   if (requestedSlug !== null && !/^[a-zA-Z0-9._:-]{1,250}$/.test(requestedSlug)) {
     return { ok: false, status: 400, error: 'Choose a valid game market.' };
   }
@@ -162,7 +162,7 @@ export function selectTennisStreamMarkets(
   }
   const selections = new Map<string, StreamSelection>();
   const add = (market: TennisStreamCandidate) => selections.set(market.slug, {
-    slug: market.slug, league: market.league as 'ATP' | 'WTA' | 'NFL' | 'CFB', detail: 'book',
+    slug: market.slug, league: market.league as 'ATP' | 'WTA' | 'NFL' | 'CFB' | 'MLB', detail: 'book',
   });
   // Position exits remain subscribed even if discovery no longer returns their markets.
   for (const market of protectedTennis) add(market);

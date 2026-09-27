@@ -17,6 +17,7 @@ import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
+import {isSupportedLeague,isTeamLeague} from './leagues.ts';
 import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
 import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan} from '../decision/engine.ts';
@@ -73,7 +74,7 @@ function policy(session: TennisSession, input: TennisInput, now: number) {
 function dataIssue(session: TennisSession, input: TennisInput, now: number): string | null {
   const orderingIssue=bookOrderIssue(input,session.bookSourceTimes?.[input.market.slug],now);
   if(orderingIssue)return orderingIssue;
-  if (!['ATP','WTA','NFL','CFB'].includes(input.market.league)) return 'Only tennis and American football are supported in this experiment.';
+  if (!isSupportedLeague(input.market.league)) return 'Only tennis, American football and MLB are supported.';
   if (!input.market.execution || input.market.execution.slug !== input.market.slug || input.market.execution.league !== input.market.league) return 'Market mapping or execution rules are unavailable.';
   if (!Array.isArray(input.book.bids) || !Array.isArray(input.book.asks)) return 'Market order book is unavailable.';
   if ([...input.book.bids, ...input.book.asks].some(level => !Number.isFinite(level.price) || level.price <= 0 || level.price >= 1 || !Number.isFinite(level.quantity) || level.quantity < 0)) return 'Market order book has invalid levels.';
@@ -748,7 +749,7 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
   const key=keyFor(input.market.slug,side),quote=quotes(input,side),history=session.histories[key]??[];
   const candidates:AutoCandidate[]=[];
   session.autoSignals??={};
-  const bookIssue=quoteAvailabilityIssue(quote.bid,quote.ask,input.market.league==='NFL'||input.market.league==='CFB'?'team':'player');
+  const bookIssue=quoteAvailabilityIssue(quote.bid,quote.ask,isTeamLeague(input.market.league)?'team':'player');
   if(bookIssue){
     for(const strategy of ['recovery','momentum'] as const){
       const track=`${key}:${strategy}`;

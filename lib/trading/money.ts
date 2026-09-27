@@ -9,7 +9,8 @@ export function toUnits(value: number): bigint {
   if (!Number.isFinite(value)) throw new RangeError('Expected a finite decimal.');
   const scaled = value * Number(SCALE);
   const rounded = Math.round(scaled);
-  if (!Number.isSafeInteger(rounded) || Math.abs(scaled - rounded) > 0.00001) {
+  // Tolerance scales with magnitude: 271789.34 * 1e6 is 271789339999.99997 in binary floating point.
+  if (!Number.isSafeInteger(rounded) || Math.abs(scaled - rounded) > Math.max(0.00001, Math.abs(scaled) * 1e-13)) {
     throw new RangeError('Decimal exceeds supported six-place precision or range.');
   }
   return BigInt(rounded);

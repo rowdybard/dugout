@@ -21,7 +21,7 @@ function providerResponseLimit(path:string):number{
   if(/^\/v1\/events\/(?:slug\/[a-zA-Z0-9_-]{1,250}|[1-9]\d{0,19})$/.test(path))return 4_000_000;
   const url=new URL(path,'https://gateway.polymarket.us');
   const limit=Number(url.searchParams.get('limit'));
-  if(/^\/v2\/leagues\/(?:atp|wta|nfl|cfb)\/events$/.test(url.pathname)&&Number.isInteger(limit)&&limit>0&&limit<=20)return 16_000_000;
+  if(/^\/v2\/leagues\/(?:atp|wta|nfl|cfb|mlb)\/events$/.test(url.pathname)&&Number.isInteger(limit)&&limit>0&&limit<=20)return 16_000_000;
   return 1_000_000;
 }
 async function readJson(response:Response,signal:AbortSignal,maxBytes=1_000_000){

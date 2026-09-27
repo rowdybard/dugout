@@ -55,7 +55,9 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     // discovery request must never delay a possible exit on a known market.
     if(action.action==='tick'&&!chosen.size&&session.status==='running'){
       const catalog=await withDeadline(getTennisCatalog({includeHistory:false,leagues:session.config.leagues,signal:controller.signal}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
-      const candidates=catalog.markets.filter(m=>m.active&&m.live&&!m.ended&&session.config.leagues.includes(m.league)&&(!session.config.focusSlug||m.slug===session.config.focusSlug)).sort((a,b)=>a.slug.localeCompare(b.slug));
+      // Engine accounts also watch their focused game before it starts: pregame strategies act then.
+      const pregameFocus=(m:TennisMarket)=>session.config.evidenceGate==='evidence-v1'&&m.slug===session.config.focusSlug&&!m.live&&Date.parse(m.startTime)>Date.now();
+      const candidates=catalog.markets.filter(m=>m.active&&(m.live||pregameFocus(m))&&!m.ended&&session.config.leagues.includes(m.league)&&(!session.config.focusSlug||m.slug===session.config.focusSlug)).sort((a,b)=>a.slug.localeCompare(b.slug));
       // Rotate over every live candidate. Both tours receive books when available.
       const tourPools=session.config.leagues.map(league=>candidates.filter(m=>m.league===league));
       const interleaved:TennisMarket[]=[];
@@ -66,7 +68,7 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
       const fallback=Array.from({length:Math.min(2,interleaved.length)},(_,i)=>interleaved[(start+i)%interleaved.length]),restSlugs=new Set<string>();
       for(let i=0;i<Math.min(2,fallback.length);i++)restSlugs.add(fallback[(cursor+i)%fallback.length].slug);
       for(const market of candidates)chosen.set(market.slug,{market,allowRest:restSlugs.has(market.slug)});
-      if(!candidates.length)failures.push(session.config.focusSlug?'The focused game is not currently confirmed live and open. Waiting without switching games.':`No live ${session.config.leagues.join(' or ')} game is available. Waiting for play to begin.`);
+      if(!candidates.length)failures.push(session.config.focusSlug?(session.config.evidenceGate==='evidence-v1'?'The focused game is not open (upcoming or live) in the current list. Waiting without switching games.':'The focused game is not currently confirmed live and open. Waiting without switching games.'):`No live ${session.config.leagues.join(' or ')} game is available. Waiting for play to begin.`);
       cursor=fallback.length?(cursor+2)%fallback.length:0;
     }
     // A slow second book must not age a usable first book past the five-second gate.

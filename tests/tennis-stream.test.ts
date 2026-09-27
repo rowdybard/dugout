@@ -12,8 +12,9 @@ const candidate = (slug: string, league = 'ATP', live = false, startTime = new D
 });
 
 test('paper subscription catalog rejects unknown, malformed, unsupported-sport and ended requests', () => {
-  const markets = [candidate('known-atp'), candidate('known-mlb', 'MLB'), { ...candidate('ended-wta', 'WTA'), ended: true }];
-  for (const slug of ['unknown', 'known-mlb', 'ended-wta']) {
+  // MLB became a supported bot league on Sep 27, 2026; NBA remains unsupported.
+  const markets = [candidate('known-atp'), candidate('known-nba', 'NBA'), { ...candidate('ended-wta', 'WTA'), ended: true }];
+  for (const slug of ['unknown', 'known-nba', 'ended-wta']) {
     assert.deepEqual(selectTennisStreamMarkets(markets, [], slug), {
       ok: false, status: 404, error: 'This game market is not in the verified catalog or your paper session.',
     });
@@ -27,7 +28,7 @@ test('paper subscription catalog rejects unknown, malformed, unsupported-sport a
 
 test('tennis subscriptions prioritize current matches and limit discovery to twelve', () => {
   const markets = Array.from({ length: 15 }, (_, i) => candidate(`future-${i}`, i % 2 ? 'WTA' : 'ATP', false, new Date(NOW + i * 60000).toISOString()));
-  markets.push(candidate('live-wta', 'WTA', true, new Date(NOW + 3600000).toISOString()), candidate('ignore-baseball', 'MLB', true));
+  markets.push(candidate('live-wta', 'WTA', true, new Date(NOW + 3600000).toISOString()), candidate('ignore-basketball', 'NBA', true));
   const result = selectTennisStreamMarkets(markets, []);
   assert.ok(result.ok);
   assert.equal(result.selections.length, 12);
@@ -99,4 +100,10 @@ test('tennis US books preserve read-only events and generation/freshness protect
     state.disconnected('market', 'stopped', 'Synthetic disconnect');
     assert.equal(state.quotes.get(slug)!.valid, false);
   }
+});
+
+test('MLB markets are streamable now that the bot supports them', () => {
+  const result = selectTennisStreamMarkets([candidate('known-mlb', 'MLB')], [], 'known-mlb');
+  assert.ok(result.ok);
+  if (result.ok) assert.deepEqual(result.selections, [{ slug: 'known-mlb', league: 'MLB', detail: 'book' }]);
 });

@@ -15,7 +15,7 @@ export async function startPaperBot(session:TennisSession|null,runtime:TennisRun
       commandId:commandId(),rules:localMoveUpgradeRules(session.config)});
     if(!saved)return false;
   }
-  const runForMs=session.config.leagues.some(league=>league==='NFL'||league==='CFB')?10_800_000:1_800_000;
+  const runForMs=session.config.leagues.some(league=>league==='NFL'||league==='CFB'||league==='MLB')?10_800_000:1_800_000;
   return perform({...(session.status==='idle'?{action:'start' as const}:{action:'resume' as const,sessionId:session.id}),
     ...(runtime?.mode==='service'?{}:{runForMs}),commandId:commandId()});
 }

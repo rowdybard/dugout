@@ -6,6 +6,7 @@ import {freshTennisBook,normalizeTennisBook,normalizeTennisEvent,normalizeTennis
 import {currentTennisContext,retainedTennisContext} from './market-context';
 import {CHART_HISTORY_SQL} from './chart-rejections';
 import {loadTennisCatalog,boundedCatalogOperation} from './catalog-loader';
+import {isSupportedLeague} from './leagues';
 import type {TennisCatalog,TennisInput,TennisLeague,TennisMarket,TennisPricePoint} from './types';
 
 const CATALOG_DEADLINE=5500;
@@ -74,7 +75,7 @@ export async function getTennisMarket(slug:string,leagues:TennisLeague[]=['ATP',
   const current=(await getTennisCatalog({includeHistory:false,leagues})).markets.find(m=>m.slug===slug);
   if(current)return {...current,rejectedQuoteTimes:rejectedTimes,history:includeHistory?await displayHistory(slug,rejectedTimes):[]};
   const previous=await readCached<TennisMarket>(`tennis:verified:${slug}`);
-  if(!previous||previous.value.slug!==slug||!['ATP','WTA','NFL','CFB'].includes(previous.value.league))throw new Error('This match is not in the verified tennis/football winner catalog.');
+  if(!previous||previous.value.slug!==slug||!isSupportedLeague(previous.value.league))throw new Error('This game is not in the verified winner catalog.');
   return {...previous.value,active:false,rejectedQuoteTimes:rejectedTimes,history:await displayHistory(slug,rejectedTimes),unavailableReason:'Match is no longer in the active catalog. New entries are blocked; held positions can still be checked.'};
 }
 
@@ -106,7 +107,7 @@ async function confirmedSettlement(market:TennisMarket,signal?:AbortSignal):Prom
 export async function loadTennisInput(market:TennisMarket,signal?:AbortSignal,options:{allowRest?:boolean;lastContext?:TennisMarket}={}):Promise<TennisInput>{
   signal?.throwIfAborted();
   // Stored mapping is trusted only because the server obtained it from the strict catalog.
-  if(!['ATP','WTA','NFL','CFB'].includes(market.league)||!market.slug)throw new Error('Unsupported paper market.');
+  if(!isSupportedLeague(market.league)||!market.slug)throw new Error('Unsupported paper market.');
   const allowRest=options.allowRest!==false;
   // The visible catalog already refreshes this verified cache. Reading it keeps
   // held-match context current without a slow discovery call on the exit path.

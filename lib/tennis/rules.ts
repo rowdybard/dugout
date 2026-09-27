@@ -10,7 +10,7 @@ export const tennisRulesSchema=z.object({
   maker:z.literal('paper-v1').optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
-  entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
+  entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB','MLB'])).min(1).max(5),
   baselineWindowMs:positive.max(3_600_000),minimumHistoryMs:positive.max(3_600_000),
   minSamples:z.number().int().min(3).max(200),
   declinePoints:positive.max(40),recoveryPoints:positive.max(40),

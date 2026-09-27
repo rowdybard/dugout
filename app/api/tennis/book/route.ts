@@ -33,7 +33,7 @@ async function load(req:Request,signal:AbortSignal){
     const held=session.positions.find(p=>p.status==='open'&&p.slug===slug);
     const pending=session.pending?.slug===slug?session.pending.market:undefined;
     const market=cached?.value??held?.lastContext??held?.market??pending;
-    if(!market||market.slug!==slug||!['ATP','WTA','NFL','CFB'].includes(market.league)||(!session.config.leagues.includes(market.league)&&!held&&!pending))return reply({error:'This game is not in the verified catalog. Refresh the game list.'},404);
+    if(!market||market.slug!==slug||!['ATP','WTA','NFL','CFB','MLB'].includes(market.league)||(!session.config.leagues.includes(market.league)&&!held&&!pending))return reply({error:'This game is not in the verified catalog. Refresh the game list.'},404);
     const input=await loadTennisInput({...market,history:[]},AbortSignal.any([signal,AbortSignal.timeout(4500)]),{allowRest:true,lastContext:held?.lastContext});
     signal.throwIfAborted();
     const checkedAt=Date.now(),issue=watchedBookIssue(input,session,checkedAt);

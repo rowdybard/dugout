@@ -7,7 +7,7 @@ import type {CompactPlan,PlanEntry} from './engine-plan';
 import type {MakerState} from './maker';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
-export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
+export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
 export type FootballContext={
   possessionTeam:string|null;down:number|null;yardsToGo:number|null;
   possessionTeamId?:string|null;
