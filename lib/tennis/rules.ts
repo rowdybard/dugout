@@ -7,6 +7,7 @@ export const tennisRulesSchema=z.object({
   decisionEngine:z.literal('local-move-v1').optional(),
   evidenceGate:z.literal('evidence-v1').optional(),
   evidencePack:z.string().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
+  maker:z.literal('paper-v1').optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB'])).min(1).max(4),
@@ -33,7 +34,7 @@ export function defaultTennisConfig(startingCash=100):TennisConfig {
 
 /** Current product defaults. The older factory is retained for historical resets/replay. */
 export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
-  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1'};
+  return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1',maker:'paper-v1'};
 }
 
 /** Add newly introduced fields without rewriting saved balances or historical rules. */
@@ -48,6 +49,7 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   if(!Number.isFinite(startingCash)||startingCash<5||startingCash>1000||Math.round(startingCash*1e6)/1e6!==startingCash)return 'Starting fake balance must be $5–$1,000 with at most six decimal places.';
   const parsed=tennisRulesSchema.safeParse(rules);
   if(!parsed.success)return `Check ${parsed.error.issues[0].path.join(' ')}: ${parsed.error.issues[0].message}`;
+  if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
   if(config.decisionEngine==='local-move-v1'&&config.strategy!=='auto')return 'Local move analysis uses Auto. Legacy entry patterns cannot override it.';
   if(config.decisionEngine==='local-move-v1'&&(config.minimumHistoryMs<30000||config.minSamples<10||config.baselineWindowMs<30000))return 'Local move analysis requires at least 30 seconds and 10 quotes of history.';
   if(config.decisionEngine==='local-move-v1'&&(config.maxSpreadPoints>2||config.maxBookAgeMs>5000))return 'Local move analysis preserves the two-cent spread and five-second book limits.';

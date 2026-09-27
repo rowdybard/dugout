@@ -18,6 +18,8 @@ import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
 import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
+import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import type {Plan} from '../decision/engine.ts';
 import type {Phase} from '../decision/evidence.ts';
 export {defaultTennisConfig,validateTennisConfig} from './rules.ts';
 
@@ -78,10 +80,11 @@ function dataIssue(session: TennisSession, input: TennisInput, now: number): str
   return executionDataIssue(policy(session, input, now));
 }
 
-function holding(session: TennisSession) { return session.positions.find(position => position.status === 'open'); }
+/** The taker position slot. Market-making inventory (exitPolicy 'maker') is managed separately. */
+function holding(session: TennisSession) { return session.positions.find(position => position.status === 'open' && position.exitPolicy !== 'maker'); }
+function makerPositions(session: TennisSession) { return session.positions.filter(position => position.status === 'open' && position.exitPolicy === 'maker'); }
 
-function simulate(session: TennisSession, input: TennisInput, command: PaperCommand, now: number): PaperExecution {
-  const position = holding(session);
+function simulate(session: TennisSession, input: TennisInput, command: PaperCommand, now: number, position = holding(session)): PaperExecution {
   const cost = position?.costBasis ?? 0;
   return executePaperCommand(command, { cash: session.cash, marketExposure: position?.slug === input.market.slug ? cost : 0,
     totalExposure: cost, availableQuantity: position?.slug === input.market.slug && position.side === command.side ? position.quantity : 0 },
@@ -168,28 +171,195 @@ function enginePendingIssue(session: TennisSession, input: TennisInput, intent: 
   return null;
 }
 
-/** Ask the engine for a plan on each eligible book and stage the best taker-hold action, if any. */
+/**
+ * Ask the engine for a plan on each eligible book. The best taker-hold action takes the position slot; otherwise,
+ * with market making on, the plan's permitted resting orders are quoted. Maker inventory also occupies the slot.
+ */
 function stageEnginePlan(session: TennisSession, current: TennisInput[], now: number) {
   const resolved = sessionEngine(session);
   for (const input of [...current].sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
     if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) continue;
     if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
-    if ('error' in resolved) { record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); continue; }
+    if ('error' in resolved) { record(session, now, input.market.slug, 'YES', 'SKIP', 'EVIDENCE_PACK_UNAVAILABLE', resolved.error, input); cancelMakerQuotes(session, resolved.error, now); continue; }
     const phase = marketPhase(input, now);
     const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now) });
     session.enginePlan = compactPlan(plan);
-    // Resting orders are managed separately; the bot's one position slot takes taker holds only.
-    const action = plan.actions.find(item => item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement');
-    if (!action || !phase) continue;
+    const action = makerPositions(session).length ? undefined : plan.actions.find(item => item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement');
+    if (!action || !phase) {
+      if (session.config.maker === 'paper-v1' && session.config.focusSlug === input.market.slug) updateMakerQuotes(session, input, plan, phase, now);
+      continue;
+    }
     const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO';
     const issue = planEntryIssue(session, input, side, action.stake, now, phase);
     if (issue) { record(session, now, input.market.slug, side, 'SKIP', issue.code, `Engine plan not executable: ${issue.reason}`, input); continue; }
     const entry: PlanEntry = { strategy: action.proposal.strategy, strategyVersion: action.proposal.strategyVersion, style: action.proposal.style, phase, exit: 'hold-to-settlement',
       code: action.verdict.code, evidence: action.verdict.deciding?.id ?? null, pack: action.verdict.pack, stake: action.stake, reason: action.verdict.reason };
     stage(session, input, side, 'BUY', now, 'AUTOMATIC', `Decision engine: ${action.proposal.rationale} ${action.verdict.reason}`, action.stake);
-    if (session.pending?.action === 'BUY') session.pending.plan = entry;
+    if (session.pending?.action === 'BUY') { session.pending.plan = entry; cancelMakerQuotes(session, 'A planned entry takes the account slot.', now); }
     return;
   }
+}
+
+function cancelMakerQuotes(session: TennisSession, reason: string, now: number) {
+  const state = session.maker;
+  if (!state) return;
+  state.reason = reason;
+  if (!state.quotes.YES && !state.quotes.NO) return;
+  state.quotes = {};
+  record(session, now, state.slug, 'YES', 'WAIT', 'MAKER_CANCELLED', `Resting quotes cancelled. ${reason}`);
+}
+
+/** Apply a conservative maker fill: a BUY into this side's maker position, with the rebate credited. */
+function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeSide, quote: RestingQuote, now: number) {
+  const rebate = makerRebate(quote.price, quote.quantity), gross = exact(quote.quantity * quote.price), cashDelta = exact(rebate - gross);
+  if (session.cash + cashDelta < -EPSILON) {
+    record(session, now, input.market.slug, side, 'SKIP', 'MAKER_CASH', 'A resting buy reached its price but cash no longer covers it; the quote was withdrawn.', input);
+    return;
+  }
+  let position = session.positions.find(p => p.status === 'open' && p.exitPolicy === 'maker' && p.slug === input.market.slug && p.side === side);
+  if (!position) {
+    position = { id: `${session.id}:maker:${input.market.slug}:${side}:${now}`, slug: input.market.slug, league: input.market.league, title: input.market.title, side,
+      name: side === 'YES' ? input.market.yesName : input.market.noName, quantity: 0, initialQuantity: 0, costBasis: 0, entryCost: 0, entryPrice: quote.price, entryFees: 0,
+      openedAt: now, status: 'open', realizedPnl: 0, exitFees: 0, proceeds: 0, netLiquidationValue: null, liquidationQuantity: 0, markedAt: null,
+      market: structuredClone(input.market), exitPolicy: 'maker',
+      exitRules: { targetReturn: session.config.targetReturn, stopReturn: session.config.stopReturn, maxHoldMs: session.config.maxHoldMs, source: 'entry' } };
+    session.positions.push(position);
+  }
+  const id = `${position.id}:fill:${session.ledger.filter(entry => entry.positionId === position!.id).length}`;
+  session.cash = exact(session.cash + cashDelta);
+  position.quantity = exact(position.quantity + quote.quantity);
+  position.initialQuantity = exact(position.initialQuantity + quote.quantity);
+  position.costBasis = exact(position.costBasis - cashDelta);
+  position.entryCost = exact(position.entryCost - cashDelta);
+  position.entryFees = exact(position.entryFees - rebate);
+  position.entryPrice = exact((position.entryCost - position.entryFees) / position.initialQuantity);
+  const reason = `Market making: resting ${side} bid at ${(quote.price * 100).toFixed(1)}¢ filled when sellers reached it (conservative fill model); rebate $${rebate.toFixed(4)}.`;
+  const execution: PaperExecution = { commandId: id, fingerprint: `maker:${id}`, status: 'filled', reason, fills: [{ price: quote.price, quantity: quote.quantity, gross, fee: -rebate }],
+    requestedQty: quote.quantity, filledQty: quote.quantity, remainingQty: 0, gross, fees: -rebate, cashDelta, averagePrice: quote.price, unusedBudget: 0, at: now,
+    replayed: false, apply: true, feeModel: 'AGGREGATED_DEPTH_ESTIMATE' };
+  session.ledger.push({ id, time: now, slug: input.market.slug, side, action: 'BUY', source: 'AUTOMATIC', positionId: position.id, reason, execution, cashDelta, realizedPnl: 0,
+    quotedPrice: quote.price, actualPrice: quote.price, executionDelayMs: now - quote.placedAt, signalBookTime: quote.placedBookTime, executionBookTime: input.receivedAt,
+    rulesRevision: session.rulesRevision ?? 0 });
+  session.maker!.fills++;
+  session.maker!.rebates = exact(session.maker!.rebates + rebate);
+  record(session, now, input.market.slug, side, 'BUY', 'MAKER_FILLED', reason, input);
+}
+
+/** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
+function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
+  const held = makerPositions(session).filter(p => p.slug === input.market.slug);
+  if (!held.length || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  // One sale attempt per book, like every other paper fill.
+  session.consumedBooks[input.market.slug] = input.receivedAt;
+  for (const position of held) {
+    const quote = quotes(input, position.side);
+    if (quote.bid === undefined) { record(session, now, position.slug, position.side, 'SKIP', 'NO_BUYERS', 'No buyers for market-making inventory yet; retrying on later books.', input); continue; }
+    const command = { ...freshCommand(session, input, position.side, 'SELL', now, quote.bids.at(-1)!.price), commandId: `${position.id}:exit:${now}`, quantity: position.quantity };
+    const result = simulate(session, input, command, now, position);
+    if (!result.apply || result.filledQty <= 0) { record(session, now, position.slug, position.side, 'SKIP', 'MAKER_EXIT_UNFILLED', `Inventory sale did not fill. ${result.reason}`, input); continue; }
+    const full = Math.abs(result.filledQty - position.quantity) < EPSILON;
+    const allocated = full ? position.costBasis : exact(position.costBasis * result.filledQty / position.quantity);
+    const pnl = exact(result.cashDelta - allocated);
+    session.cash = exact(session.cash + result.cashDelta);
+    position.quantity = full ? 0 : exact(position.quantity - result.filledQty);
+    position.costBasis = full ? 0 : exact(position.costBasis - allocated);
+    position.realizedPnl = exact(position.realizedPnl + pnl);
+    position.proceeds = exact(position.proceeds + result.cashDelta);
+    position.exitFees = exact(position.exitFees + result.fees);
+    position.exitPrice = exact((position.proceeds + position.exitFees) / (position.initialQuantity - position.quantity));
+    position.netLiquidationValue = null; position.liquidationQuantity = 0; position.markedAt = null;
+    if (full) { position.status = 'closed'; position.closedAt = now; }
+    session.ledger.push({ id: command.commandId, time: now, slug: position.slug, side: position.side, action: 'SELL', source: 'AUTOMATIC', positionId: position.id,
+      reason: 'Closing market-making inventory because the bot is stopping.', execution: result, cashDelta: result.cashDelta, realizedPnl: pnl,
+      quotedPrice: quote.bid, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt, executionBookTime: input.receivedAt,
+      rulesRevision: session.rulesRevision ?? 0 });
+    record(session, now, position.slug, position.side, 'SELL', result.status.toUpperCase(), `Closing market-making inventory: ${result.reason}`, input);
+  }
+}
+
+/** Every tick: settle, match resting quotes against the new book, mark inventory, and withdraw quotes when not allowed. */
+function advanceMaker(session: TennisSession, current: TennisInput[], now: number) {
+  for (const position of makerPositions(session)) settle(session, position, current.find(input => input.market.slug === position.slug), now, false);
+  const state = session.maker;
+  if (state && (state.quotes.YES || state.quotes.NO)) {
+    const input = current.find(item => item.market.slug === state.slug);
+    if (input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
+      for (const side of ['YES', 'NO'] as const) {
+        const quote = state.quotes[side];
+        if (!quote || !restingFilled(quote, quotes(input, side).ask, input.receivedAt)) continue;
+        delete state.quotes[side];
+        applyMakerFill(session, input, side, quote, now);
+      }
+      state.lastBookTime = input.receivedAt;
+    }
+  }
+  for (const position of makerPositions(session)) {
+    const input = current.find(item => item.market.slug === position.slug);
+    if (input) position.lastContext = currentTennisContext(position.lastContext ?? position.market, input.market, now, position.market.active);
+    markPosition(session, position, input, now);
+  }
+  if (session.status === 'stopping' || session.status === 'stopped') {
+    cancelMakerQuotes(session, 'The bot is stopping; inventory is being closed.', now);
+    for (const input of current) flattenMaker(session, input, now);
+    return;
+  }
+  if (!state) return;
+  if (session.status !== 'running') cancelMakerQuotes(session, 'Entries are paused; existing inventory is held to settlement.', now);
+  else if (holding(session) || session.pending) cancelMakerQuotes(session, 'A planned position or order has the account slot.', now);
+  else if (session.config.focusSlug !== state.slug) cancelMakerQuotes(session, 'The bot focus changed.', now);
+  else {
+    const input = current.find(item => item.market.slug === state.slug);
+    if (!input || dataIssue(session, input, now)) cancelMakerQuotes(session, 'No fresh book this check; quotes are never left resting on stale data.', now);
+  }
+}
+
+/** Quote the plan's permitted resting buys, with inventory, cash and event-pull limits. */
+function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Plan, phase: Phase | null, now: number) {
+  const slug = input.market.slug;
+  if (session.maker?.slug !== slug) session.maker = { slug, quotes: {}, pulledUntil: 0, eventKey: null, lastBookTime: input.receivedAt, reason: '', fills: 0, rebates: 0 };
+  const state = session.maker!;
+  const cancel = (reason: string) => cancelMakerQuotes(session, reason, now);
+  if (!phase) return cancel('The game phase is not confirmed.');
+  const yes = quotes(input, 'YES');
+  if (yes.bid === undefined || yes.ask === undefined || yes.ask - yes.bid > MAX_QUOTE_SPREAD + EPSILON) return cancel('The book is too thin or too wide to quote.');
+  const actions = plan.actions.filter(action => action.proposal.style === 'maker');
+  const exit = actions[0]?.proposal.exit;
+  const pullMs = exit?.kind === 'maker' ? exit.pullAfterEventMs : null;
+  const key = eventKey(input.market, session.footballReports?.[slug]);
+  if (phase === 'live' && state.eventKey !== null && key !== state.eventKey && pullMs) state.pulledUntil = now + pullMs;
+  state.eventKey = key;
+  if (now < state.pulledUntil) return cancel(`Pulled for ${Math.ceil((state.pulledUntil - now) / 1000)}s after a play; prices move most right after events.`);
+  if (phase === 'live' && isFootballMarket(input.market) && session.config.decisionPolicy === 'football-context-v1' && session.footballReports?.[slug]?.assessment.status !== 'fresh')
+    return cancel('Waiting for fresh game context before quoting live.');
+  if (!actions.length) return cancel(plan.considered.find(trade => trade.proposal.style === 'maker')?.reason ?? 'The engine does not permit resting orders here.');
+  const execution = input.market.execution!;
+  const targets: Partial<Record<TradeSide, { price: number; quantity: number; stake: number }>> = {};
+  for (const action of actions) {
+    const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO';
+    const inventory = session.positions.find(p => p.status === 'open' && p.exitPolicy === 'maker' && p.slug === slug && p.side === side);
+    if ((inventory?.costBasis ?? 0) >= action.stake * INVENTORY_MULTIPLE - EPSILON) continue;
+    const quantity = quoteQuantity(action.stake, action.proposal.price, execution.quantityIncrement, execution.minimumTradeQty);
+    if (quantity > 0) targets[side] = { price: action.proposal.price, quantity, stake: action.stake };
+  }
+  // Both resting buys must be payable at once.
+  const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);
+  if (reserve > session.cash + EPSILON) for (const side of ['YES', 'NO'] as const) {
+    const target = targets[side];
+    if (!target) continue;
+    const quantity = quoteQuantity(target.quantity * target.price * session.cash / reserve, target.price, execution.quantityIncrement, execution.minimumTradeQty);
+    if (quantity > 0) target.quantity = quantity; else delete targets[side];
+  }
+  let changed = false;
+  for (const side of ['YES', 'NO'] as const) {
+    const target = targets[side], existing = state.quotes[side];
+    if (!target) { if (existing) { delete state.quotes[side]; changed = true; } continue; }
+    if (sameQuote(existing, target.price, target.quantity)) continue;
+    state.quotes[side] = { price: target.price, quantity: target.quantity, placedAt: now, placedBookTime: input.receivedAt, activeAfter: now + session.config.executionDelayMs };
+    changed = true;
+  }
+  const describe = (side: TradeSide) => state.quotes[side] ? `${side} ${state.quotes[side]!.quantity} at ${(state.quotes[side]!.price * 100).toFixed(1)}¢` : `${side} none`;
+  state.reason = `Quoting ${describe('YES')}, ${describe('NO')} (${actions[0].verdict.code}: ${actions[0].verdict.deciding?.title ?? 'engine'}).`;
+  if (changed) record(session, now, slug, 'YES', 'WAIT', 'MAKER_QUOTING', `Market making: ${state.reason}`, input);
 }
 
 /** A return to the old midpoint is a scenario, not a forecast or executable quote. */
@@ -244,14 +414,14 @@ function markPosition(session: TennisSession, position: TennisPosition, input: T
   if (quote.bid === undefined) return;
   // All displayed bids contribute to a conservative full-book liquidation estimate.
   const lowestBid = quote.bids.at(-1)!.price;
-  const result = simulate(session, input, { ...freshCommand(session, input, position.side, 'SELL', now, lowestBid, 'MANUAL'), quantity: position.quantity }, now);
+  const result = simulate(session, input, { ...freshCommand(session, input, position.side, 'SELL', now, lowestBid, 'MANUAL'), quantity: position.quantity }, now, position);
   if (!result.apply) return;
   position.netLiquidationValue = result.cashDelta;
   position.liquidationQuantity = result.filledQty;
   position.markedAt = input.receivedAt;
 }
 
-function settle(session: TennisSession, position: TennisPosition, input: TennisInput | undefined, now: number): boolean {
+function settle(session: TennisSession, position: TennisPosition, input: TennisInput | undefined, now: number, clearPending = true): boolean {
   if (!input || (input.source !== 'REST' && input.source !== 'WEBSOCKET') || typeof input.settlement !== 'number' || !Number.isFinite(input.settlement) || input.settlement < 0 || input.settlement > 1 ||
       !Number.isFinite(input.settlementReceivedAt) || input.settlementReceivedAt! > now || input.settlementReceivedAt! < position.openedAt) return false;
   const price = position.side === 'YES' ? input.settlement : 1 - input.settlement;
@@ -262,7 +432,7 @@ function settle(session: TennisSession, position: TennisPosition, input: TennisI
   position.proceeds = exact(position.proceeds + proceeds);
   position.quantity = 0; position.costBasis = 0; position.status = 'settled'; position.closedAt = now;
   position.exitPrice = price; position.netLiquidationValue = 0; position.liquidationQuantity = 0; position.markedAt = input.settlementReceivedAt!;
-  session.pending = null; session.exitRequested = undefined;
+  if (clearPending) { session.pending = null; session.exitRequested = undefined; }
   session.ledger.push({ id: `${position.id}:settlement`, time: now, slug: position.slug, side: position.side, action: 'SETTLE', source: 'AUTOMATIC', positionId: position.id,
     reason: 'Resolved using an explicit final market settlement value.', cashDelta: proceeds, realizedPnl: pnl, rulesRevision:session.rulesRevision??0,strategy:position.strategy??session.config.strategy });
   record(session, now, position.slug, position.side, 'SETTLE', 'SETTLED', 'Final market settlement applied to remaining paper quantity.', input);
@@ -635,7 +805,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   session.revision++;
   session.lastTickAt = now;
   const configIssue = validateTennisConfig(session.config);
-  if (configIssue) { session.status = 'paused'; session.pending = null; session.lastReason = configIssue; return session; }
+  if (configIssue) { session.status = 'paused'; session.pending = null; if (session.maker) session.maker.quotes = {}; session.lastReason = configIssue; return session; }
   const sorted = inputs.filter(input => input && input.market && input.book).sort((a, b) => b.receivedAt - a.receivedAt);
   const current = [...new Map(sorted.map(input => [input.market.slug, input] as const).reverse()).values()];
   session.footballReports??={};
@@ -685,6 +855,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   for(const input of current)advanceShadowExits(session,input,now,!dataIssue(session,input,now),policy(session,input,now));
   if (open) settle(session, open, current.find(input => input.market.slug === open.slug), now);
   const processed = processPending(session, current, now);
+  advanceMaker(session, current, now);
   const position = holding(session);
   if (position) {
     const input = current.find(item => item.market.slug === position.slug);
@@ -732,8 +903,11 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     }
   } else {
     const realised = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
-    if (realised <= -session.config.startingCash * session.config.maxSessionLossFraction) session.status = 'stopped';
-    if (session.status === 'stopping') session.status = 'stopped';
+    const inventory = makerPositions(session);
+    const inventoryMarked = inventory.length > 0 && inventory.every(item => item.netLiquidationValue !== null && item.liquidationQuantity >= item.quantity - EPSILON);
+    const lossLimit = session.config.startingCash * session.config.maxSessionLossFraction;
+    if (realised <= -lossLimit || (inventoryMarked && tennisEquity(session) <= session.config.startingCash - lossLimit)) session.status = inventory.length ? 'stopping' : 'stopped';
+    if (session.status === 'stopping' && !inventory.length) session.status = 'stopped';
   }
   if (session.status === 'running' && !holding(session) && !session.pending && !processed) {
     const candidates:AutoCandidate[]=[];
@@ -743,6 +917,8 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     for (const input of current.sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
       if(session.config.focusSlug && session.config.focusSlug!==input.market.slug) continue;
       if(session.config.decisionEngine==='local-move-v1'){
+        // Legacy scalps are live-only; on engine accounts the decision engine plans pregame games instead.
+        if(session.config.evidenceGate==='evidence-v1'&&!input.market.live)continue;
         for(const side of ['YES','NO'] as const){const candidate=evaluateLocalSide(session,input,side,now);if(candidate)localCandidates.push(candidate);autoChecked++;}
         continue;
       }
@@ -824,6 +1000,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
       record(session, now, session.pending.slug, session.pending.side, 'SKIP', 'RULES_CANCELLED', 'Pending entry canceled because the bot rules changed.');
       session.pending = null;
     }
+    cancelMakerQuotes(session, 'The bot rules changed.', now);
     session.config = structuredClone(config);
     session.rulesRevision = (session.rulesRevision ?? 0) + 1;
     const keepCooldowns=(signals:Record<string,TennisSignal>)=>Object.fromEntries(Object.entries(signals).filter(([,signal])=>(signal.cooldownUntil??0)>now).map(([key,signal])=>[key,{phase:'COOLDOWN' as const,confirmations:0,cooldownUntil:signal.cooldownUntil,reason:'Resting after the previous attempt; rule changes keep this rest period.'}]));
@@ -832,7 +1009,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     return session;
   }
   if (action.action === 'reset') {
-    if (holding(session) || session.pending) return reject('Close the paper position and let pending orders finish before resetting.');
+    if (holding(session) || session.pending || makerPositions(session).length) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
     session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug}, now);
     session.commandIds = [action.commandId];
@@ -853,6 +1030,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     if (session.status === 'stopped' || session.status === 'stopping') return reject('This session is stopping or stopped; pause cannot restart it.');
     session.status = 'paused';
     if (session.pending?.action === 'BUY') session.pending = null;
+    cancelMakerQuotes(session, 'Entries are paused; existing inventory is held to settlement.', now);
     session.lastReason = 'New entries paused. Existing paper positions still receive exit checks while the page is running.';
     return session;
   }
@@ -865,8 +1043,10 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   }
   if (action.action === 'stop') {
     if (session.pending?.action === 'BUY') session.pending = null;
-    session.status = holding(session) ? 'stopping' : 'stopped';
-    session.lastReason = holding(session) ? 'Stopped new entries. Attempting to close the existing paper position on fresh buyer quotes.' : 'Paper experiment stopped.';
+    cancelMakerQuotes(session, 'The bot is stopping; inventory is being closed.', now);
+    const open = !!holding(session) || makerPositions(session).length > 0;
+    session.status = open ? 'stopping' : 'stopped';
+    session.lastReason = open ? 'Stopped new entries. Attempting to close the existing paper position on fresh buyer quotes.' : 'Paper experiment stopped.';
     return stepTennisSession(session, inputs, now);
   }
   return reject('Only bot controls are supported.');

@@ -75,7 +75,8 @@ export function sessionRisk(session:TennisSession,now:number):RiskState {
   return {dayPnl:today.reduce((sum,entry)=>sum+entry.realizedPnl,0),
     sessionPnl:session.positions.reduce((sum,position)=>sum+position.realizedPnl,0),
     openExposure:open.reduce((sum,position)=>sum+position.costBasis,0),
-    tradesToday:today.filter(entry=>entry.action==='BUY').length,
+    // Resting-quote fills are many small trades by design; the trade-count limit is for taker entries.
+    tradesToday:today.filter(entry=>entry.action==='BUY'&&!entry.positionId.includes(':maker:')).length,
     halted:session.status==='running'?null:`bot is ${session.status}`};
 }
 

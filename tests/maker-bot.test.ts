@@ -1,0 +1,145 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {applyTennisAction,createTennisSession,stepTennisSession} from '../lib/tennis/engine.ts';
+import {defaultLiveTennisConfig} from '../lib/tennis/rules.ts';
+import {makerRebate} from '../lib/tennis/maker.ts';
+import type {TennisInput,TennisLeague,TennisSession} from '../lib/tennis/types';
+
+const START=Date.parse('2026-10-03T19:00:00Z'),SLUG='aec-cfb-home-away-2026-10-03';
+type Book={bid:number;ask:number};
+type Drive={down:number;yard:number};
+function input(time:number,book:Book,over:{live?:boolean;league?:TennisLeague;settlement?:number;ended?:boolean;drive?:Drive}={}):TennisInput{
+  const league=over.league??'CFB';
+  const football=over.live&&over.drive?{possessionTeam:'Home',possessionTeamId:'1',down:over.drive.down,yardsToGo:10,fieldPosition:{team:'Home',teamId:'1',yard:over.drive.yard},timeouts:[]}:null;
+  return {receivedAt:time,source:'REST',sourceTime:time,
+    book:{bids:[{price:book.bid,quantity:1000}],asks:[{price:book.ask,quantity:1000}],state:over.ended?'MARKET_STATE_EXPIRED':'MARKET_STATE_OPEN',time:new Date(time).toISOString()},
+    market:{slug:SLUG,eventId:'4242',eventSlug:'cfb-home-away-2026-10-03',title:'Home vs Away',league,yesName:'Home',noName:'Away',startTime:new Date(START).toISOString(),
+      live:over.live??false,ended:over.ended??false,active:!over.ended,score:over.live?'7-7':null,period:over.live?'Q2':null,clock:over.live?'10:00':null,tournament:null,
+      football,footballIdentity:{yesTeamId:'1',noTeamId:'2'},
+      bid:book.bid,ask:book.ask,price:(book.bid+book.ask)/2,observedAt:time,contextUpdatedAt:time,history:[],
+      execution:{slug:SLUG,league,active:!over.ended,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.005,feeCoefficient:.0695}},
+    ...(over.settlement!==undefined?{settlement:over.settlement,settlementReceivedAt:time}:{})};
+}
+function started(league:TennisLeague='CFB'):TennisSession{
+  let session=createTennisSession({...defaultLiveTennisConfig(100),leagues:[league],focusSlug:SLUG},START-7_200_000);
+  session.id='synthetic-maker';
+  session=applyTennisAction(session,{action:'start',commandId:'maker-start'},[],START-7_200_000);
+  return session;
+}
+const step=(session:TennisSession,time:number,book:Book,over={}):TennisSession=>stepTennisSession(session,[input(time,book,over)],time);
+const T0=START-60*60_000;
+/** The runner's own reconciliation rules (services/runner/src/store.ts). */
+function assertReconciles(session:TennisSession){
+  const cash=session.ledger.reduce((sum,entry)=>sum+entry.cashDelta,session.config.startingCash);
+  assert.ok(Math.abs(cash-session.cash)<1e-6,`cash ${session.cash} vs ledger ${cash}`);
+  assert.ok(session.cash>=0);
+  assert.equal(new Set(session.ledger.map(entry=>entry.id)).size,session.ledger.length,'unique ledger ids');
+  for(const entry of session.ledger)assert.ok(session.positions.some(position=>position.id===entry.positionId),'every ledger row has a position');
+  for(const position of session.positions.filter(p=>p.status!=='open')){
+    const rows=session.ledger.filter(entry=>entry.positionId===position.id),buys=rows.filter(entry=>entry.action==='BUY'),exits=rows.filter(entry=>entry.action!=='BUY');
+    assert.ok(Math.abs(rows.reduce((sum,entry)=>sum+entry.cashDelta,0)-position.realizedPnl)<1e-6,'realized = ledger cash');
+    assert.ok(Math.abs(-buys.reduce((sum,entry)=>sum+entry.cashDelta,0)-position.entryCost)<1e-6,'entry cost = buys');
+    assert.ok(Math.abs(exits.reduce((sum,entry)=>sum+entry.cashDelta,0)-position.proceeds)<1e-6,'proceeds = exits');
+    assert.equal(position.quantity,0);assert.equal(position.costBasis,0);
+  }
+}
+
+test('pregame CFB: two-sided quotes rest at the best bids and fill only when sellers reach them',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  const quotes=session.maker!.quotes;
+  assert.deepEqual({yes:quotes.YES?.price,yesQty:quotes.YES?.quantity,no:quotes.NO?.price,noQty:quotes.NO?.quantity},{yes:.6,yesQty:8,no:.39,noQty:12});
+  assert.equal(session.pending,null);assert.equal(session.ledger.length,0);
+  // Same prices: no fill, quotes unchanged (they keep their place and activation time).
+  const placed=quotes.YES!.placedAt;
+  session=step(session,T0+2500,{bid:.60,ask:.61});
+  assert.equal(session.ledger.length,0);assert.equal(session.maker!.quotes.YES!.placedAt,placed);
+  // Sellers come down to our 60¢ bid: the YES quote fills, with the maker rebate.
+  const fill=T0+5000;
+  session=step(session,fill,{bid:.59,ask:.60});
+  const entry=session.ledger.at(-1)!,position=session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!;
+  assert.equal(entry.action,'BUY');assert.equal(entry.side,'YES');assert.equal(entry.execution!.filledQty,8);
+  assert.equal(entry.cashDelta,Math.round((makerRebate(.6,8)-8*.6)*1e6)/1e6);
+  assert.equal(position.quantity,8);assert.equal(position.status,'open');assert.equal(session.maker!.fills,1);
+  // The quote re-joins the new best bid after the delay; the NO side did not fill (YES bid never reached 61¢).
+  assert.equal(session.maker!.quotes.YES?.price,.59);assert.equal(session.maker!.quotes.NO?.price,.40);
+  assert.equal(session.positions.filter(p=>p.exitPolicy==='maker').length,1);
+  assertReconciles(session);
+});
+
+test('a quote cannot fill before it is live, and the NO side fills when buyers reach it',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  // 0.5 s later the ask touches our bid, but the quote only goes live after the 1 s execution delay.
+  session=step(session,T0+500,{bid:.59,ask:.60});
+  assert.equal(session.ledger.length,0);
+  // YES buyers rise to 61¢ = 1 − our 39¢ NO bid: the NO quote fills.
+  let later=step(started(),T0,{bid:.60,ask:.61});
+  later=step(later,T0+2000,{bid:.61,ask:.62});
+  const entry=later.ledger.at(-1)!;
+  assert.equal(entry.side,'NO');assert.equal(entry.actualPrice,.39);assert.equal(entry.execution!.filledQty,12);
+  assertReconciles(later);
+});
+
+test('inventory cap, settlement payout and reconciliation',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  let time=T0;
+  // Sellers keep hitting the YES bid; inventory stops growing at twice the quote stake.
+  for(let i=0;i<5;i++){time+=2500;session=step(session,time,{bid:.60-.01*(i+1),ask:.60-.01*i});}
+  const yes=session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!;
+  assert.ok(yes.costBasis<=10+1e-6+5,`inventory cost ${yes.costBasis}`);
+  assert.equal(session.maker!.quotes.YES,undefined,'no more YES bids at the cap');
+  assert.ok(session.maker!.quotes.NO,'the side that reduces risk keeps quoting');
+  // YES wins: maker inventory settles at $1.
+  const final=START+4*3_600_000;
+  session=stepTennisSession(session,[input(final,{bid:.99,ask:.995},{ended:true,settlement:1})],final);
+  const settled=session.positions.find(p=>p.id===yes.id)!;
+  assert.equal(settled.status,'settled');assert.ok(settled.realizedPnl>0);
+  assertReconciles(session);
+});
+
+test('Stop sells inventory at the bid; Pause cancels quotes but keeps inventory',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  session=step(session,T0+2500,{bid:.59,ask:.60});
+  assert.equal(session.positions.filter(p=>p.status==='open').length,1);
+  const paused=applyTennisAction(session,{action:'pause',commandId:'maker-pause'},[],T0+3000);
+  assert.deepEqual(paused.maker!.quotes,{});assert.equal(paused.positions.filter(p=>p.status==='open').length,1);
+  session=applyTennisAction(session,{action:'stop',commandId:'maker-stop'},[input(T0+5000,{bid:.58,ask:.59})],T0+5000);
+  assert.deepEqual(session.maker!.quotes,{});
+  assert.equal(session.positions.filter(p=>p.status==='open').length,0);
+  assert.equal(session.ledger.at(-1)!.action,'SELL');
+  session=step(session,T0+7500,{bid:.58,ask:.59});
+  assert.equal(session.status,'stopped');
+  assertReconciles(session);
+});
+
+test('no quotes where the evidence says stay out, or where no study exists',()=>{
+  const nfl=step(started('NFL'),T0,{bid:.60,ask:.61},{league:'NFL'});
+  assert.ok(!nfl.maker?.quotes.YES&&!nfl.maker?.quotes.NO);
+  assert.match(nfl.maker!.reason,/NFL pregame resting orders/);
+  const atp=step(started('ATP'),T0,{bid:.60,ask:.61},{league:'ATP'});
+  assert.ok(!atp.maker?.quotes.YES&&!atp.maker?.quotes.NO);
+  // A 6¢ book is a placeholder, not a market to make.
+  const wide=step(started(),T0,{bid:.58,ask:.64});
+  assert.ok(!wide.maker?.quotes.YES&&!wide.maker?.quotes.NO);
+});
+
+test('live CFB: quotes pull for 30 s after each play, then return',()=>{
+  const live=START+20*60_000;
+  let session=step(started(),live,{bid:.60,ask:.61},{live:true,drive:{down:1,yard:25}});
+  assert.ok(session.maker!.quotes.YES,session.maker!.reason);
+  session=step(session,live+5000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
+  assert.ok(!session.maker!.quotes.YES&&!session.maker!.quotes.NO);assert.match(session.maker!.reason,/^Pulled for 30s after a play/);
+  session=step(session,live+20_000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
+  assert.ok(!session.maker!.quotes.YES);
+  session=step(session,live+36_000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
+  assert.ok(session.maker!.quotes.YES,'quotes return once the pull window passes');
+});
+
+test('market making replays exactly',()=>{
+  const run=()=>{
+    let session=step(started(),T0,{bid:.60,ask:.61});
+    session=step(session,T0+2500,{bid:.59,ask:.60});
+    session=step(session,T0+5000,{bid:.61,ask:.62});
+    return session;
+  };
+  assert.equal(JSON.stringify(run()),JSON.stringify(run()));
+});

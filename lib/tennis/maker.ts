@@ -1,0 +1,54 @@
+import type {FootballReportState,TennisMarket} from './types';
+
+/**
+ * Paper market making: pure helpers. The bot rests a buy on each side at that side's best bid (a two-sided quote:
+ * buying NO at its bid is offering YES at 1 minus it). Fills use the research's CONSERVATIVE model: a resting buy
+ * fills only when a later book shows that side's best ask at or below our price, which means every bid at our
+ * level was taken, ours included. Real fills (queue position, touches that do not clear the level) fall between
+ * this and the optimistic model, so paper results here understate fills and overstate adverse selection.
+ */
+
+/** Polymarket US maker rebate per contract (research/studies/report.md): 0.0125 · p · (1 − p). */
+export const MAKER_REBATE_COEFFICIENT=0.0125;
+/** Wider books are placeholder quotes in the research, not markets to make. */
+export const MAX_QUOTE_SPREAD=0.05;
+/** Stop adding to one side once its inventory cost reaches this multiple of the quote stake. */
+export const INVENTORY_MULTIPLE=2;
+
+export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};
+export type MakerState={
+  slug:string;
+  /** Resting buys by contract side: YES at the YES bid, NO at the NO bid. */
+  quotes:{YES?:RestingQuote;NO?:RestingQuote};
+  pulledUntil:number;eventKey:string|null;lastBookTime:number;reason:string;
+  fills:number;rebates:number;
+};
+
+const exact=(value:number)=>Math.round(value*1_000_000)/1_000_000;
+
+export const makerRebate=(price:number,quantity:number)=>exact(quantity*MAKER_REBATE_COEFFICIENT*price*(1-price));
+
+/** Whole increments of contracts affordable for `stake` dollars at `price`; zero below the market minimum. */
+export function quoteQuantity(stake:number,price:number,increment:number,minimum:number):number {
+  if(!(stake>0)||!(price>0&&price<1)||!(increment>0))return 0;
+  const quantity=exact(Math.floor(stake/price/increment+1e-9)*increment);
+  return quantity>=minimum-1e-9?quantity:0;
+}
+
+/** Conservative fill: the side's best ask reached our resting price on a book received after the quote went live. */
+export function restingFilled(quote:RestingQuote,sideAsk:number|undefined,bookReceivedAt:number):boolean {
+  return sideAsk!==undefined&&bookReceivedAt>=quote.activeAfter&&sideAsk<=quote.price+1e-9;
+}
+
+/**
+ * A play/point boundary: quotes are pulled for a while after it, because the reaction studies show informed
+ * flow moves the price in the seconds after each event. Pregame has no events.
+ */
+export function eventKey(market:TennisMarket,report:FootballReportState|undefined):string {
+  const r=report?.report;
+  return JSON.stringify(r?[r.score,r.period,r.possessionTeamId,r.down,r.yardsToGo,r.fieldPosition.teamId,r.fieldPosition.yard]:[market.score,market.period]);
+}
+
+export function sameQuote(a:RestingQuote|undefined,price:number,quantity:number):boolean {
+  return !!a&&Math.abs(a.price-price)<1e-9&&Math.abs(a.quantity-quantity)<1e-9;
+}

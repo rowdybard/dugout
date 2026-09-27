@@ -4,6 +4,7 @@ import type {RestBookReceipt} from '../trading/fresh-book';
 import type {OpportunityAnalysis} from './opportunity';
 import type {AdaptiveExitPlan,AdaptiveExitState,AdaptiveExitAssessment} from './exit-analysis';
 import type {CompactPlan,PlanEntry} from './engine-plan';
+import type {MakerState} from './maker';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB';
@@ -55,6 +56,8 @@ export type TennisConfig={
   evidenceGate?:'evidence-v1';
   /** Pinned evidence-pack version for the gate and planner. Absent means the bundled pack. */
   evidencePack?:string;
+  /** Paper market making where the evidence permits resting orders (lib/tennis/maker.ts). Absent means off. */
+  maker?:'paper-v1';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
@@ -75,8 +78,11 @@ export type TennisPosition={
   exitRules?:PositionExitRules;entryContext?:FootballReport;
   entryAnalysis?:OpportunityAnalysis;exitPlan?:AdaptiveExitPlan;exitState?:AdaptiveExitState;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];
-  /** Engine-planned positions hold to settlement: only settlement, Stop or the account loss limit closes them. */
-  exitPolicy?:'hold-to-settlement';plan?:PlanEntry;
+  /**
+   * hold-to-settlement: engine-planned; only settlement, Stop or the account loss limit closes it.
+   * maker: inventory from resting-quote fills; settles, or is sold on Stop or the loss limit.
+   */
+  exitPolicy?:'hold-to-settlement'|'maker';plan?:PlanEntry;
 };
 export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
 export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
@@ -91,6 +97,8 @@ export type TennisSession={
   autoStatus?:{time:number;checked:number;qualified:number;reason:string;selected?:'recovery'|'momentum'};
   /** Latest decision-engine plan for the focused game (evidence-gated accounts). */
   enginePlan?:CompactPlan;
+  /** Paper market-making quotes and pull state. Inventory lives in positions with exitPolicy 'maker'. */
+  maker?:MakerState;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;
