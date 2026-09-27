@@ -1,0 +1,110 @@
+{
+  "bestIteration": 225,
+  "features": [
+    "score_diff",
+    "abs_score_diff",
+    "game_seconds_remaining",
+    "half_seconds_remaining",
+    "second_half",
+    "overtime",
+    "home_poss",
+    "no_poss",
+    "down",
+    "ydstogo",
+    "home_yardline",
+    "poss_yardline_100",
+    "home_timeouts",
+    "away_timeouts",
+    "spread_line",
+    "spread_time",
+    "spread_remaining",
+    "total_line",
+    "diff_time_ratio",
+    "home_receives_2h_ko",
+    "goal_to_go",
+    "red_zone"
+  ],
+  "splits": {
+    "train": "1999-2022",
+    "valid": "2023-2024",
+    "test": "2025-2026"
+  },
+  "valid": {
+    "ours": {
+      "n": 96259,
+      "brier": 0.14314755090929995,
+      "logloss": 0.4327137062289825
+    },
+    "nflfastR_home_wp": {
+      "n": 96259,
+      "brier": 0.15621253716897474,
+      "logloss": 0.464433108900334
+    },
+    "ours_on_same_home_wp": {
+      "n": 96259,
+      "brier": 0.14314755090929995,
+      "logloss": 0.4327137062289825
+    },
+    "nflfastR_vegas_home_wp": {
+      "n": 96259,
+      "brier": 0.141975213331034,
+      "logloss": 0.43067456493184275
+    },
+    "ours_on_same_vegas_home_wp": {
+      "n": 96259,
+      "brier": 0.14314755090929995,
+      "logloss": 0.4327137062289825
+    }
+  },
+  "test": {
+    "ours": {
+      "n": 52613,
+      "brier": 0.16204625951017643,
+      "logloss": 0.48652014810461935
+    },
+    "nflfastR_home_wp": {
+      "n": 52613,
+      "brier": 0.16980551140690664,
+      "logloss": 0.5004264691864706
+    },
+    "ours_on_same_home_wp": {
+      "n": 52613,
+      "brier": 0.16204625951017643,
+      "logloss": 0.48652014810461935
+    },
+    "nflfastR_vegas_home_wp": {
+      "n": 52613,
+      "brier": 0.15804945910402524,
+      "logloss": 0.47356148426356515
+    },
+    "ours_on_same_vegas_home_wp": {
+      "n": 52613,
+      "brier": 0.16204625951017643,
+      "logloss": 0.48652014810461935
+    }
+  },
+  "featureGain": {
+    "diff_time_ratio": 2117264.2,
+    "score_diff": 1193255.1,
+    "spread_line": 691650.8,
+    "spread_time": 183317.7,
+    "total_line": 173266.8,
+    "spread_remaining": 168595.8,
+    "home_poss": 72696.9,
+    "abs_score_diff": 60297.5,
+    "home_yardline": 56910.1,
+    "game_seconds_remaining": 39502.1,
+    "home_receives_2h_ko": 29865.3,
+    "down": 22283.4,
+    "poss_yardline_100": 21666.0,
+    "away_timeouts": 14475.7,
+    "home_timeouts": 14444.6,
+    "half_seconds_remaining": 10730.7,
+    "ydstogo": 3011.8,
+    "overtime": 1859.2,
+    "second_half": 1547.6,
+    "goal_to_go": 906.4,
+    "red_zone": 2.4,
+    "no_poss": 0.0
+  }
+}

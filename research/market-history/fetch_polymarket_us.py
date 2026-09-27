@@ -38,6 +38,13 @@ PREGAME_S = 12 * 3600
 POSTGAME_S = 15 * 60
 WINDOW_S = 24 * 3600
 TARGET_LEAGUES = ("nfl", "cfb", "mlb", "atp", "wta")
+# Full-game winner markets use the aec- prefix; atc-/astatc- slugs are sub-markets
+# (first five innings, single innings, quarters, halves, sets), which history skips unless --all-types.
+FULL_GAME_TYPES = {"moneyline", "football_team_full_game_winner", "baseball_team_full_game_winner", "tennis_match_winner"}
+
+
+def is_full_game(catalog: pd.DataFrame) -> pd.Series:
+    return catalog.market_slug.str.startswith("aec-") & catalog.market_type.isin(FULL_GAME_TYPES)
 
 
 def league_of(event: dict) -> str:
@@ -162,9 +169,10 @@ def fetch_one(row, limiter: RateLimiter) -> tuple[str, int]:
     return ("empty" if df.empty else "ok"), len(df)
 
 
-def fetch_history(leagues: list[str], workers: int, rate: float) -> None:
+def fetch_history(leagues: list[str], workers: int, rate: float, all_types: bool = False) -> None:
     catalog = pd.read_parquet(CATALOG)
-    todo = catalog[catalog.league.isin(leagues) & catalog.start_ts.notna()].sort_values("start_ts")
+    todo = catalog[catalog.league.isin(leagues) & catalog.start_ts.notna() & (all_types | is_full_game(catalog))]
+    todo = todo.sort_values("start_ts")
     limiter = RateLimiter(rate)
     counts = {"ok": 0, "empty": 0, "skip": 0, "error": 0}
     points = 0
@@ -205,6 +213,7 @@ def main() -> None:
     h.add_argument("--leagues", default=",".join(TARGET_LEAGUES))
     h.add_argument("--workers", type=int, default=4)
     h.add_argument("--rate", type=float, default=6.0, help="max requests per second across workers")
+    h.add_argument("--all-types", action="store_true", help="include sub-markets (innings, quarters, sets)")
     sub.add_parser("summarize")
     args = parser.parse_args()
     if args.cmd == "catalog":
@@ -212,7 +221,7 @@ def main() -> None:
     elif args.cmd == "rebuild-catalog":
         build_catalog()
     elif args.cmd == "history":
-        fetch_history(args.leagues.split(","), args.workers, args.rate)
+        fetch_history(args.leagues.split(","), args.workers, args.rate, args.all_types)
     else:
         summarize_history()
 

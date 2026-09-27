@@ -2,7 +2,7 @@
 
 Started September 27, 2026. **Read this first** if you are picking the project up cold (a new Claude session, Astra, or a human engineer). It records the goal, what the audit found, the decisions already made, the verified data sources, and a live checklist. Update the checklist and the "Last updated" line whenever a step changes status.
 
-Last updated: 2026-09-27. Steps 1–2 are done; Step 3 (data lake) is next.
+Last updated: 2026-09-27 (evening). Steps 1–2 are done. Step 3 (data lake) is in progress. The NFL win-probability model v1 is trained. Study scripts are written in `research/studies/`.
 
 ---
 
@@ -169,7 +169,19 @@ Last updated: 2026-09-27. Steps 1–2 are done; Step 3 (data lake) is next.
   - 577/577 tests pass, and the main and runner TypeScript checks pass.
   - The runner changes are **not deployed** to Cloudflare.
   - [ ] Owner still needs to get the CFBD key.
-- [ ] **Step 3: Data lake** (`research/market-history/`):
+- [ ] **Step 3: Data lake**, in progress Sep 27. Environment: `python -m venv research/.venv`, then `research/.venv/Scripts/python -m pip install -r research/requirements.txt` (Python 3.14 works).
+  - **Findings so far:**
+    - The Polymarket US closed catalog is about 70k events (mostly props). Full-game winner markets are `aec-` slugs with type `moneyline`, `*_full_game_winner` or `tennis_match_winner`. `atc-`/`astatc-` slugs are sub-markets (first five innings, single innings, quarters, halves, sets).
+    - Pages can be short mid-catalog (99 of 100), so only an empty page ends the crawl.
+    - Custom 24-hour history windows are **not** capped at about 1,000 points (2,112 were returned). Duplicate timestamps occur, so the `seq` column keeps arrival order.
+    - Coverage: NFL from 2025-10-31, CFB from 2025-12-06, **MLB from 2026-03-21 only** (no 2025 MLB markets), ATP/WTA from 2026-03-20.
+    - Team codes: NFL and MLB markets put the away team on the long (YES) side; codes match nflverse and Stats API except NFL `lar` → `LA`. Tennis uses `home` ordering and player codes.
+    - **Leak trap:** nflverse `home_score`/`away_score` are FINAL scores. Pre-play state is in `research/models/nfl/features.py`.
+    - nflverse `time_of_day` is a UTC ISO timestamp per snap (about 3% null).
+  - **Downloaded:**
+    - nflverse: 1.285M plays (1999–2026), schedules with closing lines, injuries, depth charts, participation, snap counts
+    - MLB Stats API feeds for 2025–2026 (about 125 KB gzipped per game)
+  - **Still to do:** MLB 2021–2024 feeds for win-probability training; CFB after the key arrives; the `align_*` scripts run after history.
   - `fetch_polymarket_us.py`: all closed MLB/NFL/CFB/ATP/WTA winner markets, with price history in 2-hour windows and outcomes
   - `fetch_mlb.py`: Stats API feeds 2025–26, Retrosheet 2000–24, Statcast 2023–26, probable pitchers
   - `fetch_nfl.py`: nflverse play-by-play 1999–2026, schedules with closing lines, injuries, depth charts, participation
@@ -188,7 +200,11 @@ Last updated: 2026-09-27. Steps 1–2 are done; Step 3 (data lake) is next.
   - live layer: pitch count, times through the order, bullpen fatigue, who's due up, platoon, park and weather
   - gradient boosting, calibrated; scored against both the outcome **and** the market price at the same moment
   - export `data/models/mlb-wp-v1.json`
-- [ ] **Step 6: NFL (then CFB) models:**
+- [ ] **Step 6: NFL (then CFB) models.** v1 trained Sep 27 (`research/models/nfl/train_wp.py`, artifacts in `research/models/nfl/artifacts/`).
+  - Brier on held-out 2025–26 (52.6k plays): ours 0.162, nflfastR `home_wp` 0.170, nflfastR `vegas_home_wp` 0.158.
+  - The added `total_line`/`spread_remaining` features were kept because *validation* improved (0.1439 → 0.1431). The test score was not used to choose.
+  - Next: benchmark against the market price at the same moments.
+  - Remaining plan items:
   - win probability plus EPA, team and QB strength
   - situation flags: QB change, weather, kicker range, fourth-down tendencies
   - train 1999–2023, validate 2024, test 2025–26 against the market
