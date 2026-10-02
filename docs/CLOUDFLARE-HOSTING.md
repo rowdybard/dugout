@@ -13,22 +13,31 @@ Added September 27, 2026. Moves the site from ChatGPT Sites to a Worker on the o
 
 **Nothing is deployed yet.** That needs a Cloudflare API token (step 1).
 
-## The short version
+## The short version (Google sign-in)
 
-**You do three things:**
-1. **Make a Cloudflare token.** Dashboard → My Profile → API Tokens → Create Token → Custom token. Tick these five account permissions:
+**You do four things:**
+1. **Pick a Zero Trust team name.** Cloudflare dashboard → Zero Trust (first visit asks for a team name; the Free plan is fine). Your sign-in address becomes `<team>.cloudflareaccess.com`.
+2. **Make a Cloudflare token.** Dashboard → My Profile → API Tokens → Create Token → Custom token. Tick these five account permissions:
    - Workers Scripts: Edit
    - D1: Edit
    - Access: Apps and Policies: Edit
    - Access: Organizations, Identity Providers, and Groups: Edit
    - Account Settings: Read
    Limit it to your account and set an expiry.
-2. **Add it to Claude's environment.** Open the environment menu in the session title bar, then Edit. Add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers overview page). Optionally also add `ANTHROPIC_API_KEY` and `POLYMARKET_KEY_ID` / `POLYMARKET_SECRET_KEY` if you want the Claude adviser and the live price stream on the new site.
-3. **Start a new session** and say: "Move Dugout to Cloudflare. Invite: me@…, friend@…"
+3. **Make a Google sign-in client** at console.cloud.google.com:
+   - Create a project (any name, e.g. Dugout).
+   - APIs & Services → OAuth consent screen: External, app name "Dugout", your email; publish it (it only asks for name and email, so no review is needed).
+   - APIs & Services → Credentials → Create credentials → OAuth client ID → Web application. Authorized redirect URI: `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback`.
+   - Keep the Client ID and Client secret.
+4. **Add them to Claude's environment** (environment menu in the session title bar → Edit), never in chat:
+   - `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (Workers overview page)
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   - Optional: `ANTHROPIC_API_KEY`, `POLYMARKET_KEY_ID` / `POLYMARKET_SECRET_KEY`
+   Then start a new session and say: "Move Dugout to Cloudflare with Google sign-in. Invite: me@…, chad@…"
 
 **Claude does the rest,** checking each step as it goes:
 1. Creates the database and deploys the site.
-2. Turns on sign-in by emailed code, restricted to your invite list, with the longest remembered-device session.
+2. Runs `ACCESS_INVITES=… node scripts/cloudflare-hosting.mjs access`: Google sign-in (an emailed code as backup), your invite list only, devices remembered for 730 hours (about a month).
 3. Reconnects your background runner with a fresh shared password.
 4. Tests it and sends you the link.
 
@@ -36,7 +45,7 @@ The old site keeps working until you're happy, then you switch it off.
 
 **Defaults already chosen for you:**
 - Everyone starts fresh with fake money. Your old history is still downloadable from the old site.
-- Sign-in is by emailed code. Google can be added later.
+- Sign-in is Google, with an emailed code as a backup for anyone without a Google account.
 - A new runner password is made, so you don't need to find the old one.
 
 The detailed steps below are for doing it by hand, or on your PC with `npx wrangler login`.

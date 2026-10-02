@@ -5,6 +5,10 @@
  *   node scripts/cloudflare-hosting.mjs database                   # find or create the D1 database; prints its id
  *   node scripts/cloudflare-hosting.mjs deploy                     # build, apply database migrations, deploy the Worker
  *   node scripts/cloudflare-hosting.mjs secrets                    # copy optional server secrets from this shell to the Worker
+ *   node scripts/cloudflare-hosting.mjs access                     # Google sign-in (+ email code backup), invite list,
+ *                                                                  # remembered devices; prints ACCESS_TEAM_DOMAIN and ACCESS_AUD
+ *   Access needs ACCESS_INVITES (comma-separated emails); Google needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (a Google
+ *   OAuth "Web application" client whose redirect URI is https://<team>.cloudflareaccess.com/cdn-cgi/access/callback).
  *
  * Credentials: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the environment, or `wrangler login` on a PC.
  * Deploy needs DUGOUT_D1_DATABASE_ID, and ACCESS_TEAM_DOMAIN + ACCESS_AUD to let anyone in. Secret values are never printed.
@@ -41,6 +45,45 @@ function findDatabase(){
   return list.find(item=>item.name===DATABASE)?.uuid??null;
 }
 
+// ---- Cloudflare Access through the API (token: Access Apps and Policies: Edit; Organizations, Identity Providers and Groups: Edit) ----
+const API='https://api.cloudflare.com/client/v4';
+async function cf(method,path,body){
+  const response=await fetch(`${API}/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}${path}`,{method,headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+  const json=await response.json().catch(()=>({}));
+  if(!response.ok||json.success===false)throw new Error(`${method} ${path} failed (${response.status}): ${(json.errors??[]).map(e=>e.message).join('; ')||'no detail'}`);
+  return json.result;
+}
+/** The longest Access session (remembered devices) Cloudflare offers for an application. */
+const SESSION='730h';
+
+async function access(){
+  need(['CLOUDFLARE_API_TOKEN','CLOUDFLARE_ACCOUNT_ID','ACCESS_INVITES']);
+  const invites=process.env.ACCESS_INVITES.split(',').map(e=>e.trim().toLowerCase()).filter(e=>e.includes('@'));
+  if(!invites.length)throw new Error('ACCESS_INVITES has no email addresses.');
+  const org=await cf('GET','/access/organizations').catch(()=>null);
+  if(!org?.auth_domain)throw new Error('Zero Trust is not set up yet: open Cloudflare dashboard → Zero Trust once and choose a team name, then run this again.');
+  const providers=await cf('GET','/access/identity_providers');
+  const ensure=async(type,name,config)=>providers.find(p=>p.type===type)?.id??(await cf('POST','/access/identity_providers',{name,type,config})).id;
+  const idps=[await ensure('onetimepin','Email code',{})];
+  if(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET){
+    const existing=providers.find(p=>p.type==='google');
+    const google={name:'Google',type:'google',config:{client_id:process.env.GOOGLE_CLIENT_ID,client_secret:process.env.GOOGLE_CLIENT_SECRET}};
+    idps.unshift(existing?(await cf('PUT',`/access/identity_providers/${existing.id}`,google)).id:(await cf('POST','/access/identity_providers',google)).id);
+  }else console.warn('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set: sign-in is by emailed code only.');
+  const sub=await cf('GET','/workers/subdomain');
+  const domain=process.env.ACCESS_SITE_DOMAIN||`dugout.${sub.subdomain}.workers.dev`;
+  const policy={name:'Dugout invite list',decision:'allow',include:invites.map(email=>({email:{email}})),precedence:1};
+  const apps=await cf('GET','/access/apps');
+  const app={name:'Dugout',domain,type:'self_hosted',session_duration:SESSION,allowed_idps:idps,auto_redirect_to_identity:false,app_launcher_visible:false,policies:[policy]};
+  const found=apps.find(a=>a.domain===domain);
+  const saved=found?await cf('PUT',`/access/apps/${found.id}`,app):await cf('POST','/access/apps',app);
+  console.log(`Access protects https://${domain} for: ${invites.join(', ')}`);
+  console.log(`Sign-in: ${idps.length>1?'Google, or an emailed code':'an emailed code'} · devices stay signed in for ${SESSION}`);
+  console.log(`ACCESS_TEAM_DOMAIN=${org.auth_domain}`);
+  console.log(`ACCESS_AUD=${saved.aud}`);
+  if(!process.env.GOOGLE_CLIENT_ID)console.log(`For Google: redirect URI https://${org.auth_domain}/cdn-cgi/access/callback`);
+}
+
 async function main([command,...args]){
   if(command==='owner-id'){
     if(!args[0]?.includes('@'))throw new Error('Usage: owner-id you@example.com');
@@ -62,8 +105,10 @@ async function main([command,...args]){
     const present=SECRETS.filter(name=>process.env[name]);
     if(!present.length)console.log(`None of ${SECRETS.join(', ')} are set in this shell; nothing to copy.`);
     for(const name of present){wrangler(['secret','put',name,'--config',WORKER_CONFIG],{input:process.env[name]});console.log(`${name} set.`);}
+  }else if(command==='access'){
+    await access();
   }else{
-    console.error('Usage: cloudflare-hosting.mjs owner-id <email> | database | deploy | secrets');
+    console.error('Usage: cloudflare-hosting.mjs owner-id <email> | database | deploy | secrets | access');
     process.exitCode=2;
   }
 }
