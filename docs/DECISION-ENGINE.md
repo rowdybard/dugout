@@ -111,7 +111,12 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
-- **Steady and Chaos mode.** `config.entries: 'steady'` keeps only the resting orders above: no taker or drive entries.
+- **Steady and Bold** (`lib/tennis/modes.ts`), the two choices on the dashboard:
+  - **Steady:** `config.entries: 'steady'` keeps only the resting orders above, with no taker or drive entries. Orders are about 5% of the balance ($5 on $100).
+  - **Bold:** `entries: 'all'` adds the hold-to-final bets the evidence allows, and the orders are 12% of the balance ($12 on $100, at most $50). At that size both resting buys still fit the 25% open-exposure cap.
+  - **Same rules, bigger money:** Bold doesn't change the edge per dollar, only how many dollars ride on each trade. Wins and losses both get bigger.
+  - **Reset** keeps the mode and resizes the orders to the new balance.
+- **Chaos mode.**
   - **Chaos mode** (experimental, off by default) is Steady on up to six more games at once (`config.chaosSlugs`). Each extra game gets its own quote state (`session.chaos[slug]`, `lib/tennis/engine.ts`), its own fills and its own inventory cap. The main game keeps `session.maker`.
   - **Taking a game out of Chaos** cancels its quotes, and so do Stop and stale data. Inventory held on it is still sold or settled.
   - **Logs:** every decision on a Chaos game, every fill, and the balance once a minute are written as one JSON line each (`lib/datastore/chaos-log.ts`).

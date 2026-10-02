@@ -9,6 +9,7 @@ const freshLive = (input:TennisInput,now:number) => input.market.live && input.m
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig,defaultLiveTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+import {modeOf,modeRules} from './modes.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
 import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
 import {adaptiveTennisRules} from './auto.ts';
@@ -1224,7 +1225,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     if (!action.abandon && (holding(session) || session.pending || makerPositions(session).length)) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
     session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug,
-      ...(session.config.entries?{entries:session.config.entries}:{})}, now);
+      ...(session.config.entries?modeRules({startingCash:action.bankroll},modeOf(session.config)):{})}, now);
     session.commandIds = [action.commandId];
     return session;
   }
