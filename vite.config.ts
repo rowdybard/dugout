@@ -40,7 +40,18 @@ const localBindingConfig = {
  * builds the site as the owner's own Worker. Every request is checked for a valid Access token in
  * worker/cloudflare-entry.ts. Without the variable, the build stays the ChatGPT Sites build.
  */
-const cloudflareHosting = process.env.DUGOUT_HOSTING === "cloudflare";
+// Cloudflare's git-connected builds (Workers Builds, WORKERS_CI=1) always build the locked self-hosted site: the
+// Sites build has no Access gate and must never be deployed there.
+const workersBuilds = process.env.WORKERS_CI === "1";
+const cloudflareHosting = process.env.DUGOUT_HOSTING === "cloudflare" || workersBuilds;
+if (workersBuilds) {
+  const missing = ["DUGOUT_D1_DATABASE_ID", "ACCESS_TEAM_DOMAIN", "ACCESS_AUD"].filter((name) => !process.env[name]?.trim());
+  if (missing.length)
+    throw new Error(
+      `Cloudflare build stopped: set ${missing.join(", ")} under your Worker > Settings > Build > Variables and secrets, ` +
+        "then retry the build. See docs/CLOUDFLARE-HOSTING.md (Deploy from GitHub).",
+    );
+}
 const selfHostedConfig = {
   name: process.env.DUGOUT_WORKER_NAME || "dugout",
   main: "./worker/cloudflare-entry.ts",

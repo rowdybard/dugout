@@ -13,6 +13,24 @@ Added September 27, 2026. Moves the site from ChatGPT Sites to a Worker on the o
 
 **Nothing is deployed yet.** That needs a Cloudflare API token (step 1).
 
+## Deploy from GitHub (Cloudflare Workers Builds)
+
+Use this when the Worker is connected to the GitHub repo, so every push to `main` deploys.
+- **Locked build:** on Cloudflare's builder (`WORKERS_CI=1`), the build is always the Google/Access-locked site.
+- **Missing settings stop the build:** it stops with a message naming what's missing, rather than deploying an unlocked or broken site.
+
+1. **Database:** Dashboard → Storage & Databases → D1 → Create, name it `dugout`, and copy its ID. Or run `node scripts/cloudflare-hosting.mjs database` on your PC.
+2. **Sign-in:** set up Access as in step 3 of the next section, then copy the team domain and the application's AUD tag.
+3. **Worker → Settings → Build:**
+   - **Build variables:**
+     - `DUGOUT_D1_DATABASE_ID` = the database ID
+     - `ACCESS_TEAM_DOMAIN` = `<team>.cloudflareaccess.com`
+     - `ACCESS_AUD` = the AUD tag
+   - **Build command:** `pnpm run build`
+   - **Deploy command:** `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy` (this creates and updates the tables, then deploys)
+4. **Retry the build** (Deployments → the failed build → Retry, or push any commit).
+5. **Runtime secrets:** add them once under Worker → Settings → Variables and Secrets (`DUGOUT_OWNER_ID` and the extras in step 5 of the next section). They survive redeploys.
+
 ## Do it yourself from your PC (Windows PowerShell)
 
 Checked Oct 2, 2026: the Cloudflare build is configured correctly and applies all database migrations to a fresh database. Locally, a visitor with no sign-in gets the invite-only page (401), a faked identity header is refused (401), and a forged sign-in token is rejected (403).
