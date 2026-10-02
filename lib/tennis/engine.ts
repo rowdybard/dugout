@@ -87,6 +87,20 @@ function dataIssue(session: TennisSession, input: TennisInput, now: number): str
 }
 
 /** The taker position slot. Market-making inventory (exitPolicy 'maker') is managed separately. */
+/** Chaos mode: an extra game the bot also quotes (Steady only). */
+function chaosGame(session: TennisSession, slug: string) {
+  return session.config.entries === 'steady' && !!session.config.maker && slug !== session.config.focusSlug && (session.config.chaosSlugs ?? []).includes(slug);
+}
+/** Run maker code against one Chaos game's own resting-order state (the same rules as the main game's). */
+function withChaosMaker<T>(session: TennisSession, slug: string, run: () => T): T {
+  const main = session.maker, store = session.chaos ??= {};
+  session.maker = store[slug];
+  try { return run(); } finally {
+    if (session.maker) store[slug] = session.maker; else delete store[slug];
+    session.maker = main;
+  }
+}
+
 function holding(session: TennisSession) { return session.positions.find(position => position.status === 'open' && position.exitPolicy !== 'maker'); }
 function makerPositions(session: TennisSession) { return session.positions.filter(position => position.status === 'open' && position.exitPolicy === 'maker'); }
 
@@ -255,7 +269,7 @@ type Evaluated = { input: TennisInput; phase: Phase | null; plan: Plan };
 function evaluateEngine(session: TennisSession, current: TennisInput[], now: number): Evaluated[] {
   const resolved = sessionEngine(session), out: Evaluated[] = [];
   for (const input of [...current].sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
-    if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) continue;
+    if (session.config.focusSlug && session.config.focusSlug !== input.market.slug && !chaosGame(session, input.market.slug)) continue;
     if (input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1) || input.receivedAt <= (session.evaluatedBooks?.[input.market.slug] ?? -1) || dataIssue(session, input, now)) continue;
     (session.evaluatedBooks ??= {})[input.market.slug] = input.receivedAt;
     if ('error' in resolved) {
@@ -264,7 +278,7 @@ function evaluateEngine(session: TennisSession, current: TennisInput[], now: num
     }
     const phase = marketPhase(input, now);
     const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now), explore: session.config.explore });
-    session.enginePlan = compactPlan(plan);
+    if (!chaosGame(session, input.market.slug)) session.enginePlan = compactPlan(plan);
     // Shadow: proposals evidence withheld, plus actions of a shadow-stage maker strategy this account does not run.
     const maker = selectedMaker(session);
     const unused = plan.actions.filter(action => action.proposal.style === 'maker' && action.proposal.strategy !== maker
@@ -284,6 +298,15 @@ function stageEnginePlan(session: TennisSession, evaluated: Evaluated[], now: nu
   for (const { input, phase, plan } of evaluated) {
     const slug = input.market.slug, maker = selectedMaker(session);
     const why = (code: string, detail: string, strategy = 'bot') => recordWhyNot(session, slug, { strategy, code: noTradeCode(code), detail }, now);
+    if (chaosGame(session, slug)) {
+      // Chaos games only ever rest Steady orders, in their own quote state.
+      const quoting = withChaosMaker(session, slug, () => {
+        updateMakerQuotes(session, input, { ...plan, actions: plan.actions.filter(item => item.proposal.style === 'maker' && item.proposal.strategy === maker) }, phase, now);
+        return !!session.maker && (!!session.maker.quotes.YES || !!session.maker.quotes.NO);
+      });
+      recordWhyNot(session, slug, quoting ? null : plan.why ?? { strategy: 'engine', code: 'PHASE', detail: 'The game phase is not confirmed.' }, now);
+      continue;
+    }
     // Steady accounts only rest orders: no taker entries at all.
     const action = makerPositions(session).length || session.config.entries === 'steady' ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
       || (item.proposal.style === 'taker-scalp' && item.proposal.exit.kind === 'drive'));
@@ -437,6 +460,28 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
     const input = current.find(item => item.market.slug === state.slug);
     if (!input || dataIssue(session, input, now)) cancelMakerQuotes(session, 'No fresh book this check; quotes are never left resting on stale data.', now);
   }
+}
+
+/** Chaos mode, every tick: fill each extra game's resting quotes on its new book, and withdraw them when not allowed. */
+function advanceChaos(session: TennisSession, current: TennisInput[], now: number) {
+  for (const slug of Object.keys(session.chaos ?? {})) withChaosMaker(session, slug, () => {
+    const state = session.maker!;
+    const input = current.find(item => item.market.slug === slug);
+    if ((state.quotes.YES || state.quotes.NO) && input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
+      for (const side of ['YES', 'NO'] as const) {
+        const quote = state.quotes[side];
+        if (!quote || !restingFilled(quote, quotes(input, side).ask, input.receivedAt)) continue;
+        delete state.quotes[side];
+        applyMakerFill(session, input, side, quote, now);
+      }
+      state.lastBookTime = input.receivedAt;
+    }
+    if (session.status !== 'running') cancelMakerQuotes(session, session.status === 'stopping' || session.status === 'stopped' ? 'The bot is stopping; inventory is being closed.' : 'Entries are paused; existing inventory is held to settlement.', now);
+    else if (!chaosGame(session, slug)) cancelMakerQuotes(session, 'This game left Chaos mode.', now);
+    else if (!input || dataIssue(session, input, now)) cancelMakerQuotes(session, 'No fresh book this check; quotes are never left resting on stale data.', now);
+    // A game that left Chaos mode with nothing resting and no inventory is forgotten.
+    if (!chaosGame(session, slug) && !state.quotes.YES && !state.quotes.NO && !makerPositions(session).some(position => position.slug === slug)) session.maker = undefined;
+  });
 }
 
 /** Quote the plan's permitted resting buys, with inventory, cash and event-pull limits. */
@@ -1004,6 +1049,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   if (open) settle(session, open, current.find(input => input.market.slug === open.slug), now);
   const processed = processPending(session, current, now);
   advanceMaker(session, current, now);
+  advanceChaos(session, current, now);
   advanceShadows(session, current, now, input => !dataIssue(session, input, now));
   const position = holding(session);
   if (position) {

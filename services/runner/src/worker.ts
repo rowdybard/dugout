@@ -8,6 +8,7 @@ import type {MigrationStart,MigrationChunk,RunnerCommand} from '../../../lib/run
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
 import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
+import {ChaosFiles,chaosLines,chaosOn,type ChaosCursor} from '../../../lib/datastore/chaos-log.ts';
 import {createSweepSession,listInput,SWEEP_EVERY_MS,SWEEP_LEAGUES,sweepAwaiting,sweepStep,sweepSummary} from '../../../lib/tennis/sweep.ts';
 import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
 
@@ -29,9 +30,10 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
   private adapter:PolymarketInputAdapter;
   private tickInFlight:Promise<void>|null=null;
   private recorder:BookRecorder;
+  private chaosFiles:ChaosFiles;
   constructor(ctx:DurableObjectState,env:RunnerEnv){
     super(ctx,env);this.store=new RunnerStore(ctx.storage,env.RUNNER_ENGINE_VERSION);
-    this.recorder=new BookRecorder({prefix:(env as RunnerEnv&LakeBindings).LAKE_PREFIX||'dugout'});this.adapter=new PolymarketInputAdapter(this.store,async()=>{
+    this.recorder=new BookRecorder({prefix:(env as RunnerEnv&LakeBindings).LAKE_PREFIX||'dugout'});this.chaosFiles=new ChaosFiles((env as RunnerEnv&LakeBindings).LAKE_PREFIX||'dugout');this.adapter=new PolymarketInputAdapter(this.store,async()=>{
       const value=this.store.get<EncryptedFeedCredentials>('feed-credentials'),identity=this.store.active();
       return value&&identity?decryptFeedCredentials(value,env.RUNNER_HMAC_SECRET,identity.ownerId,identity.epoch):null;
     },task=>ctx.waitUntil(task));
@@ -131,6 +133,13 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
         await this.store.advance({action:'tick',sessionId:current.id},inputs,Date.now(),failures,current.revision);
         const after=this.store.session();
         if(after)await this.sweep(after,lake);
+        // Chaos mode (experimental): every event as one short line, written to the lake as tiny files.
+        const account=this.store.active()?.ownerId;
+        if(after&&lake&&account&&chaosOn(after)){
+          const {lines,cursor}=chaosLines(after,this.store.get<ChaosCursor>('chaos-cursor')??{decisions:0,ledger:0,balance:0},Date.now());
+          this.chaosFiles.add(lines);this.store.set('chaos-cursor',cursor);
+          this.ctx.waitUntil(this.chaosFiles.flush(lake,account).catch(()=>null));
+        }
         const finalMarket=endedMarket??inputs.find(i=>i.market.slug===after?.config.focusSlug&&i.market.ended)?.market;
         if(after?.status==='running'&&finalMarket&&finalMarket.slug===after.config.focusSlug&&finalMarket.ended&&finalMarket.observedAt<=Date.now()&&Date.now()-finalMarket.observedAt<=45000){
           await this.store.advance({action:'pause',sessionId:after.id,commandId:'runner-game-ended-'+after.id+'-'+after.revision},[],Date.now(),[],after.revision,{code:'FOCUSED_GAME_ENDED',market:finalMarket});

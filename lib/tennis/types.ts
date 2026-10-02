@@ -89,6 +89,11 @@ export type TennisConfig={
    * fill wins or loses about a cent). all (or absent): every entry the evidence permits.
    */
   entries?:'steady'|'all';
+  /**
+   * Chaos mode (experimental): extra games where the bot ALSO rests Steady orders at the same time, each with its own
+   * quotes, inventory cap and stake (the entry budget), sharing the account's cash and loss limit. Up to 6. Steady only.
+   */
+  chaosSlugs?:string[];
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
@@ -133,6 +138,8 @@ export type TennisSession={
   enginePlan?:CompactPlan;
   /** Paper market-making quotes and pull state. Inventory lives in positions with exitPolicy 'maker'. */
   maker?:MakerState;
+  /** Chaos mode: resting-order state for each extra game (the main game keeps `maker`). */
+  chaos?:Record<string,MakerState>;
   /** The football drive each market last entered, so one drive is traded once. Cleared when the drive ends. */
   drives?:Record<string,{possessionTeamId:string;score:string;period:string}>;
   /** Last setup each strategy entered per market (`slug|strategy` → setup key): one entry per setup. */

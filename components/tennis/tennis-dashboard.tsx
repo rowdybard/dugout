@@ -26,6 +26,7 @@ import {RunnerSetup} from './runner-setup';
 import {FeedKey} from './feed-key';
 import {DecisionCard} from './decision-card';
 import {EngineCard} from './engine-card';
+import {ChaosPanel,downloadChaosLog} from './chaos-panel';
 
 import {describeTennisRules} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
@@ -130,10 +131,11 @@ export function TennisDashboard() {
     setFollowed(slug);
     if(!session||open.length||session.pending||session.config.focusSlug===slug)return;
     await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),
-      rules:{focusSlug:slug,...(onlyVisible?{}:{leagues:[...VISIBLE_LEAGUES]})}});
+      rules:{focusSlug:slug,...(onlyVisible?{}:{leagues:[...VISIBLE_LEAGUES]}),...(session.config.chaosSlugs?.includes(slug)?{chaosSlugs:session.config.chaosSlugs.filter(item=>item!==slug)}:{})}});
   };
   const steady=session?.config.entries==='steady';
-  const setEntries=(entries:'steady'|'all')=>{if(session&&session.config.entries!==entries)void bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{entries}});};
+  const setEntries=(entries:'steady'|'all')=>{if(session&&session.config.entries!==entries)void bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{entries,...(entries==='all'&&session.config.chaosSlugs?.length?{chaosSlugs:[]}:{})}});};
+  const setChaos=(chaosSlugs:string[])=>{if(session)void bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{chaosSlugs}});};
   const botGame=focusedMarket??null;
   // "Still loading more games" is not a problem worth a banner; the search box says it is checking.
   const feedErrors=(catalog?.errors??[]).filter(error=>!/still loading/i.test(error));
@@ -149,6 +151,7 @@ export function TennisDashboard() {
       {bot.connectionIssue&&<div className="tennis-error" role="status"><RefreshCw size={16}/><span>{bot.connectionIssue} Last check {session?age(session.lastTickAt,now):'connecting'}.</span></div>}
       {(bot.feedError||!!feedErrors.length)&&<div className="tennis-error" role="alert"><TriangleAlert size={16}/><span>{bot.feedError||feedErrors.join(' ')}</span></div>}
 
+      {session&&!onlyVisible&&<div className="tennis-notice" role="status"><span>This account is still set to other sports.</span><button className="tennis-secondary" disabled={bot.busy||migrating||open.length>0||!!session.pending} onClick={()=>void chooseVisible()}>Show college football games</button></div>}
       <GameSearch markets={availableMarkets} current={botGame} focused={session?.config.focusSlug??null} busy={bot.busy||!session||migrating} loading={catalog?.discovery?.complete===false} now={now} onChoose={slug=>void chooseGame(slug)}/>
 
       <section className="tennis-bot" aria-label="Paper bot">
@@ -159,7 +162,7 @@ export function TennisDashboard() {
             <div className="tennis-mode-choice" role="group" aria-label="How the bot trades">
               <button aria-pressed={steady} disabled={!session||bot.busy} onClick={()=>setEntries('steady')}>Steady</button>
               <button aria-pressed={!steady} disabled={!session||bot.busy} onClick={()=>setEntries('all')}>Full</button>
-              <span>{steady?'Resting orders only: many small wins and losses, about a cent each.':'Also takes hold-to-final bets the research allows: bigger swings.'}</span>
+              <span>{steady?'Resting orders only: many small wins and losses, about a cent each.':'Also takes hold-to-final bets the research allows: bigger swings.'}{session?.config.chaosSlugs?.length?' Full turns Chaos off.':''}</span>
             </div>
           </div>
           <div className="tennis-bot-money">
@@ -178,6 +181,8 @@ export function TennisDashboard() {
           <span className="tennis-runtime"><Clock3 size={13}/>{background?'Keeps running with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still managed':''}</span>
         </div>
 
+        {session&&steady&&<details className="tennis-chaos-details" open={!!session.config.chaosSlugs?.length}><summary>Chaos mode · {session.config.chaosSlugs?.length?`${session.config.chaosSlugs.length} extra game${session.config.chaosSlugs.length>1?'s':''}`:'off'}</summary>
+          <ChaosPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setChaos}/></details>}
         {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}
         {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Entry':'Exit'} queued · fills on the next fresh price</div>}
         {open.length>0&&<div className="tennis-position-list" aria-label="Open paper positions">{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-label">{position.side}</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for a price':partial?'Part can sell now':'If sold now'}</small></div><span className="tennis-tag">{session?.pending?.action==='SELL'?'Exiting':position.exitPolicy==='maker'?'Quote fill':position.exitPolicy==='hold-to-settlement'?'Holding to final':position.exitPolicy==='drive'?'Riding the drive':'Managing'}</span></article>;})}</div>}
@@ -211,7 +216,7 @@ export function TennisDashboard() {
         <FeedKey runtime={bot.runtime} onChange={bot.reloadAccount}/>
         <section className="tennis-rule-summary" aria-label="Connection diagnostics"><b>Connection &amp; checks</b><p>{bot.runtime?.description||'Connecting to the saved paper account.'}</p>{background&&<p className="tennis-order-help">Last successful check: {bot.runtime?.lastSuccessfulCheck?age(bot.runtime.lastSuccessfulCheck,now):'waiting'}. {bot.runtime?.usage&&`${bot.runtime.usage.estimatedRowsWritten.toLocaleString()} estimated storage writes today.`}</p>}<small>{session?.evaluated??0} price checks · Rules revision {session?.rulesRevision??0} · Entry {session?money(isIdle?entryBudget:session.config.entryBudget):'—'} · Cash {session?money(session.cash):'—'}</small></section>
         {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':`${Math.round((session.testRun.endsAt-session.testRun.startedAt)/60000)}-minute paper watch`}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/></section>}
-        <section className="tennis-activity" aria-label="Bot activity"><div className="tennis-activity-head"><h2>Bot activity</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a></div>
+        <section className="tennis-activity" aria-label="Bot activity"><div className="tennis-activity-head"><h2>Bot activity</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a>{session&&<button className="tennis-link" onClick={()=>downloadChaosLog(session)}>Download Chaos log</button>}</div>
           <div className="tennis-rule-summary"><b>What is happening now</b><p>{reason}</p></div>
           {unique.length?<div className="tennis-activity-list">{unique.map(decision=><div className="tennis-activity-row" key={decision.id}><span className={`tennis-action-badge ${decision.action==='BUY'?'is-buy':decision.action==='SELL'?'is-sell':''}`}>{decision.action}</span><div><strong>{labelFor(decision.slug,decision.side)}</strong><p>{decision.reason}</p></div><time>{time(decision.time)}</time></div>)}</div>:<div className="tennis-empty-activity">Nothing yet.</div>}</section>
         <div className="tennis-rule-summary"><b>Your current rules</b><p>{session?describeTennisRules(session.config):'Loading saved rules…'}</p></div>

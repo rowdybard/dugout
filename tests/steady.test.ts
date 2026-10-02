@@ -61,3 +61,49 @@ test('reset can drop open paper trades (fake money) so nobody gets stuck, and ke
   const steady=applyTennisAction({...run('steady'),pending:busy.pending},{action:'reset',bankroll:20,commandId:'reset-3',abandon:true},[],at);
   assert.equal(steady.config.entries,'steady','the Steady choice survives a reset');
 });
+
+// ---- Chaos mode: Steady resting orders on several games at once ------------------------------------------------
+
+function game(slug:string,at:number,bid:number,ask:number,start='2026-10-03T16:00:00Z'):TennisInput {
+  const raw={id:slug.length+400000,slug:slug.replace(/^aec-/,''),title:slug,startTime:start,active:true,closed:false,period:'NS',eventState:null,
+    markets:[{slug,sportsMarketType:'football_team_full_game_winner',status:'MARKET_STATUS_OPEN',active:true,closed:false,
+      feeCoefficient:0.0695,orderPriceMinTickSize:0.01,minimumTradeQty:0.01,bestBidQuote:{value:String(bid)},bestAskQuote:{value:String(ask)},
+      marketSides:[{long:true,description:'Away',teamId:9001,team:{id:9001,name:`${slug} away`,league:'cfb',ordering:'away'}},
+        {long:false,description:'Home',teamId:9002,team:{id:9002,name:`${slug} home`,league:'cfb',ordering:'home'}}]}]};
+  const market=normalizeTennisEvent(raw,'CFB',at)[0];
+  assert.ok(market?.active,market?.unavailableReason);
+  return {receivedAt:at,source:'REST',sourceTime:at,market,book:{bids:[{price:bid,quantity:800}],asks:[{price:ask,quantity:800}],state:'MARKET_STATE_OPEN',time:new Date(at).toISOString()}};
+}
+const A='aec-cfb-alpha-beta-2026-10-03',B='aec-cfb-gamma-delta-2026-10-03',C='aec-cfb-eps-zeta-2026-10-03';
+
+test('Chaos mode rests Steady orders on several games at once, each with its own quotes and fills',()=>{
+  const config={...defaultLiveTennisConfig(100),leagues:['CFB' as const],focusSlug:A,entries:'steady' as const,chaosSlugs:[B,C]};
+  assert.equal(validateTennisConfig(config),null);
+  assert.match(validateTennisConfig({...config,entries:'all'})!,/Steady/,'Chaos is Steady only');
+  let session=applyTennisAction(createTennisSession(config,START-3_600_000),{action:'start',commandId:'chaos-start'},[],START-3_600_000);
+  let t=START-60*60_000;
+  session=stepTennisSession(session,[game(A,t,0.6,0.61),game(B,t,0.3,0.31),game(C,t,0.5,0.51)],t);
+  assert.ok(session.maker?.quotes.YES&&session.maker.slug===A,session.maker?.reason);
+  assert.equal(session.chaos?.[B]?.quotes.YES?.price,0.3);assert.equal(session.chaos?.[B]?.quotes.NO?.price,0.69);
+  assert.equal(session.chaos?.[C]?.quotes.YES?.price,0.5);
+  assert.equal(session.pending,null,'never a taker entry');
+  assert.equal(session.enginePlan?.slug,A,'the dashboard plan stays on the main game');
+  // On B sellers come down to our 30¢ bid: B's YES quote fills, A and C are untouched.
+  t+=5_000;
+  session=stepTennisSession(session,[game(A,t,0.6,0.61),game(B,t,0.29,0.3),game(C,t,0.5,0.51)],t);
+  const fills=session.ledger.filter(entry=>entry.action==='BUY');
+  assert.equal(fills.length,1);assert.equal(fills[0].slug,B);assert.equal(fills[0].side,'YES');
+  assert.equal(session.positions.filter(p=>p.status==='open'&&p.exitPolicy==='maker').length,1);
+  assert.equal(session.chaos?.[B]?.fills,1);assert.equal(session.maker?.fills??0,0);
+  // Dropping C from Chaos mode withdraws its quotes; B (with inventory) keeps its state.
+  session=applyTennisAction(session,{action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:'chaos-drop',rules:{chaosSlugs:[B]}},[],t+1000);
+  t+=10_000;
+  session=stepTennisSession(session,[game(A,t,0.6,0.61),game(B,t,0.3,0.31),game(C,t,0.5,0.51)],t);
+  assert.equal(session.chaos?.[C],undefined,'C forgotten once nothing rests and nothing is held');
+  assert.ok(session.chaos?.[B]);
+  // Pause: every game's quotes come down.
+  session=applyTennisAction(session,{action:'pause',commandId:'chaos-pause'},[],t+1000);
+  t+=5_000;
+  session=stepTennisSession(session,[game(A,t,0.6,0.61),game(B,t,0.3,0.31)],t);
+  assert.ok(!session.maker?.quotes.YES&&!session.chaos?.[B]?.quotes.YES&&!session.chaos?.[B]?.quotes.NO);
+});

@@ -111,6 +111,12 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
+- **Steady and Chaos mode.** `config.entries: 'steady'` keeps only the resting orders above: no taker or drive entries.
+  - **Chaos mode** (experimental, off by default) is Steady on up to six more games at once (`config.chaosSlugs`). Each extra game gets its own quote state (`session.chaos[slug]`, `lib/tennis/engine.ts`), its own fills and its own inventory cap. The main game keeps `session.maker`.
+  - **Taking a game out of Chaos** cancels its quotes, and so do Stop and stale data. Inventory held on it is still sold or settled.
+  - **Logs:** every decision on a Chaos game, every fill, and the balance once a minute are written as one JSON line each (`lib/datastore/chaos-log.ts`).
+    - **Background runner:** with the `LAKE` R2 binding, it writes tiny files to `<prefix>/chaos/<YYYY-MM-DD>/<account>/<HHMMSS>-<n>.jsonl`. A file is written at 200 lines or after a minute, whichever comes first.
+    - **Download:** "Download Chaos log" in Settings & history builds the same lines from the saved session, and works without the lake.
 - **The all-games sweep** (runner only, `lib/tennis/sweep.ts`): every open college game is evaluated every 30 s from the games list and measured in a separate shadow session. It never trades. See [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md#14-college-football-first-the-rule-miner-and-the-all-games-sweep).
 - **The dashboard.** The Decision engine card shows the latest plan, every proposal with its result and reason, the maker quotes, fills and rebates, and any planned holds. The game picker lists upcoming games, so pregame strategies can be focused.
 - **The bet checker (for people).** The default mode is `real`. With `--slug` it reads the live book, gives a verdict per side, and prints the full engine plan: every strategy's proposal and why it was taken or refused.

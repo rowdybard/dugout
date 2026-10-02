@@ -168,6 +168,16 @@ export class PolymarketInputAdapter implements InputAdapter {
         markets=catalog.filter(m=>m.slug===session.config.focusSlug).slice(0,1);
       }
     }
+    // Chaos mode: the extra games' books are fetched every tick too (each resting-order game needs a fresh book).
+    // In Chaos mode inventory on one game must not stop the others (main game included) from being fetched.
+    const chaosOn=session.status==='running'&&session.config.entries==='steady'&&!!session.config.chaosSlugs?.length;
+    const chaos=chaosOn?[session.config.focusSlug,...(session.config.chaosSlugs??[])].filter((slug):slug is string=>!!slug&&!markets.some(m=>m.slug===slug)):[];
+    if(chaos.length){
+      const missing=chaos.filter(slug=>!this.store.get<TennisMarket>('focused-market:'+slug));
+      let catalog:TennisMarket[]=[];
+      if(missing.length){try{catalog=await this.catalog(session,AbortSignal.timeout(3500));}catch(error){failures.push(errorText(error));}}
+      for(const slug of chaos){const market=this.store.get<TennisMarket>('focused-market:'+slug)??catalog.find(m=>m.slug===slug);if(market)markets.push(market);}
+    }
     if(gatheringGeneration!==this.generation)return {inputs:[],failures:['The runner was paused during discovery.']};
     if(!markets.length){this.close();this.setHealth('waiting','No confirmed live focused market is available.');return {inputs:[],failures};}
     // Reports and handshake run alongside books. Held exits wait only for books.
