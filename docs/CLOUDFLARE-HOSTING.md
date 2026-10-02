@@ -72,7 +72,8 @@ node scripts/cloudflare-hosting.mjs secrets
 Then point the runner at you and redeploy it (same secret on both sides):
 ```powershell
 npx wrangler secret put RUNNER_HMAC_SECRET --config services/runner/wrangler.jsonc      # paste the same secret
-npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var RUNNER_ENGINE_VERSION:(git rev-parse --short HEAD)
+$v = git rev-parse --short HEAD
+npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var RUNNER_ENGINE_VERSION:$v
 ```
 Finally, sign in to the new site and press the background setup button (Settings & history).
 
