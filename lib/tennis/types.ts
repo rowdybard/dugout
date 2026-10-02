@@ -173,5 +173,7 @@ export type TennisRuntime={mode:'browser'|'migrating'|'service';intervalMs:numbe
   lastSuccessfulCheck?:number;quoteAgeMs?:number|null;gameReportAgeMs?:number|null;failureReason?:string|null;
   usage?:{day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number};
   /** The runner's all-games sweep (lib/tennis/sweep.ts): shadow measurements across every open college game. */
-  sweep?:SweepSummary|null};
+  sweep?:SweepSummary|null;
+  /** This account's runner holds its own Polymarket key (live price stream). Only a yes/no; the key never comes back. */
+  feedKey?:boolean};
 export type TennisSessionResponse={session:TennisSession;runtime:TennisRuntime;error?:string};

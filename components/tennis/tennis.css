@@ -240,3 +240,6 @@ body:has(.tennis-app){background:#17191e}
 @media (max-width:640px){.tennis-search-count{display:none}.tennis-simple>.tennis-activity,.tennis-tracker{padding:16px}}
 .tennis-kickoff{margin:14px 0;padding:14px 16px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-surface-2);color:var(--dg-text-2);font-size:var(--fs-sm)}
 .tennis-bot-money .tennis-reset-link{margin-top:6px}
+.tennis-feed-key form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px}
+.tennis-feed-key label{display:grid;gap:4px;font-size:var(--fs-xs);color:var(--dg-muted);flex:1 1 200px}
+.tennis-feed-key input{background:var(--dg-surface-2);border:1px solid var(--dg-line-2);border-radius:8px;color:var(--dg-text);padding:10px 12px;font-size:var(--fs-sm)}

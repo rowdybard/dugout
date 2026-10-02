@@ -47,7 +47,13 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       if(method==='GET'&&path==='/v1/migration/status')return response(this.store.importStatus(url.searchParams.get('migrationId')??''));
       if(method==='POST'&&path==='/v1/feed-credentials'){
         this.store.assertCredentialIdentity(verified.owner,verified.epoch);
-        const value=await encryptFeedCredentials(json<unknown>(verified.body),this.env.RUNNER_HMAC_SECRET,verified.owner,verified.epoch);
+        const body=json<unknown>(verified.body);
+        // {remove:true} forgets this account's key; the runner falls back to REST price checks.
+        if(body&&typeof body==='object'&&(body as {remove?:unknown}).remove===true&&Object.keys(body).length===1){
+          this.store.set('feed-credentials',null);this.adapter.close();
+          return response({configured:false,transport:'rest'});
+        }
+        const value=await encryptFeedCredentials(body,this.env.RUNNER_HMAC_SECRET,verified.owner,verified.epoch);
         this.store.assertCredentialIdentity(verified.owner,verified.epoch);this.store.set('feed-credentials',value);this.adapter.close();
         return response({configured:true,transport:'native-stream'});
       }

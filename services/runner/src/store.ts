@@ -88,7 +88,7 @@ export class RunnerStore {
     const now=Date.now(),slug=session.positions.find(p=>p.status==='open')?.slug??session.pending?.slug??session.config.focusSlug;
     const quote=slug?session.quotes?.[slug]:undefined,context=slug?session.footballReports?.[slug]:undefined,report=context?.transition??context?.report;
     const age=(time:number|undefined|null)=>typeof time==='number'&&Number.isFinite(time)&&time>=0&&time<=now?now-time:null;
-    return {session,sweep:this.get<SweepSummary>('sweep-summary'),runner:{mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
+    return {session,sweep:this.get<SweepSummary>('sweep-summary'),runner:{feedKey:!!this.get('feed-credentials'),mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
   }
   acceptNonce(nonce:string,now:number){
     this.storage.transactionSync(()=>{this.storage.sql.exec('DELETE FROM runner_nonces WHERE expires<?',now);

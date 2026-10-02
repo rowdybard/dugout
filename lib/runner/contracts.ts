@@ -20,7 +20,9 @@ export type ReplayFrame={
 export type RunnerMeta={ownerId:string;epoch:string;migrationId:string;activatedAt:number};
 export type SourceHealth={updatedAt:number;state:'starting'|'streaming'|'rest'|'waiting'|'error'|'stopped';message:string};
 export type RunnerUsage={day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number};
-export type RunnerState={session:TennisSession;sweep?:SweepSummary|null;runner:{mode:'service';backgroundConnected:true;epoch:string;lastTickAt:number;lastEngineCheck:number;quoteAgeMs:number|null;contextAgeMs:number|null;source:SourceHealth;usage:RunnerUsage;paperOnly:true}};
+export type RunnerState={session:TennisSession;sweep?:SweepSummary|null;runner:{
+  /** A Polymarket key is stored (encrypted) in this account's runner; the key itself never leaves it. */
+  feedKey?:boolean;mode:'service';backgroundConnected:true;epoch:string;lastTickAt:number;lastEngineCheck:number;quoteAgeMs:number|null;contextAgeMs:number|null;source:SourceHealth;usage:RunnerUsage;paperOnly:true}};
 export function runnable(session:TennisSession):boolean {
   return session.status==='running'||session.status==='stopping'||session.positions.some(p=>p.status==='open')||!!session.pending;
 }
