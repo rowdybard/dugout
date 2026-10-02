@@ -67,7 +67,8 @@ test('old setup signals and a fresh display quote do not imply a current forming
   assert.equal(decisionView(value,market(),runtime(),now).state,'Watching');
   value.quotes.focus.time=now-500;value.signals['focus:YES'].lastObservedAt=now-500;
   assert.equal(decisionView(value,market(),runtime(),now).state,'Setup forming');
-  assert.equal(decisionView(value,market(),runtime(now-25000),now).state,'Waiting for a check');
+  assert.equal(decisionView(value,market(),runtime(now-25000),now).state,'Setup forming','a slow runner cycle is not a stale bot');
+  assert.equal(decisionView(value,market(),runtime(now-50000),now).state,'Bot is behind');
 });
 
 test('leading reason selects the corresponding side, not a newer other-outcome diagnostic',()=>{
@@ -83,4 +84,13 @@ test('future or absent source times remain unknown rather than becoming a fresh 
   assert.equal(view.quoteAge,null);
   assert.equal(view.checkAge,null);
   assert.equal(view.checkStale,true);
+});
+
+test('resting offers read in plain English with team names and prices',()=>{
+  const value=session();
+  value.maker={slug:'focus',quotes:{YES:{price:.7,quantity:7,placedAt:now,placedBookTime:now,activeAfter:now},NO:{price:.295,quantity:16,placedAt:now,placedBookTime:now,activeAfter:now}},
+    pulledUntil:0,eventKey:null,lastBookTime:now,reason:'',fills:0,rebates:0};
+  const view=decisionView(value,market(),runtime(now-1000),now);
+  assert.equal(view.state,'Buy offers posted');
+  assert.equal(view.reason,'Offering to buy focus A at 70¢ and focus B at 29.5¢. A trade happens only when someone sells at that price, so most checks change nothing.');
 });
