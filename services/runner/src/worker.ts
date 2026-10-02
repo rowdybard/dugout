@@ -3,6 +3,7 @@ import {RunnerStore} from './store.ts';
 import {PolymarketInputAdapter} from './input-adapter.ts';
 import {json,verifyRunnerRequest,runnerError,RunnerError} from '../../../lib/runner/protocol.ts';
 import {runnable} from '../../../lib/runner/contracts.ts';
+import {runnerAllowed} from '../../../lib/runner/owners.ts';
 import type {MigrationStart,MigrationChunk,RunnerCommand} from '../../../lib/runner/contracts';
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
@@ -12,6 +13,8 @@ import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/t
 
 /** Optional research recording (docs/DATA-PLATFORM.md): add an R2 binding named LAKE to switch it on. */
 type LakeBindings={LAKE?:R2Put;LAKE_PREFIX?:string};
+/** Optional: more accounts that may have their own runner (lib/runner/owners.ts). */
+type AllowList={RUNNER_OWNERS?:string};
 const response=(value:unknown)=>Response.json(value,{headers:{'Cache-Control':'no-store'}});
 function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
@@ -36,7 +39,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
   async fetch(request:Request):Promise<Response>{
     try{
       const verified=await verifyRunnerRequest(request,this.env.RUNNER_HMAC_SECRET);
-      if(verified.owner!==this.env.RUNNER_OWNER_ID)throw new RunnerError(403,'Runner owner is not authorized.');
+      if(!runnerAllowed(verified.owner,this.env.RUNNER_OWNER_ID,(this.env as RunnerEnv&AllowList).RUNNER_OWNERS))throw new RunnerError(403,'Runner owner is not authorized.');
       this.store.assertIdentity(verified.owner,verified.epoch);this.store.acceptNonce(verified.nonce,Date.now());
       const url=new URL(request.url),method=request.method,path=url.pathname;
       if(method==='GET'&&path==='/v1/state')return response(this.store.state());
@@ -67,7 +70,8 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
    * skips one sweep.
    */
   private async sweep(session:TennisSession,lake:R2Put|undefined){
-    if(session.config.evidenceGate!=='evidence-v1'||session.status!=='running')return;
+    // The all-games sweep is research for the owner; other accounts' runners only run their own bot.
+    if(session.config.evidenceGate!=='evidence-v1'||session.status!=='running'||this.store.active()?.ownerId!==this.env.RUNNER_OWNER_ID)return;
     const now=Date.now(),last=this.store.get<number>('sweep-last')??0;
     if(now-last<SWEEP_EVERY_MS&&last<=now)return;
     this.store.set('sweep-last',now);
@@ -138,7 +142,7 @@ const runnerWorker={
     try{
       // Authentication happens before selecting or instantiating an owner object.
       const verified=await verifyRunnerRequest(request.clone(),env.RUNNER_HMAC_SECRET);
-      if(!env.RUNNER_OWNER_ID||verified.owner!==env.RUNNER_OWNER_ID)throw new RunnerError(403,'Runner owner is not authorized.');
+      if(!runnerAllowed(verified.owner,env.RUNNER_OWNER_ID,(env as RunnerEnv&AllowList).RUNNER_OWNERS))throw new RunnerError(403,'Runner owner is not authorized.');
       return env.PAPER_RUNNERS.get(env.PAPER_RUNNERS.idFromName(verified.owner)).fetch(request.url,{method:request.method,headers:request.headers,body:request.body});
     }catch(error){return runnerError(error);}
   },

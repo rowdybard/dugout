@@ -10,7 +10,7 @@ This directory is part of the full repository, not a standalone install. Its imp
 
 Worker name: `dugout-paper-runner`. Namespace binding: `PAPER_RUNNERS`, class `OwnerPaperRunner`, SQLite migration tag `v1`.
 
-The deployed design authorizes exactly one `RUNNER_OWNER_ID`. It is not a multi-customer background service. An invited Sites identity has its own D1 paper session and remains browser-owned unless an explicitly supported runner configuration and migration is provided for that identity. Do not reuse the original owner's identity or promise background operation to other accounts.
+The runner authorizes `RUNNER_OWNER_ID` plus the optional allow-list `RUNNER_OWNERS` ("*" for every account the site signs requests for, or a comma list of account ids; lib/runner/owners.ts). Each account gets its own Durable Object instance (`idFromName(owner)`), so accounts never share state. The site offers background setup to `DUGOUT_OWNER_ID` plus `DUGOUT_RUNNER_USERS`, and sends the owner's Polymarket stream credentials only to the owner's runner. It is meant for a small invited group, not a public service. Accounts not on the allow-list keep a browser-run bot. Never reuse the owner's identity for someone else.
 
 | Location | Setting | Required value |
 | --- | --- | --- |

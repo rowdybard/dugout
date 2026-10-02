@@ -66,6 +66,7 @@ node scripts/cloudflare-hosting.mjs owner-id you@gmail.com     # -> u_...  (the 
 $env:DUGOUT_OWNER_ID="u_..."
 $env:DUGOUT_RUNNER_URL="https://dugout-paper-runner.<your-subdomain>.workers.dev"
 $env:DUGOUT_RUNNER_SECRET="<32+ random characters>"
+$env:DUGOUT_RUNNER_USERS="*"        # everyone you invite gets their own background runner (or a comma list of u_... ids)
 $env:ANTHROPIC_API_KEY="..."; $env:POLYMARKET_KEY_ID="..."; $env:POLYMARKET_SECRET_KEY="..."   # any you use
 node scripts/cloudflare-hosting.mjs secrets
 ```
@@ -73,11 +74,11 @@ Then point the runner at you and redeploy it (same secret on both sides):
 ```powershell
 npx wrangler secret put RUNNER_HMAC_SECRET --config services/runner/wrangler.jsonc      # paste the same secret
 $v = git rev-parse --short HEAD
-npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var RUNNER_ENGINE_VERSION:$v
+npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var RUNNER_OWNERS:* --var RUNNER_ENGINE_VERSION:$v
 ```
 Finally, sign in to the new site and press the background setup button (Settings & history).
 
-**6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. Only you get the background runner; their bot runs while their tab is open.
+**6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. With `DUGOUT_RUNNER_USERS=*` and `RUNNER_OWNERS:*`, each person presses the background setup button once (Settings & history) and their bot keeps running with the tab closed, in their own runner instance: nobody can see or touch another's. Ask Claude and the live price stream stay yours (they use your paid keys); friends' runners check prices over REST. The all-games research sweep runs only in your runner. Cost: each running bot wakes every 2.5 s (about 1,400 wake-ups an hour), fine for a few friends on the Workers Paid plan ($5/month).
 
 ## The short version (Google sign-in)
 

@@ -2,7 +2,7 @@ import {applyTennisAction} from '../tennis/engine.ts';
 import {normalizeTennisConfig} from '../tennis/rules.ts';
 import {toUnits} from '../trading/money.ts';
 import {polymarketSecrets} from '../trading/credentials.ts';
-import {requireSiteOwner,siteOwnerEnabled} from '../server/owner-access.ts';
+import {requireRunnerUser,runnerUserEnabled,siteOwnerEnabled} from '../server/owner-access.ts';
 import {boundedBody,RunnerError,sha256} from './protocol.ts';
 import {requireRunnerOrigin,requireSitesOwner,runnerConfiguration,runnerRequest} from './sites-proxy.ts';
 import type {RunnerBindings,RunnerDatabase} from './sites-proxy';
@@ -61,10 +61,10 @@ export function packMigrationChunks(data:MigrationData):string[]{
   flush();return result;
 }
 export async function migrationStatus(database:RunnerDatabase,owner:string,env:RunnerBindings){
-  const eligible=siteOwnerEnabled(owner,env);
+  const eligible=runnerUserEnabled(owner,env);
   const row=await readMigration(database,owner);
   // Revoking eligibility must never describe an already-fenced account as local.
-  if(!eligible)return {eligible:false,configured:false,mode:row?.mode==='active'?'service' as const:row?'migrating' as const:'browser' as const,phase:row?.phase??null,canPrepare:false,revision:row?.revision??0,progress:null,error:row?'Background setup is restricted to the site owner. The existing account remains protected.':null};
+  if(!eligible)return {eligible:false,configured:false,mode:row?.mode==='active'?'service' as const:row?'migrating' as const:'browser' as const,phase:row?.phase??null,canPrepare:false,revision:row?.revision??0,progress:null,error:row?'Background running is not enabled for this account. The existing account remains protected.':null};
   let configured=true;try{runnerConfiguration(env);}catch{configured=false;}
   if(!row){
     const source=await database.prepare('SELECT value FROM tennis_sessions WHERE owner_id=?').bind(owner).first<{value:string}>();
@@ -77,7 +77,7 @@ export async function migrationStatus(database:RunnerDatabase,owner:string,env:R
 }
 
 export async function prepareMigration(database:RunnerDatabase,owner:string,env:RunnerBindings,now=Date.now()):Promise<MigrationOwner>{
-  requireSiteOwner(owner,env);
+  requireRunnerUser(owner,env);
   runnerConfiguration(env);
   const existing=await readMigration(database,owner);if(existing)return existing;
   const source=await database.prepare('SELECT value,revision FROM tennis_sessions WHERE owner_id=?').bind(owner).first<{value:string;revision:number}>();
@@ -166,7 +166,8 @@ async function uploadStep(database:RunnerDatabase,row:MigrationOwner,env:RunnerB
     return checkpoint(database,row,[],[],{remote_started:1},now);
   }
   if(row.remote_started===1){
-    const credentials=polymarketSecrets(env as Record<string,unknown>);
+    // The owner's Polymarket key streams prices for the owner's runner only; other accounts' runners use REST checks.
+    const credentials=siteOwnerEnabled(row.owner_id,env)?polymarketSecrets(env as Record<string,unknown>):null;
     if(credentials)await request(env,row.owner_id,row.epoch,'/v1/feed-credentials','POST',credentials);
     return checkpoint(database,row,[],[],{remote_started:2},now);
   }
@@ -179,7 +180,7 @@ async function uploadStep(database:RunnerDatabase,row:MigrationOwner,env:RunnerB
   return row.phase==='ready'?row:checkpoint(database,row,[],[],{phase:'ready'},now);
 }
 export async function advanceMigration(database:RunnerDatabase,owner:string,env:RunnerBindings,deps:MigrationDeps={}):Promise<MigrationOwner>{
-  requireSiteOwner(owner,env);
+  requireRunnerUser(owner,env);
   const now=deps.now??Date.now,request=deps.request??runnerRequest;
   let row=await readMigration(database,owner);if(!row)throw new RunnerError(409,'Prepare the saved history migration first.');
   if(row.mode==='active'||row.phase==='ready')return row;
@@ -202,7 +203,7 @@ export async function advanceMigration(database:RunnerDatabase,owner:string,env:
   }
 }
 export async function activateMigration(database:RunnerDatabase,owner:string,env:RunnerBindings,deps:MigrationDeps={}):Promise<MigrationOwner>{
-  requireSiteOwner(owner,env);
+  requireRunnerUser(owner,env);
   const now=deps.now??Date.now,request=deps.request??runnerRequest;
   const row=await readMigration(database,owner);if(!row)throw new RunnerError(409,'No prepared migration exists.');if(row.mode==='active')return row;
   if(row.phase!=='ready'||!row.manifest||row.remote_started!==2||row.uploaded_chunks!==row.next_chunk)throw new RunnerError(409,'Finish copying and verifying all saved history before activation.');
@@ -221,7 +222,7 @@ export async function handleRunnerMigration(request:Request,database:RunnerDatab
   if(request.method==='GET')return Response.json(await migrationStatus(database,owner,env),{headers:{'Cache-Control':'no-store'}});
   if(request.method!=='POST')throw new RunnerError(405,'Unsupported migration method.');
   requireRunnerOrigin(request);
-  requireSiteOwner(owner,env);
+  requireRunnerUser(owner,env);
   const body=await boundedBody(request,1024);
   let input:{action?:unknown};try{input=JSON.parse(body);}catch{throw new RunnerError(400,'Invalid migration command.');}
   if(!input||typeof input!=='object'||Object.keys(input).length!==1)throw new RunnerError(400,'Choose one migration action.');

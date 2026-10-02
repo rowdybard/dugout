@@ -21,7 +21,7 @@ const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const WORKER_CONFIG='dist/server/wrangler.json';
 const DATABASE=process.env.DUGOUT_D1_NAME||'dugout';
 /** Optional server secrets (see .env.example). Only the ones set in this shell are copied. */
-const SECRETS=['DUGOUT_OWNER_ID','DUGOUT_RUNNER_URL','DUGOUT_RUNNER_SECRET','ANTHROPIC_API_KEY','POLYMARKET_KEY_ID','POLYMARKET_SECRET_KEY'];
+const SECRETS=['DUGOUT_OWNER_ID','DUGOUT_RUNNER_USERS','DUGOUT_RUNNER_URL','DUGOUT_RUNNER_SECRET','ANTHROPIC_API_KEY','POLYMARKET_KEY_ID','POLYMARKET_SECRET_KEY'];
 
 /** Must match userIdForEmail in lib/server/cloudflare-access.ts (tests/cloudflare-access.test.ts checks it). */
 export function ownerIdFor(email){

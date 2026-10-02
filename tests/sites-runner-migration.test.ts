@@ -184,3 +184,45 @@ test('streamed export aggregates missing evidence separately from pagination and
     assert.equal(exported.recordCount,2);assert.equal(exported.observationCount,2);assert.equal(calls,3);
   }finally{globalThis.fetch=originalFetch;h.sql.close();}
 });
+
+test('allow-listed friends get their own runner; the owner\'s Polymarket key only goes to the owner\'s runner',async()=>{
+  const keys={POLYMARKET_KEY_ID:'synthetic-key-id',POLYMARKET_SECRET_KEY:'synthetic-secret-key'};
+  for(const [label,setup,expectCredentials] of [
+    ['owner',{...env,...keys},true],
+    ['friend',{...env,...keys,DUGOUT_OWNER_ID:'someone-else-123',DUGOUT_RUNNER_USERS:owner},false],
+    ['everyone',{...env,...keys,DUGOUT_OWNER_ID:'someone-else-123',DUGOUT_RUNNER_USERS:'*'},false],
+  ] as const){
+    const h=harness();try{
+      assert.equal((await migrationStatus(h.database,owner,setup)).eligible,true,label);
+      await prepareMigration(h.database,owner,setup,20000);
+      let sent=false,manifest:MigrationManifest|undefined;const chunks=new Map<number,string>();
+      const request:typeof runnerRequest=async<T>(_env:RunnerBindings,_owner:string,_epoch:string,path:string,_method?:'GET'|'POST',value?:unknown)=>{
+        if(path==='/v1/feed-credentials'){sent=true;return {} as T;}
+        if(path==='/v1/migration/start'){manifest=(value as {manifest:MigrationManifest}).manifest;return {} as T;}
+        if(path==='/v1/migration/chunk'){const chunk=value as {index:number;data:string};chunks.set(chunk.index,chunk.data);return {} as T;}
+        if(path.startsWith('/v1/migration/status'))return {expectedChunks:manifest!.chunks.length,receivedChunks:[...chunks.keys()],activated:false} as T;
+        throw new Error('Unexpected route');
+      };
+      let row=await advanceMigration(h.database,owner,setup,{now:()=>21000,request});
+      for(let attempt=0;attempt<20&&row.phase!=='ready';attempt++)row=await advanceMigration(h.database,owner,setup,{now:()=>22000,request});
+      assert.equal(row.phase,'ready',label);assert.equal(sent,expectCredentials,label);
+    }finally{h.sql.close();}
+  }
+  // Not on the list: no background setup.
+  const h=harness();try{
+    const other={...env,DUGOUT_OWNER_ID:'someone-else-123',DUGOUT_RUNNER_USERS:'another-person-456'};
+    assert.equal((await migrationStatus(h.database,owner,other)).eligible,false);
+    await assert.rejects(prepareMigration(h.database,owner,other,20000),/not enabled for this account/);
+  }finally{h.sql.close();}
+});
+
+test('runner allow-list: the owner, listed accounts, or everyone signed in; malformed ids never',async()=>{
+  const {runnerAllowed}=await import('../lib/runner/owners.ts');
+  assert.equal(runnerAllowed('owner-account-1','owner-account-1',undefined),true);
+  assert.equal(runnerAllowed('friend-account-2','owner-account-1',undefined),false);
+  assert.equal(runnerAllowed('friend-account-2','owner-account-1','friend-account-2, another-acct-3'),true);
+  assert.equal(runnerAllowed('friend-account-2','owner-account-1','*'),true);
+  assert.equal(runnerAllowed('friend-account-2','','*'),true,'an allow-list works without a pinned owner');
+  assert.equal(runnerAllowed('bad id!','owner-account-1','*'),false);
+  assert.equal(runnerAllowed('friend-account-2',undefined,''),false);
+});
