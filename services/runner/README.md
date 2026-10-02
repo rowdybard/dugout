@@ -21,6 +21,15 @@ The runner authorizes `RUNNER_OWNER_ID` plus the optional allow-list `RUNNER_OWN
 | Sites server setting | `DUGOUT_RUNNER_URL` | HTTPS runner origin, without a path or query |
 | Sites server setting | `DUGOUT_OWNER_ID` | Same trusted ID as `RUNNER_OWNER_ID`; gates migration/setup and paid adviser access |
 
+**Deploy from GitHub (Cloudflare Workers Builds).** Connect the `dugout-paper-runner` Worker to the repo and use these settings. Every push to `main` then redeploys the runner, so it stays in step with the site.
+- **Root directory:** the repo root.
+- **Build command:** leave it empty. `pnpm run build` builds the site instead and stops on the site's settings check.
+- **Deploy command:**
+  ```
+  npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var "RUNNER_OWNERS:*" --var RUNNER_ENGINE_VERSION:$WORKERS_CI_COMMIT_SHA
+  ```
+- **Secret:** set `RUNNER_HMAC_SECRET` once under Settings → Variables and Secrets.
+
 The checked-in Wrangler file leaves the owner blank and build ID as `pending-build`. Configure both for deployment. The protocol rejects secrets shorter than 32 characters, and absent owner authorization fails closed. The build ID is provenance and must be set accurately by the release process. Never put secrets or provider credentials in browser variables. Cloudflare deployer credentials belong in deployment tooling, not the Sites application or ZIP.
 
 Sites checks `DUGOUT_OWNER_ID` before migration commands can pause or fence an account. Other authenticated visitors receive a disabled setup capability and keep their independent browser-mode session; they must keep the page open and visible. Missing owner configuration disables setup and adviser access. It does not change an existing writer fence or silently return a migrated account to browser trading.
