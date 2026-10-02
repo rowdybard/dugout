@@ -70,17 +70,22 @@ export function useTennis() {
     }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
     finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);setCatalogAttempt(value=>value+1);if(catalogRerun.current)void refreshCatalog();}}
   },[]);
-  const perform=useCallback(async(action:TennisAction,background=false)=>{
-    // User commands wait behind the one in-flight check. Never silently discard a click.
+  // A command can be a function of the latest saved session: it is built after any in-flight check finishes, so a
+  // rule change never carries a stale rules revision. Built commands retry once if the rules changed meanwhile.
+  const perform=useCallback(async(request:TennisAction|((session:TennisSession|null)=>TennisAction|null),background=false)=>{
+    // User commands wait behind the one in-flight check.
     if(background&&(inflight.current||commandQueued.current))return false;
     if(!background){
       if(commandQueued.current)return false;
       commandQueued.current=true;setBusy(true);setError(null);
       if(runningRequest.current)await runningRequest.current;
     }
+    const build=()=>typeof request==='function'?request(sessionRef.current):request;
+    let action=build();
+    if(!action){if(!background){commandQueued.current=false;if(mounted.current)setBusy(false);}return false;}
     inflight.current=true;
     const task=(async()=>{
-      try{
+      for(let attempt=0;;attempt++)try{
         const response=await readJson<TennisSessionResponse>('/api/tennis/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});
         accept(response);
         const result=response.session;
@@ -88,6 +93,9 @@ export function useTennis() {
           :action.action==='reset'?result.config.startingCash!==action.bankroll||result.status!=='idle'
           :action.action==='update-rules'?(result.rulesRevision??0)!==action.expectedRulesRevision+1
           :action.action==='resume'?result.status!=='running':false;
+        if(rejected&&!response.error&&typeof request==='function'&&attempt===0&&action.action==='update-rules'&&/another tab/i.test(result.lastReason??'')){
+          const next=build();if(next){action=next;continue;}
+        }
         if(response.error||rejected){setError(response.error||result.lastReason);return false;}
         setError(null);return true;
       }catch(cause){

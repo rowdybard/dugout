@@ -26,6 +26,9 @@ export const tennisRulesSchema=z.object({
 }).strict();
 export const tennisRulesPatchSchema=tennisRulesSchema.partial();
 
+/** Largest fake starting balance a paper run can have. */
+export const MAX_BALANCE=10_000;
+
 export function defaultTennisConfig(startingCash=100):TennisConfig {
   return {version:'tennis-recovery-v1',decisionPolicy:'football-context-v1',strategy:'recovery',startingCash,focusSlug:null,
     entryBudget:Math.min(5,Math.round(startingCash*.2*1e6)/1e6),leagues:['ATP','WTA'],
@@ -50,7 +53,7 @@ export function normalizeTennisConfig(config:TennisConfig):TennisConfig {
 export function validateTennisConfig(config:TennisConfig):string|null {
   const {version,startingCash,...rules}=config;
   if(version!=='tennis-recovery-v1')return 'Unknown bot rules version.';
-  if(!Number.isFinite(startingCash)||startingCash<5||startingCash>1000||Math.round(startingCash*1e6)/1e6!==startingCash)return 'Starting fake balance must be $5–$1,000 with at most six decimal places.';
+  if(!Number.isFinite(startingCash)||startingCash<5||startingCash>MAX_BALANCE||Math.round(startingCash*1e6)/1e6!==startingCash)return 'Starting fake balance must be $5–$10,000 with at most six decimal places.';
   const parsed=tennisRulesSchema.safeParse(rules);
   if(!parsed.success)return `Check ${parsed.error.issues[0].path.join(' ')}: ${parsed.error.issues[0].message}`;
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';

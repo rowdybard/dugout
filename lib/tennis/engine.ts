@@ -8,7 +8,7 @@ const EPSILON = 0.0000001;
 const freshLive = (input:TennisInput,now:number) => input.market.live && input.market.active && !input.market.ended && Number.isFinite(input.market.observedAt) && input.market.observedAt<=now && now-input.market.observedAt<=45_000;
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
-import {defaultTennisConfig,defaultLiveTennisConfig, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
+import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {modeOf,modeRules} from './modes.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
 import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
@@ -1223,7 +1223,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if (action.action === 'reset') {
     // Without `abandon`, open paper trades must finish first; with it (fake money), they are dropped with the old run.
     if (!action.abandon && (holding(session) || session.pending || makerPositions(session).length)) return reject('Close the paper position and let pending orders finish before resetting.');
-    if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
+    if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > MAX_BALANCE) return reject('Choose a fake starting balance between $5 and $10,000.');
     session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug,
       ...(session.config.entries?modeRules({startingCash:action.bankroll},modeOf(session.config)):{})}, now);
     session.commandIds = [action.commandId];

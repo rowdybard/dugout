@@ -38,7 +38,7 @@ function conserved(session: TennisSession) {
 test('start cannot be reused to overwrite a running balance or rules', () => {
   assert.equal(validateTennisConfig(defaultTennisConfig()), null);
   assert.ok(validateTennisConfig({ ...defaultTennisConfig(), executionDelayMs: 0 }));
-  assert.match(validateTennisConfig({ ...defaultTennisConfig(), startingCash: 1001 })!, /balance/);
+  assert.match(validateTennisConfig({ ...defaultTennisConfig(), startingCash: 10001 })!, /balance/);
   assert.match(validateTennisConfig({ ...defaultTennisConfig(), entryBudget: 50 })!, /20%/);
   let session = applyTennisAction(createTennisSession(defaultTennisConfig(), epoch), { action: 'start', commandId: 'start', config: { entryBudget: 10 } }, [], epoch);
   assert.equal(session.config.entryBudget, 10);
