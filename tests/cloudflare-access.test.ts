@@ -13,7 +13,9 @@ const jwk={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'key-1'};
 
 function certs(){
   const calls:string[]=[];
-  const fetcher=(async(url:string)=>{calls.push(url);return Response.json({keys:[jwk]});}) as unknown as typeof fetch;
+  const fetcher=(async(url:string,init?:RequestInit)=>{
+    // Cloudflare Workers reject redirect:'error' (only 'follow' or 'manual'), which broke every sign-in.
+    assert.equal(init?.redirect,'manual');calls.push(url);return Response.json({keys:[jwk]});}) as unknown as typeof fetch;
   return {calls,fetcher};
 }
 async function token(claims:Record<string,unknown>={},header:Record<string,unknown>={alg:'RS256',kid:'key-1'},key=pair.privateKey){

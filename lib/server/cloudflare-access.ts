@@ -38,7 +38,8 @@ type KeySet={keys:Map<string,CryptoKey>;fetchedAt:number};
 const keyCache=new Map<string,KeySet>();
 
 async function loadKeys(teamDomain:string,fetcher:typeof fetch,now:number):Promise<KeySet> {
-  const response=await fetcher(`https://${teamDomain}/cdn-cgi/access/certs`,{redirect:'error'});
+  // Workers' fetch accepts only 'follow' or 'manual' ('error' throws); a redirect comes back non-OK and is refused below.
+  const response=await fetcher(`https://${teamDomain}/cdn-cgi/access/certs`,{redirect:'manual'});
   if(!response.ok)throw new Error(`Access keys unavailable (${response.status}).`);
   const body=await response.json() as {keys?:(JsonWebKey&{kid?:string})[]};
   const keys=new Map<string,CryptoKey>();
