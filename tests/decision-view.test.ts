@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decisionView} from '../lib/tennis/decision-view.ts';
+import {decisionView,sideLines} from '../lib/tennis/decision-view.ts';
 import {createTennisSession,defaultTennisConfig} from '../lib/tennis/engine.ts';
 import type {TennisMarket,TennisPosition,TennisRuntime} from '../lib/tennis/types';
 
@@ -100,4 +100,17 @@ test('resting offers read in plain English with team names and prices',()=>{
   const view=decisionView(value,market(),runtime(now-1000),now);
   assert.equal(view.state,'Buy offers posted');
   assert.equal(view.reason,'Offering to buy focus A at 70¢ or focus B at 29.5¢. It fills only if someone sells at that price.');
+});
+
+test('"Both sides" gives each team its own line, so the second team never looks unchecked',()=>{
+  const value=session();
+  value.decisions=[{id:'q',time:now-500,slug:'focus',side:'YES',action:'WAIT',code:'MAKER_QUOTING',reason:'Quoting both sides.'}];
+  value.maker={slug:'focus',quotes:{YES:{price:.7,quantity:7,placedAt:now,placedBookTime:now,activeAfter:now},NO:{price:.295,quantity:16,placedAt:now,placedBookTime:now,activeAfter:now}},
+    pulledUntil:0,eventKey:null,lastBookTime:now,reason:'',fills:0,rebates:0};
+  const [yes,no]=sideLines(value,'focus',{yesName:'Liberty',noName:'Delaware'});
+  assert.equal(yes.text,'Offer to buy 7 at 70¢ is posted.');
+  assert.equal(no.name,'Delaware');assert.equal(no.text,'Offer to buy 16 at 29.5¢ is posted.');
+  value.maker.quotes={};
+  value.enginePlan={time:now,slug:'focus',phase:'pregame',pack:'p',trust:'t',summary:'',considered:[{strategy:'s',side:'NO',style:'taker-hold',price:.3,stake:0,result:'NO_EVIDENCE',reason:'No tested rule covers this price.'}]};
+  assert.equal(sideLines(value,'focus',{yesName:'Liberty',noName:'Delaware'})[1].text,'Not trading: No tested rule covers this price.');
 });

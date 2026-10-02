@@ -1,5 +1,5 @@
 import type {TennisMarket,TennisRuntime,TennisSession} from '@/lib/tennis/types';
-import {decisionView} from '@/lib/tennis/decision-view';
+import {decisionView,sideLines} from '@/lib/tennis/decision-view';
 import {decisionEvidence} from '@/lib/tennis/decision-evidence';
 import {DecisionMetrics} from './decision-metrics';
 
@@ -17,6 +17,6 @@ export function DecisionCard({session,market,runtime,now}:{session:TennisSession
     </span></div>
     <p role="status" className="tennis-clamp tennis-clamp-4" title={view.reason}>{view.reason}</p>
     {evidence&&<DecisionMetrics {...evidence} name={name} now={now}/>}
-    {view.focus&&<details><summary>Both sides</summary>{(['YES','NO'] as const).map(side=>{const latest=session.decisions.findLast(row=>row.slug===view.focus&&row.side===side);return <p key={side}><b>{(side==='YES'?identity?.yesName:identity?.noName)??side}</b>: {latest?.reason??'Not checked yet.'}</p>;})}</details>}
+    {view.focus&&<details><summary>Both sides</summary>{sideLines(session,view.focus,identity).map(line=><p key={line.side}><b>{line.name}</b>: {line.text}</p>)}</details>}
   </div>;
 }

@@ -60,3 +60,25 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
     identityKnown:!!identity,football:identity?.league==='CFB'||identity?.league==='NFL'||!!report,
     checkLabel:runtime?.mode==='service'?'Runner update':'Bot update'};
 }
+
+/**
+ * One line per team for "Both sides". The bot checks both teams on every pass, but it files game-wide notes (offers
+ * on both teams, rule saves) under the first team, so "latest note for this team" left the second team looking
+ * unchecked. Each line comes from that team's own state: what is held, the resting offer, the engine's verdict.
+ */
+export function sideLines(session:TennisSession,focus:string|null|undefined,names:{yesName?:string;noName?:string}|undefined){
+  return (['YES','NO'] as const).map(side=>{
+    const name=(side==='YES'?names?.yesName:names?.noName)??side;
+    if(!focus)return {side,name,text:'Not checked yet.'};
+    const held=session.positions.find(position=>position.status==='open'&&position.slug===focus&&position.side===side);
+    const offer=session.maker?.slug===focus?session.maker.quotes[side]:undefined;
+    const plan=session.enginePlan?.slug===focus?session.enginePlan:undefined;
+    const considered=plan?.considered.find(trade=>trade.side===side);
+    const parts:string[]=[];
+    if(held)parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average.`);
+    if(offer)parts.push(`Offer to buy ${+offer.quantity.toFixed(2)} at ${cents(offer.price)} is posted.`);
+    else if(considered)parts.push(considered.result==='ACTION'?`Planned: ${considered.style==='maker'?'post an offer':'buy'} at ${cents(considered.price)}.`:`Not trading: ${considered.reason}`);
+    if(!parts.length){const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);parts.push(latest?.reason??plan?.why?.detail??'Checked with the game; nothing to do on this side.');}
+    return {side,name,text:parts.join(' ')};
+  });
+}
