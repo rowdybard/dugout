@@ -1,15 +1,16 @@
 .tennis-app,.tennis-market-dialog{
   /* One palette and one type scale for the whole dashboard. Minimum text size 13px. */
   --dg-font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  --dg-bg:#0d1117;--dg-surface:#141a22;--dg-surface-2:#1a212b;--dg-surface-3:#222b37;
-  --dg-line:#28323e;--dg-line-2:#384553;
-  --dg-text:#eef2f6;--dg-text-2:#c8d0da;--dg-muted:#9ba6b4;
-  --dg-accent:#c2f477;--dg-accent-hover:#d4ff94;--dg-accent-ink:#16230b;--dg-neg:#ff8d96;--dg-warn:#f2c46d;--dg-info:#8fc8ff;
+  /* Soft dark (Oct 2026): charcoal instead of near-black, off-white text, a muted sage accent instead of bright lime. */
+  --dg-bg:#17191e;--dg-surface:#1e2127;--dg-surface-2:#23272e;--dg-surface-3:#2a2f37;
+  --dg-line:#2f343d;--dg-line-2:#3b414b;
+  --dg-text:#e4e6e9;--dg-text-2:#c4c8ce;--dg-muted:#979da6;
+  --dg-accent:#9fcfa9;--dg-accent-hover:#b3dbbb;--dg-accent-ink:#13261a;--dg-neg:#e59599;--dg-warn:#d8b672;--dg-info:#9dbedf;
   --fs-xs:13px;--fs-sm:14px;--fs-md:16px;--fs-lg:20px;--fs-xl:28px;--fs-2xl:40px;
   --tennis-green:var(--dg-accent);--tennis-muted:var(--dg-muted);--tennis-line:var(--dg-line);
   font-family:var(--dg-font);font-feature-settings:"tnum" 1,"cv11" 1;letter-spacing:normal;
 }
-body:has(.tennis-app){background:#0d1117}
+body:has(.tennis-app){background:#17191e}
 .tennis-app{max-width:1460px;margin:0 auto;color:var(--dg-text);font-variant-numeric:tabular-nums}
 .tennis-app button,.tennis-app input,.tennis-app select,.tennis-market-dialog button,.tennis-market-dialog input{font-family:inherit}
 .tennis-header{height:82px;padding:0 40px;border-bottom:1px solid var(--tennis-line);display:flex;align-items:center;justify-content:space-between;gap:18px}
@@ -25,8 +26,8 @@ body:has(.tennis-app){background:#0d1117}
 .tennis-heading p{color:var(--tennis-muted);font-size:var(--fs-md);margin-top:10px}
 .tennis-feed-indicator{display:flex;gap:7px;align-items:center;color:var(--dg-muted);font-size:var(--fs-xs);white-space:nowrap;padding-bottom:4px}
 .tennis-dot{width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--dg-muted);flex-shrink:0}
-.tennis-dot.is-live{background:var(--tennis-green);box-shadow:0 0 0 4px #c2f4770b}
-.tennis-dot.is-waiting{background:#deb46e}
+.tennis-dot.is-live{background:var(--tennis-green);box-shadow:0 0 0 4px #9fcfa914}
+.tennis-dot.is-waiting{background:var(--dg-warn)}
 .tennis-command{border:1px solid var(--dg-line-2);background:var(--dg-surface-2);border-radius:13px;display:grid;grid-template-columns:minmax(0,1fr) 320px;overflow:hidden;margin-bottom:20px}
 .tennis-command-left{padding:24px 27px;min-width:0}
 .tennis-section-label{font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--dg-muted);font-weight:700}
@@ -207,3 +208,34 @@ body:has(.tennis-app){background:#0d1117}
 .tennis-scorecard th,.tennis-scorecard td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--dg-line);white-space:nowrap}
 .tennis-scorecard th{color:var(--dg-muted);font-weight:600}
 .tennis-engine details{overflow-x:auto}
+
+/* Simple view (Oct 2026): search, bot, tracker, trades & balance; everything else under "Settings & history". */
+.tennis-simple{max-width:980px;margin:0 auto;display:grid;gap:18px}
+.tennis-simple>.tennis-activity{margin-top:0;border:1px solid var(--dg-line);border-radius:16px;background:var(--dg-surface);padding:20px 24px}
+.tennis-search{position:relative}
+.tennis-search-box{display:flex;align-items:center;gap:12px;border:1px solid var(--dg-line-2);background:var(--dg-surface);border-radius:14px;padding:0 16px;color:var(--dg-muted)}
+.tennis-search-box:focus-within{border-color:var(--dg-accent)}
+.tennis-search-box input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--dg-text);font-size:var(--fs-md);padding:15px 0}
+.tennis-search-box input::placeholder{color:var(--dg-muted)}
+.tennis-search-count{font-size:var(--fs-xs);white-space:nowrap}
+.tennis-search-list{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);list-style:none;margin:0;padding:6px;background:var(--dg-surface-2);border:1px solid var(--dg-line-2);border-radius:14px;box-shadow:0 16px 40px #0006;max-height:420px;overflow:auto}
+.tennis-search-list button{width:100%;display:grid;grid-template-columns:1fr auto;gap:2px 12px;text-align:left;background:none;color:var(--dg-text);border-radius:10px;padding:10px 12px}
+.tennis-search-list button:hover:not(:disabled){background:var(--dg-surface-3)}
+.tennis-search-list button:disabled{opacity:.5}
+.tennis-search-list strong{font-size:var(--fs-md);font-weight:600}
+.tennis-search-list strong small{color:var(--dg-muted);font-weight:400}
+.tennis-search-list span{grid-column:1;font-size:var(--fs-xs);color:var(--dg-muted)}
+.tennis-search-list span.is-live{color:var(--dg-accent)}
+.tennis-search-list em{grid-row:1/3;grid-column:2;align-self:center;font-style:normal;font-size:var(--fs-xs);color:var(--dg-accent)}
+.tennis-search-empty{padding:12px;color:var(--dg-muted);font-size:var(--fs-sm)}
+.tennis-mode-choice{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+.tennis-mode-choice button{border:1px solid var(--dg-line-2);background:var(--dg-surface-2);color:var(--dg-text-2);border-radius:999px;padding:6px 14px;font-size:var(--fs-sm);font-weight:600}
+.tennis-mode-choice button[aria-pressed=true]{background:var(--dg-accent);border-color:var(--dg-accent);color:var(--dg-accent-ink)}
+.tennis-mode-choice span{font-size:var(--fs-xs);color:var(--dg-muted)}
+.tennis-app button.tennis-big{min-width:170px;font-size:var(--fs-md)}
+.tennis-app button.tennis-primary.is-stop{background:var(--dg-surface-3);color:var(--dg-text);border:1px solid var(--dg-line-2)}
+.tennis-app button.tennis-primary.is-stop:hover{background:#343a44}
+.tennis-tracker{border:1px solid var(--dg-line);border-radius:16px;background:var(--dg-surface);padding:18px 22px;min-width:0}
+.tennis-simple .tennis-main-details{margin-top:4px}
+@media (max-width:640px){.tennis-search-count{display:none}.tennis-simple>.tennis-activity,.tennis-tracker{padding:16px}}
+.tennis-kickoff{margin:14px 0;padding:14px 16px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-surface-2);color:var(--dg-text-2);font-size:var(--fs-sm)}

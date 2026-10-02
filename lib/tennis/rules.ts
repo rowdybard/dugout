@@ -8,6 +8,7 @@ export const tennisRulesSchema=z.object({
   evidenceGate:z.literal('evidence-v1').optional(),
   evidencePack:z.string().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
   maker:z.enum(['paper-v1','quiet-window-v1']).optional(),
+  entries:z.enum(['steady','all']).optional(),
   explore:z.array(z.enum(['comeback-drive'])).max(5).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),

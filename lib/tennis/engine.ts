@@ -284,7 +284,8 @@ function stageEnginePlan(session: TennisSession, evaluated: Evaluated[], now: nu
   for (const { input, phase, plan } of evaluated) {
     const slug = input.market.slug, maker = selectedMaker(session);
     const why = (code: string, detail: string, strategy = 'bot') => recordWhyNot(session, slug, { strategy, code: noTradeCode(code), detail }, now);
-    const action = makerPositions(session).length ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
+    // Steady accounts only rest orders: no taker entries at all.
+    const action = makerPositions(session).length || session.config.entries === 'steady' ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
       || (item.proposal.style === 'taker-scalp' && item.proposal.exit.kind === 'drive'));
     if (!action || !phase) {
       if (session.config.maker && session.config.focusSlug === slug)

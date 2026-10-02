@@ -106,10 +106,10 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     const live=event.live===true&&state.live!==false,ended=event.ended===true||state.ended===true||event.closed===true||(football&&/^(FT|FINAL|ENDED)$/i.test(period??''));
     const interrupted=/sus|delay|postpon|cancel|retir|walkover|abandon|interrupt/i.test(period??'');
     const execution=normalizeTennisExecution(market,league);
-    // MLB pregame events carry no live flag, only period "NS" (not started); verified Sep 27, 2026. Live MLB stays
-    // strict (event.live===true) until its live schema is verified, so an unclear state is never tradable.
-    const pregameBaseball=baseball&&event.live!==true&&/^NS$/i.test(period??'')&&start!==null&&start>observedAt;
-    const validPhase=!ended&&!interrupted&&(live||(event.live===false&&start!==null&&start>observedAt)||pregameBaseball);
+    // Pregame events carry no live flag, only period "NS" (not started): verified for MLB on Sep 27, 2026 and for
+    // college football on Oct 2, 2026. Live play still needs an explicit live flag, so an unclear state is never tradable.
+    const pregameScheduled=event.live!==true&&/^NS$/i.test(period??'')&&start!==null&&start>observedAt;
+    const validPhase=!ended&&!interrupted&&(live||(event.live===false&&start!==null&&start>observedAt)||pregameScheduled);
     const active=event.active===true&&execution?.active===true&&validPhase;
     const bid=price(market.bestBidQuote),ask=price(market.bestAskQuote);
     const unavailableReason=!execution?'Exchange fee or order-size rules are missing.'

@@ -84,6 +84,11 @@ export type TennisConfig={
    * paper-v1: maker-quote@1 (always on, pulled after events). quiet-window-v1: quiet-window-maker@1 (dead-ball windows only).
    */
   maker?:'paper-v1'|'quiet-window-v1';
+  /**
+   * steady: resting orders only; the bot never takes a hold-to-final or drive entry (the lowest-variance mode: each
+   * fill wins or loses about a cent). all (or absent): every entry the evidence permits.
+   */
+  entries?:'steady'|'all';
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
