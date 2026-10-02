@@ -16,6 +16,23 @@ const visible=(markets:TennisMarket[],now:number)=>[...new Map(markets.map(m=>[m
   const start=Date.parse(m.startTime);return !m.ended&&Number.isFinite(start)&&start<=now+48*60*60_000&&start>=now-30*60*60_000;
 }).sort((a,b)=>Number(b.live)-Number(a.live)||Date.parse(a.startTime)-Date.parse(b.startTime)||a.slug.localeCompare(b.slug));
 
+/**
+ * Which refreshed games get their stored copy (`tennis:verified:<slug>`) rewritten. Every refresh observes every game
+ * (about 230 college games every 30 s), and rewriting all of them spent the D1 free-plan write limit in a few hours.
+ * A game's row is rewritten only when the game itself changed (status, score, clock, rules), or once per 10-minute
+ * window so the copy never ages more than that. Prices are not part of the comparison: books are read fresh.
+ */
+export const VERIFIED_HEARTBEAT_MS=10*60_000;
+const VOLATILE=new Set(['observedAt','quoteObservedAt','quoteSource','quoteSourceTime','bid','ask','price','history','rejectedQuoteTimes']);
+const gameKey=(market:TennisMarket)=>JSON.stringify(market,(key,value)=>VOLATILE.has(key)?undefined:value);
+export function verifiedRowsToWrite(previous:TennisMarket[],fresh:TennisMarket[]):TennisMarket[] {
+  const before=new Map(previous.map(market=>[market.slug,market]));
+  return fresh.filter(market=>{
+    const old=before.get(market.slug);
+    return !old||Math.floor(old.observedAt/VERIFIED_HEARTBEAT_MS)!==Math.floor(market.observedAt/VERIFIED_HEARTBEAT_MS)||gameKey(old)!==gameKey(market);
+  });
+}
+
 /** Bound the complete operation, including D1 calls that cannot accept an AbortSignal. */
 export async function boundedCatalogOperation<T>(operation:()=>Promise<T>,deadlineAt:number,now:()=>number,signal?:AbortSignal):Promise<T>{
   signal?.throwIfAborted();const remaining=deadlineAt-now();if(remaining<=0)throw new Error('Game list refresh timed out. Showing saved games.');
@@ -68,7 +85,7 @@ export async function loadTennisCatalog(leagues:TennisLeague[],deps:CatalogDepen
           const pageDeadline=Math.min(deadlineAt-Math.min(1250,(deadlineAt-startedAt)/4),deps.now()+(limits.pageMs??2750));
           const state=await advanceLeagueDiscovery(previous?.value,league,deps,{deadlineAt:pageDeadline,signal:controller.signal,maxPages:Math.max(1,Math.min(2,limits.maxPages??2))});
           controller.signal.throwIfAborted();
-          const fresh=visibleLeagueMarkets(state).filter(m=>m.observedAt>(previous?.value.lastPageAt??0));
+          const fresh=verifiedRowsToWrite(previous?visibleLeagueMarkets(previous.value):[],visibleLeagueMarkets(state).filter(m=>m.observedAt>(previous?.value.lastPageAt??0)));
           const committed=await bounded(()=>deps.writeLeague(stateKey,state,previous?.updated??null,fresh),writeMs);
           if(committed)states.set(league,state);
           else{
