@@ -29,9 +29,18 @@ test('Worker rejects unsigned controls before selecting any object',async()=>{
 });
 test('signed resume arms recovery before provider I/O, then engine persists and next alarm remains scheduled',async(t)=>{
   const f=await setup();let now=NOW+2000;t.mock.method(Date,'now',()=>now);
-  assert.equal((await request(f.instance,'/v1/command',{command:{action:'resume',commandId:'alarm-resume'}})).status,200);assert.equal(f.alarm(),now+2500);
-  now+=4000;let called=false;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic book'}),async gather(){assert.equal(f.alarm(),now+2500);called=true;return {inputs:[input(now)],failures:[]};}};
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'resume',commandId:'alarm-resume'}})).status,200);assert.equal(f.alarm(),now+10_000,'pregame, nothing held: checks every 10 s');
+  now+=4000;let called=false;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic book'}),async gather(){
+    // Recovery is armed before provider I/O: 2.5 s once live or holding, 10 s before kickoff with nothing held.
+    const armed=f.alarm()!;assert.ok(armed>now&&armed<=now+10_000,`alarm armed ${armed-now} ms ahead`);called=true;return {inputs:[input(now)],failures:[]};}};
   await f.instance.alarm();assert.equal(called,true);assert.equal(f.instance.store.session()?.lastTickAt,now);assert.ok(f.alarm()!==null);assert.ok(f.writes()>=2);assert.equal(f.instance.store.usage(now).alarmChecks,1);
+});
+test('a live watched game keeps the 2.5-second check',async(t)=>{
+  const f=await setup();const now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const focus=f.instance.store.session()!.config.focusSlug!;
+  f.instance.store.set('focused-market:'+focus,{...input(now).market,slug:focus,live:true});
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'resume',commandId:'live-resume'}})).status,200);
+  assert.equal(f.alarm(),now+2500);
 });
 test('provider failure keeps a recovery alarm and paused flat command removes alarms',async(t)=>{
   const f=await setup();let now=NOW+2000;t.mock.method(Date,'now',()=>now);await request(f.instance,'/v1/command',{command:{action:'resume',commandId:'failure-resume'}});

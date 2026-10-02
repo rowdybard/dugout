@@ -85,9 +85,12 @@ test('frames replay exactly from frozen migration checkpoint including empty tic
 test('export pages remain pinned while later ticks append, and counters persist across restart',async()=>{
   const {store,storage}=await active();await store.advance({action:'resume',commandId:'export-resume'},[],NOW+2);
   const first=store.exportPage(null,0,1,NOW+3);await store.advance({action:'tick'},[],NOW+4000);
+  // The counter is saved at most once a minute, but rows written in between already count toward the budget.
+  assert.equal(store.usage(NOW+4000).alarmChecks,1);
+  await store.advance({action:'tick'},[],NOW+65000);
   let cursor=first.nextCursor;const records=[...first.records];while(true){const p=store.exportPage(first.exportId,cursor,1,NOW+5000);assert.deepEqual(p.session,first.session);records.push(...p.records);cursor=p.nextCursor;if(p.complete)break;}
   assert.ok(!records.some(r=>r.kind==='replay'&&(r.value as unknown as ReplayFrame).now===NOW+4000));
-  const reopened=new RunnerStore(storage);assert.equal(reopened.usage(NOW).alarmChecks,1);assert.ok(reopened.usage(NOW).estimatedRowsWritten>0);assert.equal(reopened.usage(NOW+86400000).estimatedRowsWritten,0);
+  const reopened=new RunnerStore(storage);assert.equal(reopened.usage(NOW).alarmChecks,2);assert.ok(reopened.usage(NOW).estimatedRowsWritten>0);assert.equal(reopened.usage(NOW+86400000).estimatedRowsWritten,0);
 });
 test('actual synthetic delayed entry, fees and exit reproduce exactly, followed by deterministic reset',async()=>{
   const {store}=await active();const initial=store.session()!;

@@ -7,6 +7,7 @@ import {publicRetryAfterMs} from '../../../lib/bot/public-source-budget.ts';
 import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from '../../../lib/tennis/normalize.ts';
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
 import {advanceLeagueDiscovery,visibleLeagueMarkets,type LeagueDiscoveryState} from '../../../lib/tennis/catalog-discovery.ts';
+import {gameCopyDue} from '../../../lib/tennis/catalog-loader.ts';
 import {loadPriorityContext,joinBookWithPriorityContext,type PriorityContextRecord,type PriorityContextResult} from '../../../lib/tennis/priority-context.ts';
 import type {TennisInput,TennisLeague,TennisMarket,TennisSession} from '../../../lib/tennis/types';
 import type {SourceHealth} from '../../../lib/runner/contracts';
@@ -197,7 +198,9 @@ export class PolymarketInputAdapter implements InputAdapter {
     }));
     // A failed post-game book must not hide a confirmed final game report.
     if(requireReport)await Promise.allSettled(reportTasks);
-    const inputs:TennisInput[]=[];for(const r of results)if(r.status==='fulfilled'){inputs.push(r.value);this.store.set('focused-market:'+r.value.market.slug,r.value.market);}else failures.push(errorText(r.reason));
+    const inputs:TennisInput[]=[];for(const r of results)if(r.status==='fulfilled'){inputs.push(r.value);
+      // The saved copy only seeds the next pass; rewrite it when the game changes or once a minute (each save is a write).
+      const key='focused-market:'+r.value.market.slug;if(gameCopyDue(this.store.get<TennisMarket>(key),r.value.market,60_000))this.store.set(key,r.value.market);}else failures.push(errorText(r.reason));
     if(!inputs.length)this.setHealth('error',failures[0]??'Current market data is unavailable.');
     const endedMarket=markets.map(m=>latest.get(m.slug)??m).find(m=>m.slug===session.config.focusSlug&&m.ended&&m.observedAt<=now()&&now()-m.observedAt<=45000);
     return {inputs,failures:[...failures],...(endedMarket?{endedMarket}:{})};

@@ -21,6 +21,18 @@ The runner authorizes `RUNNER_OWNER_ID` plus the optional allow-list `RUNNER_OWN
 | Sites server setting | `DUGOUT_RUNNER_URL` | HTTPS runner origin, without a path or query |
 | Sites server setting | `DUGOUT_OWNER_ID` | Same trusted ID as `RUNNER_OWNER_ID`; gates migration/setup and paid adviser access |
 
+**Storage writes.** Each check writes:
+- an audit record (about 3 rows with its indexes) and the bot's state (1 row);
+- its next wake-up alarm (1 row);
+- the game report when one is fetched.
+
+These are only saved when they change, or once a minute:
+- the health status;
+- copies of the watched games;
+- the write counter itself.
+
+Before kickoff, with nothing held or pending, the runner checks every 10 s; once a watched game is live, or anything is held or pending, every 2.5 s. New entries pause at 90,000 rows a day (the Free plan allows 100,000).
+
 **Deploy from GitHub (Cloudflare Workers Builds).** Connect the `dugout-paper-runner` Worker to the repo and use these settings. Every push to `main` then redeploys the runner, so it stays in step with the site.
 - **Root directory:** the repo root.
 - **Build command:** leave it empty. `pnpm run build` builds the site instead and stops on the site's settings check.

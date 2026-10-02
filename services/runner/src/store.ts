@@ -51,7 +51,7 @@ function assertSession(session:TennisSession){
   if(new Set(session.ledger.map(row=>row.id)).size!==session.ledger.length)throw new RunnerError(400,'Duplicate ledger commands.');
 }
 export class RunnerStore {
-  private pendingWrites=0;
+  private pendingWrites=0;private pendingAlarms=0;private usageSavedAt=0;
   private engineVersion:string;
   readonly storage:RunnerStorage;
   constructor(storage:RunnerStorage,engineVersion='shared-tennis-engine'){
@@ -74,12 +74,19 @@ export class RunnerStore {
   active(){return this.get<RunnerMeta>('active');}
   session(){return this.get<TennisSession>('session');}
   health():SourceHealth{return this.get<SourceHealth>('source')??{updatedAt:0,state:'stopped',message:'Runner has not started.'};}
-  usage(now=Date.now()):RunnerUsage{const day=new Date(now).toISOString().slice(0,10),stored=this.get<RunnerUsage>('usage');return {...(stored?.day===day?stored:{day,estimatedRowsWritten:0,alarmChecks:0}),entryPauseAt:RUNNER_ENTRY_WRITE_LIMIT};}
+  private storedUsage(now:number):RunnerUsage{const day=new Date(now).toISOString().slice(0,10),stored=this.get<RunnerUsage>('usage');return {...(stored?.day===day?stored:{day,estimatedRowsWritten:0,alarmChecks:0}),entryPauseAt:RUNNER_ENTRY_WRITE_LIMIT};}
+  /** Saved count plus rows written since the last save (the count itself is saved at most once a minute). */
+  usage(now=Date.now()):RunnerUsage{const usage=this.storedUsage(now);return {...usage,estimatedRowsWritten:usage.estimatedRowsWritten+this.pendingWrites,alarmChecks:usage.alarmChecks+this.pendingAlarms};}
   saveUsage(now=Date.now(),alarm=false){
-    const usage=this.usage(now),pending=this.pendingWrites;
-    if(!pending&&!alarm)return usage;
+    this.pendingAlarms+=Number(alarm);
+    const stored=this.get<RunnerUsage>('usage'),day=new Date(now).toISOString().slice(0,10);
+    if(!this.pendingWrites&&!this.pendingAlarms)return this.usage(now);
+    // Saving the counter is itself a write, so it is batched: once a minute, at 200 unsaved rows, or on a new day.
+    if(stored?.day===day&&this.pendingWrites<200&&now-this.usageSavedAt<60_000)return this.usage(now);
+    const usage=this.storedUsage(now),pending=this.pendingWrites;
     // An existing value updates one row; first insertion also creates its PK index row.
-    usage.estimatedRowsWritten+=pending+(this.get('usage')?1:2);usage.alarmChecks+=Number(alarm);
+    usage.estimatedRowsWritten+=pending+(stored?1:2);usage.alarmChecks+=this.pendingAlarms;
+    this.pendingWrites=0;this.pendingAlarms=0;this.usageSavedAt=now;
     this.set('usage',usage);this.pendingWrites=0;return usage;
   }
   accountAlarmWrite(){this.pendingWrites++;}

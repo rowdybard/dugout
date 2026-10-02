@@ -25,12 +25,13 @@ const visible=(markets:TennisMarket[],now:number)=>[...new Map(markets.map(m=>[m
 export const VERIFIED_HEARTBEAT_MS=10*60_000;
 const VOLATILE=new Set(['observedAt','quoteObservedAt','quoteSource','quoteSourceTime','bid','ask','price','history','rejectedQuoteTimes']);
 const gameKey=(market:TennisMarket)=>JSON.stringify(market,(key,value)=>VOLATILE.has(key)?undefined:value);
+/** True when a stored copy of a game should be rewritten: it changed, or `windowMs` has turned over since it was saved. */
+export function gameCopyDue(old:TennisMarket|null|undefined,market:TennisMarket,windowMs:number):boolean {
+  return !old||Math.floor(old.observedAt/windowMs)!==Math.floor(market.observedAt/windowMs)||gameKey(old)!==gameKey(market);
+}
 export function verifiedRowsToWrite(previous:TennisMarket[],fresh:TennisMarket[]):TennisMarket[] {
   const before=new Map(previous.map(market=>[market.slug,market]));
-  return fresh.filter(market=>{
-    const old=before.get(market.slug);
-    return !old||Math.floor(old.observedAt/VERIFIED_HEARTBEAT_MS)!==Math.floor(market.observedAt/VERIFIED_HEARTBEAT_MS)||gameKey(old)!==gameKey(market);
-  });
+  return fresh.filter(market=>gameCopyDue(before.get(market.slug),market,VERIFIED_HEARTBEAT_MS));
 }
 
 /** Bound the complete operation, including D1 calls that cannot accept an AbortSignal. */

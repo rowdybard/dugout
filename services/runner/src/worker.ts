@@ -4,13 +4,15 @@ import {PolymarketInputAdapter} from './input-adapter.ts';
 import {json,verifyRunnerRequest,runnerError,RunnerError} from '../../../lib/runner/protocol.ts';
 import {runnable} from '../../../lib/runner/contracts.ts';
 import {runnerAllowed} from '../../../lib/runner/owners.ts';
-import type {MigrationStart,MigrationChunk,RunnerCommand} from '../../../lib/runner/contracts';
+import type {MigrationStart,MigrationChunk,RunnerCommand,SourceHealth} from '../../../lib/runner/contracts';
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
 import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
 import {ChaosFiles,chaosLines,chaosOn,type ChaosCursor} from '../../../lib/datastore/chaos-log.ts';
 import {createSweepSession,listInput,SWEEP_EVERY_MS,SWEEP_LEAGUES,sweepAwaiting,sweepStep,sweepSummary} from '../../../lib/tennis/sweep.ts';
-import type {TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
+import type {TennisAction,TennisInput,TennisMarket,TennisSession} from '../../../lib/tennis/types';
+/** Check interval before kickoff with nothing held (each check costs storage writes). */
+const PREGAME_CHECK_MS=10_000;
 
 /** Optional research recording (docs/DATA-PLATFORM.md): add an R2 binding named LAKE to switch it on. */
 type LakeBindings={LAKE?:R2Put;LAKE_PREFIX?:string};
@@ -104,10 +106,26 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       if(lake){this.recorder.add(markets.map(market=>listInput(market,now)).filter((input):input is TennisInput=>!!input),'LIST');this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
     }catch{/* the sweep is research only */}
   }
+  /**
+   * How long until the next check. Every check costs storage writes, so before kickoff (nothing held, nothing pending,
+   * no watched game live) the runner checks every 10 s; once a game is live, or anything is held or pending, every 2.5 s.
+   */
+  private delay(session:TennisSession){
+    const watched=[session.config.focusSlug,...(session.config.entries==='steady'?session.config.chaosSlugs??[]:[])].filter((slug):slug is string=>!!slug);
+    const busy=session.status==='stopping'||!!session.pending||session.positions.some(position=>position.status==='open');
+    const live=watched.some(slug=>this.store.get<TennisMarket>('focused-market:'+slug)?.live);
+    return busy||live||!watched.length?2500:PREGAME_CHECK_MS;
+  }
+  /** Health is rewritten only when it changes, or once a minute to refresh its time (each save is a storage write). */
+  private setSource(health:SourceHealth){
+    const saved=this.store.health();
+    if(saved.state===health.state&&saved.message===health.message&&health.updatedAt-saved.updatedAt<60_000)return;
+    this.store.set('source',health);
+  }
   private async schedule(){
     const session=this.store.session();
     if(session&&runnable(session)){
-      const next=Date.now()+2500;const scheduled=await this.ctx.storage.getAlarm();
+      const next=Date.now()+this.delay(session);const scheduled=await this.ctx.storage.getAlarm();
       if(scheduled===null||scheduled>next){await this.ctx.storage.setAlarm(next);this.store.accountAlarmWrite();}
     }else{this.adapter.close();this.store.set('source',this.adapter.health());if(await this.ctx.storage.getAlarm()!==null){await this.ctx.storage.deleteAlarm();this.store.accountAlarmWrite();}}
   }
@@ -120,13 +138,13 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
         this.store.set('source',{updatedAt:Date.now(),state:'waiting',message:'New entries paused at the runner write-budget estimate. Existing exits remain managed.'});
       }
       // Persist the next wakeup before external I/O. Recovery never depends on the browser.
-      await this.ctx.storage.setAlarm(Date.now()+2500);
+      await this.ctx.storage.setAlarm(Date.now()+this.delay(before));
       this.store.accountAlarmWrite();
       try{
         const current=this.store.session()!;
         if(!runnable(current)){await this.schedule();return;}
         const {inputs,failures,endedMarket}=await this.adapter.gather(current);
-        this.store.set('source',this.adapter.health());
+        this.setSource(this.adapter.health());
         // Read-only research capture of every accepted book; never delays or affects the paper step.
         const lake=(this.env as RunnerEnv&LakeBindings).LAKE;
         if(lake){this.recorder.add(inputs);this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
