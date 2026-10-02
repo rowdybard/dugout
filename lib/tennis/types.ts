@@ -163,7 +163,9 @@ export type TennisSession={
 export type TennisAction=
  |{action:'start';config?:Partial<TennisConfig>;runForMs?:number;commandId:string}
  |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string}
- |{action:'reset';bankroll:number;commandId:string}
+ |{action:'reset';bankroll:number;commandId:string;
+  /** Paper only: drop open paper positions, pending orders and resting quotes instead of refusing (fake money). */
+  abandon?:true}
  |{action:'update-rules';rules:Partial<Omit<TennisConfig,'startingCash'|'version'>>;expectedRulesRevision:number;sessionId:string;commandId:string};
 /** The all-games sweep's dashboard summary (lib/tennis/sweep.ts). */
 export type SweepSummary={updatedAt:number;games:number;open:number;measured:number;records:TradeRecord[]};

@@ -17,6 +17,7 @@ function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
   if(!c||!['start','resume','pause','stop','reset','update-rules'].includes(c.action)||typeof c.commandId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(c.commandId))throw new RunnerError(400,'A supported command and unique commandId are required.');
   if(c.action==='update-rules'&&!tennisRulesPatchSchema.safeParse(c.rules).success)throw new RunnerError(400,'Invalid rule update.');
+  if(c.action==='reset'&&'abandon' in c&&c.abandon!==undefined&&c.abandon!==true)throw new RunnerError(400,'Invalid reset.');
   if('runForMs' in c&&c.runForMs!==undefined&&(!Number.isFinite(c.runForMs)||c.runForMs<60000||c.runForMs>21600000))throw new RunnerError(400,'Invalid observation duration.');
   return c;
 }

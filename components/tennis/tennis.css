@@ -239,3 +239,4 @@ body:has(.tennis-app){background:#17191e}
 .tennis-simple .tennis-main-details{margin-top:4px}
 @media (max-width:640px){.tennis-search-count{display:none}.tennis-simple>.tennis-activity,.tennis-tracker{padding:16px}}
 .tennis-kickoff{margin:14px 0;padding:14px 16px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-surface-2);color:var(--dg-text-2);font-size:var(--fs-sm)}
+.tennis-bot-money .tennis-reset-link{margin-top:6px}

@@ -1174,9 +1174,11 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     return session;
   }
   if (action.action === 'reset') {
-    if (holding(session) || session.pending || makerPositions(session).length) return reject('Close the paper position and let pending orders finish before resetting.');
+    // Without `abandon`, open paper trades must finish first; with it (fake money), they are dropped with the old run.
+    if (!action.abandon && (holding(session) || session.pending || makerPositions(session).length)) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > 1000) return reject('Choose a fake starting balance between $5 and $1,000.');
-    session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug}, now);
+    session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug,
+      ...(session.config.entries?{entries:session.config.entries}:{})}, now);
     session.commandIds = [action.commandId];
     return session;
   }

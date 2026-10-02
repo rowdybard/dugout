@@ -119,7 +119,10 @@ export function TennisDashboard() {
 
   const labelFor=(slug:string,side:'YES'|'NO')=>{const market=catalog?.markets.find(item=>item.slug===slug)??session?.positions.find(position=>position.slug===slug)?.market;return market?(side==='YES'?market.yesName:market.noName):slug||'Paper session';};
 
-  const reset=async()=>{const ok=await bot.perform({action:'reset',bankroll:resetBalance,commandId:tennisCommandId()});if(ok)setResetOpen(false);};
+  // Paper only: a reset with an open trade or order drops it along with the old run (fake money), so nobody gets stuck.
+  const tradesOpen=open.length>0||!!session?.pending;
+  const reset=async()=>{const ok=await bot.perform({action:'reset',bankroll:resetBalance,commandId:tennisCommandId(),...(tradesOpen?{abandon:true as const}:{})});if(ok)setResetOpen(false);};
+  const openReset=()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);};
 
   // Choosing a game points the bot at it (and narrows the account to college football); with a trade open it only follows it.
   const chooseGame=async(slug:string)=>{
@@ -162,11 +165,12 @@ export function TennisDashboard() {
             <span className="tennis-label">{incompleteMark?'Cash + priced exits':'Balance'}</span>
             <strong className="tennis-balance">{session?money(liquidCash):'—'}</strong>
             <span className={`tennis-pnl ${pnl<0?'tennis-negative':'tennis-positive'}`}>{session?`${signed(pnl)}${incompleteMark?' · partly unpriced':''}`:'Loading'}</span>
+            <button className="tennis-link tennis-reset-link" disabled={!session||bot.busy||migrating} onClick={openReset}>Reset balance</button>
           </div>
         </div>
 
         <div className="tennis-controls">
-          {isStopped?<button className="tennis-primary tennis-big" disabled={bot.busy||migrating||open.length>0} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}><RotateCcw size={16}/>New run</button>
+          {isStopped?<button className="tennis-primary tennis-big" disabled={bot.busy||migrating} onClick={openReset}><RotateCcw size={16}/>New run</button>
             :isRunning||session?.status==='stopping'?<button className="tennis-primary tennis-big is-stop" disabled={bot.busy||migrating||session?.status==='stopping'} onClick={()=>void bot.perform({action:'pause',commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:<Pause size={17}/>}Stop bot</button>
             :<button className="tennis-primary tennis-big" disabled={bot.busy||migrating||!session?.config.focusSlug||(isIdle&&(entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)))} onClick={()=>void startBot()}>{bot.busy?<LoaderCircle size={17}/>:<Play size={17}/>}{bot.busy?'Starting…':'Start bot'}</button>}
           {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}
@@ -200,7 +204,6 @@ export function TennisDashboard() {
           {session&&!onlyVisible&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void chooseVisible()}>Watch college football only</button>}
           {session&&session.config.decisionEngine!=='local-move-v1'&&<button className="tennis-secondary" disabled={bot.busy} onClick={()=>void bot.perform({action:'update-rules',rules:localMoveUpgradeRules(session.config),expectedRulesRevision:session.rulesRevision??0,sessionId:session.id,commandId:tennisCommandId()})}>Use decision engine</button>}
           {session&&!isIdle&&!isStopped&&<button className="tennis-secondary" disabled={bot.busy||session.status==='stopping'} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>End run (sell and stop)</button>}
-          <button className="tennis-secondary" disabled={!session||bot.busy||open.length>0||!!session?.pending} title={open.length?'Stop the bot and finish its exits before resetting':undefined} onClick={()=>{setResetBalance(session?.config.startingCash??100);setResetOpen(true);}}>Reset balance</button>
         </div>
         {session&&<EngineCard session={session} market={availableMarkets.find(m=>m.slug===session.config.focusSlug)} sweep={bot.runtime?.sweep??null} now={now}/>}
         <RunnerSetup runtime={bot.runtime} flat={open.length===0&&!session?.pending} onComplete={bot.reloadAccount}/>
@@ -220,7 +223,7 @@ export function TennisDashboard() {
 
     {advisorOpen&&<TennisAdvisor onClose={()=>setAdvisorOpen(false)}/>}
 
-    <Dialog open={resetOpen} onOpenChange={setResetOpen}><DialogContent className="tennis-market-dialog"><DialogTitle className="tennis-dialog-title">Start with fake money.</DialogTitle><DialogDescription className="tennis-dialog-description">Choose $5–$1,000 for a new paper run. Reset starts a fresh run and archives the previous balance and history. Stop the bot and let it finish any exits first.</DialogDescription><div className="tennis-reset-form"><label htmlFor="tennis-reset-balance">Starting paper balance</label><input className="tennis-reset-input" id="tennis-reset-balance" type="number" min="5" max="1000" step="1" value={resetBalance} onChange={event=>setResetBalance(Number(event.target.value))}/><div className="tennis-amounts">{[5,10,100].map(value=><button key={value} aria-pressed={resetBalance===value} onClick={()=>setResetBalance(value)}>${value}</button>)}</div>{bot.error&&<div className="tennis-dialog-error" role="alert">{bot.error}</div>}<div className="tennis-reset-actions"><button className="tennis-secondary" onClick={()=>setResetOpen(false)}>Cancel</button><button className="tennis-primary" disabled={bot.busy||resetBalance<5||resetBalance>1000||!Number.isFinite(resetBalance)||open.length>0||!!session?.pending} onClick={()=>void reset()}>{bot.busy?'Resetting…':'Reset paper run'}</button></div></div></DialogContent></Dialog>
+    <Dialog open={resetOpen} onOpenChange={setResetOpen}><DialogContent className="tennis-market-dialog"><DialogTitle className="tennis-dialog-title">Reset your balance.</DialogTitle><DialogDescription className="tennis-dialog-description">Starts a fresh paper run with the amount you choose. The bot stops, and your Steady or Full choice is kept.{tradesOpen?' Your open paper trade is dropped with the old run. It is fake money, so nothing is lost.':''}</DialogDescription><div className="tennis-reset-form"><label htmlFor="tennis-reset-balance">Starting paper balance</label><input className="tennis-reset-input" id="tennis-reset-balance" type="number" min="5" max="1000" step="1" value={resetBalance} onChange={event=>setResetBalance(Number(event.target.value))}/><div className="tennis-amounts">{[5,10,100].map(value=><button key={value} aria-pressed={resetBalance===value} onClick={()=>setResetBalance(value)}>${value}</button>)}</div>{bot.error&&<div className="tennis-dialog-error" role="alert">{bot.error}</div>}<div className="tennis-reset-actions"><button className="tennis-secondary" onClick={()=>setResetOpen(false)}>Cancel</button><button className="tennis-primary" disabled={bot.busy||resetBalance<5||resetBalance>1000||!Number.isFinite(resetBalance)} onClick={()=>void reset()}>{bot.busy?'Resetting…':tradesOpen?'Drop the trade and reset':'Reset balance'}</button></div></div></DialogContent></Dialog>
 
   </div>;
 

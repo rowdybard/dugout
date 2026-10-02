@@ -49,3 +49,15 @@ test('upcoming college games (no live flag, period "NS", as the feed sends them)
   assert.equal(market.active,true,market.unavailableReason);assert.equal(market.live,false);
   assert.equal(normalizeTennisEvent({...raw,startTime:'2026-10-02T15:00:00Z'},'CFB',at)[0].active,false,'past kickoff without a live flag: not tradable');
 });
+
+test('reset can drop open paper trades (fake money) so nobody gets stuck, and keeps the Steady/Full choice',()=>{
+  const busy=run();
+  assert.equal(busy.pending?.action,'BUY');
+  const at=START-5*60_000;
+  const refused=applyTennisAction(busy,{action:'reset',bankroll:50,commandId:'reset-1'},[],at);
+  assert.equal(refused.pending?.action,'BUY','without abandon, an open order blocks the reset');
+  const fresh=applyTennisAction(busy,{action:'reset',bankroll:50,commandId:'reset-2',abandon:true},[],at);
+  assert.equal(fresh.pending,null);assert.equal(fresh.positions.length,0);assert.equal(fresh.cash,50);assert.equal(fresh.status,'idle');
+  const steady=applyTennisAction({...run('steady'),pending:busy.pending},{action:'reset',bankroll:20,commandId:'reset-3',abandon:true},[],at);
+  assert.equal(steady.config.entries,'steady','the Steady choice survives a reset');
+});
