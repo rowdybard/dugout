@@ -78,12 +78,19 @@ test('leading reason selects the corresponding side, not a newer other-outcome d
   assert.equal(decisionView(value,market(),runtime(),now).side,'YES');
 });
 
-test('future or absent source times remain unknown rather than becoming a fresh age',()=>{
-  const value=session();value.quotes={focus:{time:now+1,bid:.5,ask:.51,source:'REST'}};
-  const view=decisionView(value,market(),runtime(now+1),now);
+test('a device clock slightly behind the server reads a just-made check as fresh, not unknown',()=>{
+  const value=session();value.quotes={focus:{time:now+800,bid:.5,ask:.51,source:'REST'}};
+  const view=decisionView(value,market(),runtime(now+800),now);
+  assert.equal(view.quoteAge,0);assert.equal(view.checkAge,0);assert.equal(view.checkStale,false);
+});
+
+test('far-future or absent source times remain unknown rather than becoming a fresh age',()=>{
+  const value=session();value.quotes={focus:{time:now+60_000,bid:.5,ask:.51,source:'REST'}};
+  const view=decisionView(value,market(),runtime(now+60_000),now);
   assert.equal(view.quoteAge,null);
   assert.equal(view.checkAge,null);
   assert.equal(view.checkStale,true);
+  assert.equal(decisionView(value,market(),{...runtime(),lastSuccessfulCheck:undefined},now).checkStale,true);
 });
 
 test('resting offers read in plain English with team names and prices',()=>{

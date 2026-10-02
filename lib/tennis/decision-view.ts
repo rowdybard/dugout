@@ -7,7 +7,14 @@ import type {TennisMarket,TennisRuntime,TennisSession} from './types';
 export const CHECK_STALE_MS={service:45_000,browser:30_000} as const;
 const cents=(price:number)=>`${+(price*100).toFixed(1)}¢`;
 
-const evidenceAge=(time:number|undefined|null,now:number)=>typeof time==='number'&&Number.isFinite(time)&&time<=now&&time>=0?now-time:null;
+/**
+ * Times come from the server and runner clocks, `now` from this device. A device a little behind the server sees a
+ * just-made check slightly in the future; that is "just now", not unknown (treating it as unknown made the card flip
+ * to stale and back every few seconds). Only a time far in the future is rejected.
+ */
+export const CLOCK_SKEW_MS=15_000;
+const evidenceAge=(time:number|undefined|null,now:number)=>typeof time!=='number'||!Number.isFinite(time)||time<0?null:
+  time<=now?now-time:time-now<=CLOCK_SKEW_MS?0:null;
 
 /** Describe saved bot authority only. Display-only feed polling cannot advance these clocks. */
 export function decisionView(session:TennisSession,market:TennisMarket|undefined,runtime:TennisRuntime|null,now:number){
