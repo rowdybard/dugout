@@ -166,6 +166,7 @@ body:has(.tennis-app){background:#17191e}
 .tennis-chips{display:flex;flex-wrap:wrap;gap:6px}
 .tennis-chips span{font-size:var(--fs-xs);color:var(--dg-muted);background:var(--dg-surface-3);border-radius:999px;padding:3px 10px}
 .tennis-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tennis-clamp.tennis-clamp-4{-webkit-line-clamp:4}
 .tennis-decision-card p{font-size:var(--fs-md);line-height:1.5}
 .tennis-decision-card details summary{cursor:pointer;color:var(--dg-text-2);font-size:var(--fs-sm)}
 .tennis-bot .tennis-position-list{margin:0}

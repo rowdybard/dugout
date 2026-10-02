@@ -99,5 +99,5 @@ test('resting offers read in plain English with team names and prices',()=>{
     pulledUntil:0,eventKey:null,lastBookTime:now,reason:'',fills:0,rebates:0};
   const view=decisionView(value,market(),runtime(now-1000),now);
   assert.equal(view.state,'Buy offers posted');
-  assert.equal(view.reason,'Offering to buy focus A at 70¢ and focus B at 29.5¢. A trade happens only when someone sells at that price, so most checks change nothing.');
+  assert.equal(view.reason,'Offering to buy focus A at 70¢ or focus B at 29.5¢. It fills only if someone sells at that price.');
 });

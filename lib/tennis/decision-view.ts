@@ -54,7 +54,7 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
     session.status==='idle'?(focus?'The paper bot has not started. Press Start to check the saved bot focus.':'Choose a bot focus, then press Start to begin paper checks.'):
     session.status==='stopped'?'This paper run is stopped. Its chart can still update; create a new run when ready.':
     checkStale?`The bot's last check was ${checkAge===null?'not recorded':`${Math.round(checkAge/1000)} seconds ago`}. It normally checks every few seconds; if this lasts more than a minute, reload the page.`:
-    runtime?.failureReason||(offers.length?`Offering to buy ${offers.join(' and ')}. A trade happens only when someone sells at that price, so most checks change nothing.`:session.lastReason);
+    runtime?.failureReason||(offers.length?`Offering to buy ${offers.join(' or ')}. It fills only if someone sells at that price.`:session.lastReason);
   return {state,reason,quoteAge,gameAge,checkAge,checkStale,focus,side,
     focusName:identity?`${identity.yesName} vs. ${identity.noName}`:focus?`${focus} (not in the current game list)`:'No game selected',
     identityKnown:!!identity,football:identity?.league==='CFB'||identity?.league==='NFL'||!!report,

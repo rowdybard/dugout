@@ -15,7 +15,7 @@ export function DecisionCard({session,market,runtime,now}:{session:TennisSession
     <div className="tennis-decision-head"><strong>{view.state}</strong><span className="tennis-chips">
       <span title="Last saved bot check">Check {age(view.checkAge)}</span><span title="Last accepted order book">Quote {age(view.quoteAge)}</span>{view.football&&<span title="Last verified game report">Game {age(view.gameAge)}</span>}
     </span></div>
-    <p role="status" className="tennis-clamp" title={view.reason}>{view.reason}</p>
+    <p role="status" className="tennis-clamp tennis-clamp-4" title={view.reason}>{view.reason}</p>
     {evidence&&<DecisionMetrics {...evidence} name={name} now={now}/>}
     {view.focus&&<details><summary>Both sides</summary>{(['YES','NO'] as const).map(side=>{const latest=session.decisions.findLast(row=>row.slug===view.focus&&row.side===side);return <p key={side}><b>{(side==='YES'?identity?.yesName:identity?.noName)??side}</b>: {latest?.reason??'Not checked yet.'}</p>;})}</details>}
   </div>;
