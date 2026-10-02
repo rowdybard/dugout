@@ -13,6 +13,71 @@ Added September 27, 2026. Moves the site from ChatGPT Sites to a Worker on the o
 
 **Nothing is deployed yet.** That needs a Cloudflare API token (step 1).
 
+## Do it yourself from your PC (Windows PowerShell)
+
+Checked Oct 2, 2026: the Cloudflare build is configured correctly and applies all database migrations to a fresh database. Locally, a visitor with no sign-in gets the invite-only page (401), a faked identity header is refused (401), and a forged sign-in token is rejected (403).
+
+**1. Get the code and sign in to Cloudflare**
+```powershell
+cd <your dugout folder>
+git pull
+pnpm install
+npx wrangler login
+```
+
+**2. Create the database and deploy once** (the site refuses everyone until step 4)
+```powershell
+node scripts/cloudflare-hosting.mjs database          # prints DUGOUT_D1_DATABASE_ID=...
+$env:DUGOUT_D1_DATABASE_ID="<that id>"
+node scripts/cloudflare-hosting.mjs deploy
+```
+The site is now at `https://dugout.<your-subdomain>.workers.dev`.
+
+**3. Sign-in, in the Cloudflare dashboard**
+1. **Zero Trust** (first visit: choose a team name). Your sign-in domain is `<team>.cloudflareaccess.com`.
+2. **Google client** at console.cloud.google.com:
+   - Create a project.
+   - Set up the OAuth consent screen: External, then publish it.
+   - Go to Credentials → OAuth client ID → Web application.
+   - Set the redirect URI to `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback`.
+3. **Zero Trust → Settings → Authentication → Login methods → Add new:**
+   - **Google:** paste the Client ID and secret.
+   - **One-time PIN:** a backup for anyone without Google.
+4. **Workers & Pages → dugout → Settings → Domains & Routes:** turn on **Cloudflare Access** for the workers.dev route.
+5. **Zero Trust → Access → Applications → the dugout application → Edit:**
+   - **Session duration:** the longest option (devices stay signed in).
+   - **Login methods:** Google and One-time PIN.
+   - **Policy:** Allow → Include → Emails → you, Chad, and anyone else invited.
+6. Copy the application's **Audience (AUD) tag**.
+
+(With an API token in your shell, `$env:ACCESS_INVITES="you@x.com,chad@y.com"; node scripts/cloudflare-hosting.mjs access` does 3–6 for you and prints both values.)
+
+**4. Deploy again with sign-in switched on**
+```powershell
+$env:ACCESS_TEAM_DOMAIN="<team>.cloudflareaccess.com"
+$env:ACCESS_AUD="<the AUD tag>"
+node scripts/cloudflare-hosting.mjs deploy
+```
+Open the site: you should see Google sign-in. Signing in takes you to your own fresh paper account.
+
+**5. Your extras: background runner, Ask Claude, live prices** (optional)
+```powershell
+node scripts/cloudflare-hosting.mjs owner-id you@gmail.com     # -> u_...  (the email you sign in with)
+$env:DUGOUT_OWNER_ID="u_..."
+$env:DUGOUT_RUNNER_URL="https://dugout-paper-runner.<your-subdomain>.workers.dev"
+$env:DUGOUT_RUNNER_SECRET="<32+ random characters>"
+$env:ANTHROPIC_API_KEY="..."; $env:POLYMARKET_KEY_ID="..."; $env:POLYMARKET_SECRET_KEY="..."   # any you use
+node scripts/cloudflare-hosting.mjs secrets
+```
+Then point the runner at you and redeploy it (same secret on both sides):
+```powershell
+npx wrangler secret put RUNNER_HMAC_SECRET --config services/runner/wrangler.jsonc      # paste the same secret
+npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:u_... --var RUNNER_ENGINE_VERSION:(git rev-parse --short HEAD)
+```
+Finally, sign in to the new site and press the background setup button (Settings & history).
+
+**6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. Only you get the background runner; their bot runs while their tab is open.
+
 ## The short version (Google sign-in)
 
 **You do four things:**
