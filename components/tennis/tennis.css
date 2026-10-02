@@ -260,3 +260,18 @@ body:has(.tennis-app){background:#17191e}
 .tennis-chaos-games strong{font-size:var(--fs-sm);font-weight:600;overflow-wrap:anywhere}
 .tennis-chaos-games small{font-size:var(--fs-xs);color:var(--dg-muted)}
 .tennis-chaos-games button{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--dg-surface-3);color:var(--dg-text-2);flex-shrink:0}
+
+/* Open orders & shares: one list on the bot card */
+.tennis-open-book{margin-top:14px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-surface);padding:12px 14px;display:grid;gap:10px}
+.tennis-open-book-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:baseline}
+.tennis-open-book-head b{font-size:var(--fs-sm)}
+.tennis-open-book-head span{font-size:var(--fs-xs);color:var(--dg-muted)}
+.tennis-open-book table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.tennis-open-book caption{text-align:left;font-size:var(--fs-xs);color:var(--dg-muted);padding-bottom:4px}
+.tennis-open-book th{text-align:right;font-weight:500;font-size:var(--fs-xs);color:var(--dg-muted);padding:4px 6px;border-bottom:1px solid var(--dg-line)}
+.tennis-open-book td{text-align:right;padding:7px 6px;border-bottom:1px solid var(--dg-line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tennis-open-book th:first-child,.tennis-open-book td:first-child{text-align:left;white-space:normal}
+.tennis-open-book td strong{font-weight:600;display:block}
+.tennis-open-book td small{display:block;font-size:var(--fs-xs);color:var(--dg-muted)}
+.tennis-open-book tr:last-child td{border-bottom:0}
+@media(max-width:520px){.tennis-open-book{padding:10px}.tennis-open-book th,.tennis-open-book td{padding:6px 3px;font-size:var(--fs-xs)}}

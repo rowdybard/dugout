@@ -26,6 +26,7 @@ import {RunnerSetup} from './runner-setup';
 import {FeedKey} from './feed-key';
 import {DecisionCard} from './decision-card';
 import {EngineCard} from './engine-card';
+import {OpenBook} from './open-book';
 import {ChaosPanel,downloadChaosLog} from './chaos-panel';
 import {modeOf,modeRules,type TradeMode} from '@/lib/tennis/modes';
 
@@ -203,8 +204,7 @@ export function TennisDashboard() {
         {session&&steady&&<details className="tennis-chaos-details" open={!!session.config.chaosSlugs?.length}><summary>Chaos mode · {session.config.chaosSlugs?.length?`${session.config.chaosSlugs.length} extra game${session.config.chaosSlugs.length>1?'s':''}`:'off'}</summary>
           <ChaosPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setChaos}/></details>}
         {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}
-        {!!session?.pending&&<div className="tennis-notice" role="status"><Clock3 size={14}/>{session.pending.action==='BUY'?'Entry':'Exit'} queued · fills on the next fresh price</div>}
-        {open.length>0&&<div className="tennis-position-list" aria-label="Open paper positions">{open.map(position=>{const marked=position.netLiquidationValue!==null&&!!position.markedAt&&now-position.markedAt<=15000;const returnValue=marked?position.netLiquidationValue!-position.costBasis:null;const partial=position.liquidationQuantity+1e-7<position.quantity;return <article className="tennis-position" key={position.id}><div><span className="tennis-label">{position.side}</span><h3>{position.name}</h3><p>{position.quantity.toFixed(2)} contracts · {money(position.costBasis)} cost</p></div><div className="tennis-position-return"><strong className={returnValue!==null&&returnValue<0?'tennis-negative':'tennis-positive'}>{returnValue===null?'—':signed(returnValue)}</strong><small>{!marked?'Waiting for a price':partial?'Part can sell now':'If sold now'}</small></div><span className="tennis-tag">{session?.pending?.action==='SELL'?'Exiting':position.exitPolicy==='maker'?'Quote fill':position.exitPolicy==='hold-to-settlement'?'Holding to final':position.exitPolicy==='drive'?'Riding the drive':'Managing'}</span></article>;})}</div>}
+        {session&&<OpenBook session={session} markets={availableMarkets} now={now}/>}
       </section>
 
       <section className="tennis-tracker" aria-label="Game tracker">
