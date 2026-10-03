@@ -4,6 +4,8 @@ Added September 27, 2026. This is how Dugout turns a trading idea into something
 
 The core question: **what information does Dugout have that the market has not fully priced yet, and can the bot trade it systematically after costs?** The honest answer today is "very little, and nothing proven". This layer exists so that the answer can change on evidence, and so that bad ideas die quickly instead of being tuned until they look good.
 
+October 3 addition: the Tennis tab now runs the existing Recovery and Momentum signals as explicitly registered paper experiments (`tennis-recovery@1`, `tennis-momentum@1`). Auto selects between them. Both bots share one wallet and risk allowance, with independent controls. These registrations add a measurable execution path; they do not claim a proven edge. The football research assessment below remains historical context. Verified ESPN scoring summaries can now label a scoring play in the tracker without changing the decision engine's event classifications.
+
 ## 1. Assessment: what was missing
 
 The flow from raw data to a decision, before this work and now:

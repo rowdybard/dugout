@@ -25,6 +25,8 @@ export type ExitRule=
   |{kind:'stop';netReturn:number}
   /** Net return falls `drawdown` below its best so far (after it has been positive). */
   |{kind:'trailing';drawdown:number}
+  |{kind:'initial-loss';fraction:number}
+  |{kind:'noise-trailing';noiseMultiplier:number;minimumTicks:number;confirmations:number}
   /** Fair-value convergence after an event: the side's midpoint recovers `fraction` of the event's move against it. */
   |{kind:'retrace';fraction:number}
   /** Maker fills: marked to the midpoint `ms` after the fill (the research's markout convention). */
@@ -38,6 +40,8 @@ const exitRule:z.ZodType<ExitRule>=z.discriminatedUnion('kind',[
   z.object({kind:z.literal('target'),netReturn:z.number().positive().max(10)}).strict(),
   z.object({kind:z.literal('stop'),netReturn:z.number().positive().max(1)}).strict(),
   z.object({kind:z.literal('trailing'),drawdown:z.number().positive().max(1)}).strict(),
+  z.object({kind:z.literal('initial-loss'),fraction:z.number().positive().max(.5)}).strict(),
+  z.object({kind:z.literal('noise-trailing'),noiseMultiplier:z.number().positive().max(10),minimumTicks:z.number().int().positive().max(10),confirmations:z.number().int().min(2).max(20)}).strict(),
   z.object({kind:z.literal('retrace'),fraction:z.number().positive().max(1)}).strict(),
   z.object({kind:z.literal('markout'),ms:z.number().int().positive().max(3_600_000)}).strict(),
 ]) as z.ZodType<ExitRule>;

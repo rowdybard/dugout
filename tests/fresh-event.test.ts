@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fetchFreshFootballEvent} from '../lib/trading/fresh-event.ts';
+import {fetchFreshFootballEvent,fetchFreshTennisEvent} from '../lib/trading/fresh-event.ts';
 
 const now=1_000_000;
 const payload={events:[{id:'112943',eventState:{updatedAt:'2026-09-26T22:00:00.000Z',footballState:{driveState:{down:3}}}}]};
@@ -81,4 +81,13 @@ test('caller cancellation prevents fetch and discards successful responses arriv
 test('a backward receipt clock is rejected even with an uncached body',async()=>{
   let time=now;
   await assert.rejects(fetchFreshFootballEvent('112943',undefined,{now:()=>time,fetcher:async()=>{time--;return response();}}),/receipt time/);
+});
+
+test('tennis shares the bounded uncached transport while selecting only its match winner type',async()=>{
+  let requested:URL|undefined;
+  const result=await fetchFreshTennisEvent('136204',undefined,{now:()=>now,nonce:()=> 'tennis receipt',fetcher:async(url,init)=>{requested=new URL(url);assert.equal(init.cache,'no-store');assert.ok(init.signal);return response();}});
+  assert.equal(requested?.searchParams.get('id'),'136204');assert.equal(requested?.searchParams.get('sportsMarketTypes'),'tennis_match_winner');assert.equal(requested?.searchParams.get('dugout_read'),'tennis receipt');assert.deepEqual(result.data,payload);
+  await assert.rejects(fetchFreshTennisEvent('136204&limit=20',undefined,{fetcher:async()=>{assert.fail('invalid ID cannot fetch');}}),/numeric tennis event ID/);
+  const cached=streamResponse({'CF-Cache-Status':'HIT'});await assert.rejects(fetchFreshTennisEvent('136204',undefined,{fetcher:async()=>cached.response}),/cached or unverifiable/);assert.equal(cached.cancelled(),true);
+  const oversized=streamResponse({'CF-Cache-Status':'MISS'},200,new Uint8Array(1_000_001));await assert.rejects(fetchFreshTennisEvent('136204',undefined,{fetcher:async()=>oversized.response}),/oversized/);assert.equal(oversized.cancelled(),true);
 });

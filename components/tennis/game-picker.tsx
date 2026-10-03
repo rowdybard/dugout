@@ -5,9 +5,9 @@ import {Search} from 'lucide-react';
 import type {TennisMarket} from '@/lib/tennis/types';
 
 /** One search box for the bot's game: type a team, pick from a short list of live and upcoming games. */
-export function GameSearch({markets,current,focused,busy,loading,now,onChoose,label='Search a college football game',picked=[]}:{
+export function GameSearch({markets,current,focused,busy,loading,now,onChoose,label='Search a college football game',emptyLabel='No live or upcoming college games right now.',picked=[]}:{
   markets:TennisMarket[];current:TennisMarket|null;focused:string|null;busy:boolean;loading:boolean;now:number;
-  onChoose:(slug:string)=>void;label?:string;picked?:string[];
+  onChoose:(slug:string)=>void;label?:string;emptyLabel?:string;picked?:string[];
 }) {
   const [query,setQuery]=useState(''),[open,setOpen]=useState(false);
   const listId=`tennis-game-options-${useId().replace(/:/g,'')}`;
@@ -40,7 +40,7 @@ export function GameSearch({markets,current,focused,busy,loading,now,onChoose,la
           {m.slug===focused?<em>Bot’s game</em>:picked.includes(m.slug)&&<em>Added</em>}
         </button>
       </li>)}
-      {!matches.length&&<li className="tennis-search-empty">{text?'No games match.':loading?'Checking the schedule…':'No live or upcoming college games right now.'}</li>}
+      {!matches.length&&<li className="tennis-search-empty">{text?'No games match.':loading?'Checking the schedule…':emptyLabel}</li>}
     </ul>}
   </section>;
 }

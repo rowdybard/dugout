@@ -1,4 +1,6 @@
 import type {TennisMarket,TennisRuntime,TennisSession} from './types';
+import {canAcknowledgeLoss,lossAllowance,lossLimitReached} from './loss-limit.ts';
+import {purchaseAverageWithFees} from './position-average.ts';
 
 /**
  * How old the bot's last check may be before the card says it is behind. A normal background-runner cycle can take
@@ -41,13 +43,14 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
   const forming=quoteAge!==null&&quoteAge<=session.config.maxBookAgeMs&&signal.some(value=>value&&
     value.lastObservedAt===quote?.time&&['DIP','RECOVERING','RISING'].includes(value.phase));
   const pausedFlat=session.status==='paused'&&!held&&!session.pending;
+  const lossStopped=session.status==='stopped'&&lossLimitReached(session,session.cash);
   const usage=runtime?.mode==='service'?runtime.usage:undefined;
   const budgetReached=!!usage&&usage.day===new Date(now).toISOString().slice(0,10)&&usage.estimatedRowsWritten>=usage.entryPauseAt;
   const quoting=!!session.maker&&(!!session.maker.quotes.YES||!!session.maker.quotes.NO);
   const holdLabel=held?.exitPolicy==='hold-to-settlement'?'Holding to final':held?.exitPolicy==='maker'?'Market making':held?.exitPolicy==='drive'?'Riding the drive':'Holding';
   const state=runtime?.mode==='migrating'?'Setup paused':session.pending?.action==='SELL'||session.exitRequested||session.status==='stopping'?'Exiting':
     held?(session.status==='paused'?`${holdLabel} · entries paused`:holdLabel):session.pending?.action==='BUY'?'Buying':
-    pausedFlat?'Paused':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
+    pausedFlat?'Paused':lossStopped?'Loss limit hit':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
     checkStale?'Bot is behind':quoting?'Buy offers posted':forming?'Setup forming':'Watching';
   // Plain-English summary of the resting orders: which team, what price, and what makes them trade.
   const offers=quoting&&session.maker?(['YES','NO'] as const).flatMap(side=>{const quote=session.maker!.quotes[side];if(!quote)return [];
@@ -56,7 +59,9 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
     pausedFlat?(budgetReached?`Daily storage budget reached (${usage!.estimatedRowsWritten.toLocaleString()} / ${usage!.entryPauseAt.toLocaleString()} estimated rows). Entries remain paused; the daily allowance renews at 00:00 UTC. Resetting the paper balance will not clear it.`:
       /paused/i.test(session.lastReason)?`${session.lastReason} Press Start when ready.`:`${session.lastReason} Entries are paused; press Start when ready.`):
     session.status==='idle'?(focus?'The paper bot has not started. Press Start to check the saved bot focus.':'Choose a bot focus, then press Start to begin paper checks.'):
-    session.status==='stopped'?'This paper run is stopped. Its chart can still update; create a new run when ready.':
+    lossStopped?(canAcknowledgeLoss(session)?`The loss limit was reached. Acknowledge the loss to resume this run with another $${lossAllowance(session).toFixed(2)} loss allowance. Your balance and history stay intact.`:
+      session.cash<=0?'The loss limit was reached and no cash remains. Reset the shared balance to begin again.':'The loss limit was reached. Existing exits must finish before the loss can be acknowledged.'):
+    session.status==='stopped'?'This bot is stopped. Press Start bot when ready; your balance and history stay saved.':
     checkStale?`The bot's last check was ${checkAge===null?'not recorded':`${Math.round(checkAge/1000)} seconds ago`}. It normally checks every few seconds; if this lasts more than a minute, reload the page.`:
     runtime?.failureReason||(offers.length?`Offering to buy ${offers.join(' or ')}. It fills only if someone sells at that price.`:session.lastReason);
   return {state,reason,quoteAge,gameAge,checkAge,checkStale,focus,side,
@@ -85,11 +90,22 @@ export function sideLines(session:TennisSession,focus:string|null|undefined,name
     const offer=session.maker?.slug===focus?session.maker.quotes[side]:undefined;
     const plan=session.enginePlan?.slug===focus?session.enginePlan:undefined;
     const considered=plan?.considered.find(trade=>trade.side===side);
+    const pending=session.pending?.slug===focus&&session.pending.side===side?session.pending:undefined;
     const parts:string[]=[];
-    if(held)parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average.`);
+    if(held){const withFees=purchaseAverageWithFees(held);parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average before buy fees${withFees===null?'':` (${cents(withFees)} incl. buy fees)`}.`);}
     if(offer)parts.push(`Offer to buy ${+offer.quantity.toFixed(2)} at ${cents(offer.price)} is posted.`);
-    else if(considered)parts.push(considered.result==='ACTION'?`Planned: ${considered.style==='maker'?'post an offer':'buy'} at ${cents(considered.price)}.`:`Not trading: ${considered.reason}`);
-    if(!parts.length){const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);parts.push(latest?.reason??plan?.why?.detail??'Checked with the game; nothing to do on this side.');}
+    else if(pending)parts.push(pending.action==='BUY'?`${pending.tennisAdd&&held?.id===pending.positionId?'Add buy':'Buy'} queued, up to ${cents(pending.limitPrice)}. Rechecking the price and entry conditions before buying.`:'Sale queued. Waiting for a fresh executable price.');
+    if(!parts.length){
+      const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);
+      const signal=session.signals[`${focus}:${side}`];
+      // A retained plan is historical evidence, not a live order. Later cancellations
+      // and fresh watching reasons must win, including after an entry has filled.
+      if(signal?.reason&&(signal.lastObservedAt??-Infinity)>=Math.max(plan?.time??-Infinity,latest?.time??-Infinity))parts.push(signal.reason);
+      else if(latest&&latest.code!=='ENTRY_PENDING'&&(!plan||latest.time>=plan.time))parts.push(latest.reason);
+      else if(considered&&considered.result!=='ACTION')parts.push(`Not trading: ${considered.reason}`);
+      else if(considered?.result==='ACTION'||latest?.code==='ENTRY_PENDING')parts.push('No buy queued. Waiting for a new confirmed entry.');
+      else parts.push(latest?.reason??plan?.why?.detail??'Checked with the game; nothing to do on this side.');
+    }
     return {side,name,text:parts.join(' ')};
   });
 }

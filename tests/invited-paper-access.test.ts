@@ -29,6 +29,9 @@ function fixture(pin:string|undefined=OWNER){
     filename=resolve(filename);const cached=modules.get(filename);if(cached)return cached.exports;
     const normalized=filename.replaceAll('\\','/');
     if(normalized.endsWith('/lib/market/scanner.ts'))return {DEFAULT_CONFIG:{}};
+    if(normalized.endsWith('/lib/tennis/server-priority-context.ts'))return {
+      async loadServerPriorityContext(){providerCalls++;throw new Error('No fixture game report');},
+    };
     if(normalized.endsWith('/lib/tennis/data.ts'))return {
       async getTennisCatalog(){providerCalls++;return {markets:[],updatedAt:Date.now(),errors:[]};},
       async getTennisMarket(){providerCalls++;throw new Error('No fixture market');},
@@ -37,7 +40,7 @@ function fixture(pin:string|undefined=OWNER){
     const moduleObject={exports:{}};modules.set(filename,moduleObject);
     const source=ts.transpileModule(readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
     new Function('require','module','exports',source)((specifier:string)=>{
-      if(specifier==='cloudflare:workers')return {env};
+      if(specifier==='cloudflare:workers')return {env,waitUntil:(task:Promise<unknown>)=>{void task.catch(()=>{});}};
       if(specifier.startsWith('@/')||specifier.startsWith('.')){
         let child=specifier.startsWith('@/')?resolve(root,specifier.slice(2)):resolve(dirname(filename),specifier);
         if(!existsSync(child))child+='.ts';return load(child);
@@ -53,6 +56,26 @@ function fixture(pin:string|undefined=OWNER){
 }
 const request=(owner:string|null,path:string,body?:unknown)=>new Request('https://dugout.invalid/api/tennis/'+path,{method:body===undefined?'GET':'POST',headers:{origin:'https://dugout.invalid',...(owner?{'oai-authenticated-user-id':owner}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});
 const account=async(response:Response)=>{assert.equal(response.status,200);return response.json() as Promise<{session:TennisSession;runtime:{mode:string}}>};
+
+test('Tennis tab reads keep one wallet and scoped starts preserve its existing balance and history',async(t)=>{
+  const f=fixture();t.after(f.close);
+  const first=await account(await f.session.GET(request(CUSTOMER,'session'))),saved=first.session;
+  saved.cash=83;saved.ledger=[{id:'saved-fixture-buy',time:saved.startedAt-2,slug:'old-match',side:'YES',action:'BUY',source:'AUTOMATIC',positionId:'old-position',reason:'Saved fixture entry',cashDelta:-25,realizedPnl:0},
+    {id:'saved-fixture-sell',time:saved.startedAt-1,slug:'old-match',side:'YES',action:'SELL',source:'AUTOMATIC',positionId:'old-position',reason:'Saved fixture exit',cashDelta:8,realizedPnl:-17}];
+  saved.equity.push({time:saved.startedAt,price:83});
+  f.sql.prepare('UPDATE tennis_sessions SET value=? WHERE owner_id=?').run(JSON.stringify(saved),CUSTOMER);
+  const beforeWrites=f.writes();
+  const read=await account(await f.session.GET(request(CUSTOMER,'session?botId=tennis')));
+  assert.equal(f.writes(),beforeWrites);assert.equal(read.session.bots,undefined);assert.equal(read.session.cash,83);
+  const started=await account(await f.session.POST(request(CUSTOMER,'session',{action:'start',botId:'tennis',config:{focusSlug:'synthetic-tennis'},commandId:crypto.randomUUID()})));
+  assert.equal(started.session.id,saved.id);assert.equal(started.session.cash,83);assert.deepEqual(started.session.ledger,saved.ledger);
+  assert.equal(started.session.status,'idle');assert.equal(started.session.bots?.tennis?.status,'running');
+  assert.equal(started.session.bots?.tennis?.config.tennisStrategy,'auto');
+  const paused=await account(await f.session.POST(request(CUSTOMER,'session',{action:'pause',botId:'tennis',commandId:crypto.randomUUID()})));
+  assert.equal(paused.session.bots?.tennis?.status,'paused');assert.equal(paused.session.status,'idle');assert.equal(paused.session.cash,83);
+  const invalid=await f.session.POST(request(CUSTOMER,'session',{action:'start',botId:'unknown',commandId:crypto.randomUUID()}));assert.equal(invalid.status,400);
+  assert.equal(f.providerCalls(),0);
+});
 
 test('invited customer receives an independent browser paper account and isolated history',async(t)=>{
   const f=fixture();t.after(f.close);let outbound=0;t.mock.method(globalThis,'fetch',async()=>{outbound++;throw new Error('No runner or paid API calls allowed');});

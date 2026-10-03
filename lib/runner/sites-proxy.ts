@@ -85,7 +85,7 @@ export async function runnerStateText(env:RunnerBindings,owner:string,epoch:stri
 }
 function sessionResponse({text,runner}:{text:string;runner:RunnerState['runner']},env:RunnerBindings){
   // The sweep summary stays in the body (top-level `sweep`); the dashboard reads it from there.
-  const runtime={mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:runner.lastEngineCheck,quoteAgeMs:runner.quoteAgeMs,gameReportAgeMs:runner.contextAgeMs,failureReason:runner.source.state==='error'?runner.source.message:null,usage:runner.usage,feedKey:runner.feedKey===true};
+  const runtime={mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:runner.lastEngineCheck,quoteAgeMs:runner.quoteAgeMs,gameReportAgeMs:runner.contextAgeMs,failureReason:runner.source.state==='error'?runner.source.message:null,usage:runner.usage,feedKey:runner.feedKey===true,supportedBots:runner.supportedBots??['football'],botHealth:runner.botHealth};
   return new Response(`${text.slice(0,-1)},"runtime":${JSON.stringify(runtime)}}`,{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
 /** `session` is on the first page only. */
@@ -128,6 +128,11 @@ export async function proxyRunnerSession(request:Request,database:RunnerDatabase
     return Response.json({session:JSON.parse(fence.snapshot),runtime:{mode:'migrating',intervalMs:2500,backgroundConnected:false,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'History migration is paused safely between resumable steps.'}},{headers:{'Cache-Control':'no-store'}});
   }
   if(new URL(request.url).searchParams.get('export')==='1')return runnerExport(env,fence);
+  // Site and runner builds finish independently. Never send a new bot command to an older reducer.
+  if(action?.botId&&action.action!=='tick'){
+    const current=await runnerStateText(env,owner,fence.epoch,'/v1/state');
+    if(!current.runner.supportedBots?.includes(action.botId))throw new RunnerError(409,'The shared-wallet runner update is still deploying. Refresh in a moment.');
+  }
   // Older open browser tabs may still post ticks. Read state without duplicating work.
   const state=action&&action.action!=='tick'
     ?await runnerStateText(env,owner,fence.epoch,'/v1/command','POST',{command:action})

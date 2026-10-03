@@ -4,6 +4,7 @@ import {PolymarketInputAdapter} from '../src/input-adapter.ts';
 import {RunnerStore} from '../src/store.ts';
 import {active,NOW,input} from './helpers.ts';
 import type {TennisInput,TennisMarket} from '../../../lib/tennis/types';
+import {applyAccountAction} from '../../../lib/tennis/account.ts';
 const marketRaw=(slug='synthetic-tennis')=>({slug,sportsMarketType:'tennis_match_winner',minimumTradeQty:1,orderPriceMinTickSize:.01,feeCoefficient:.05,active:true,status:'MARKET_STATUS_OPEN',marketSides:[{long:true,description:'Synthetic A'},{long:false,description:'Synthetic B'}]});
 const eventRaw=(slug='synthetic-tennis')=>({id:'fixture',slug:'fixture',title:'Synthetic A vs Synthetic B',active:true,live:true,ended:false,startTime:new Date(NOW).toISOString(),eventState:{updatedAt:new Date(NOW).toISOString(),live:true},markets:[marketRaw(slug)]});
 const bookRaw=(time:number)=>({marketData:{marketSlug:'synthetic-tennis',bids:[{px:{value:'0.49',currency:'USD'},qty:'1000'}],offers:[{px:{value:'0.50',currency:'USD'},qty:'1000'}],state:'MARKET_STATE_OPEN',transactTime:new Date(time).toISOString()}});
@@ -104,13 +105,63 @@ test('successful websocket upgrade cancels its handshake deadline and requests u
 });
 test('held football exits use their book before a slow direct game report, then use the persisted fresh report',async(t)=>{
   const {store}=await active();let now=NOW+2000;t.mock.method(Date,'now',()=>now);const session=store.session()!,market={...input(NOW).market,eventId:'112943',league:'CFB' as const,score:'7-0',period:'Q1',clock:'10:30',contextUpdatedAt:NOW,footballIdentity:{yesTeamId:'1',noTeamId:'2'},football:{possessionTeam:'Synthetic A',possessionTeamId:'1',down:2,yardsToGo:7,fieldPosition:{team:'Synthetic B',teamId:'2',yard:30},timeouts:[]},execution:{...input(NOW).market.execution!,league:'CFB' as const}};
-  session.positions=[{status:'open',market,lastContext:market} as unknown as typeof session.positions[number]];
+  session.positions=[{slug:market.slug,status:'open',market,lastContext:market} as unknown as typeof session.positions[number]];
   let release!:(r:Response)=>void,requested=false;const delayed=new Promise<Response>(r=>{release=r;});
   const rawMarket={...marketRaw(),sportsMarketType:'football_team_full_game_winner',marketSides:[{long:true,teamId:'1',team:{id:'1',name:'Synthetic A',league:'CFB'}},{long:false,teamId:'2',team:{id:'2',name:'Synthetic B',league:'CFB'}}]};
   t.mock.method(globalThis,'fetch',async(url:string)=>{if(url.includes('/v1/events?')){requested=true;return delayed;}if(url.includes('/market/slug/'))return Response.json({market:rawMarket});return fresh(now);});
   const tasks:Promise<unknown>[]=[];const adapter=new PolymarketInputAdapter(store,async()=>null,p=>{tasks.push(p);});const first=await adapter.gather(session);assert.equal(requested,true);assert.equal(first.inputs.length,1);assert.equal(first.inputs[0].receivedAt,now);assert.equal(first.inputs[0].market.football?.down,2);
   now+=1000;release(Response.json({events:[{...eventRaw(),id:'112943',score:'7-0',period:'Q1',eventState:{type:'football',live:true,period:'Q1',elapsed:'10:20',updatedAt:new Date(now-500).toISOString(),footballState:{driveState:{possessionTeamId:'1',down:4,yfd:7,fieldPosition:{teamId:'2',yard:30}}}},markets:[rawMarket]}]},{headers:{'CF-Cache-Status':'DYNAMIC'}}));await Promise.all(tasks);
   const second=await adapter.gather(session);assert.equal(second.inputs[0].market.football?.down,4);assert.equal(second.inputs[0].market.contextUpdatedAt,now-500);assert.equal(second.inputs[0].restReceipt?.requestedAt,now);
+});
+
+test('a pending football buy waits for its own fresh report without waiting for another held game',async(t)=>{
+  const {store}=await active(),now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const session=store.session()!;session.status='running';session.config.leagues=['CFB'];
+  const footballMarket=(slug:string,eventId:string,yesId:string,noId:string):TennisMarket=>({...input(NOW).market,slug,eventId,eventSlug:'event-'+eventId,
+    league:'CFB',score:'7-0',period:'Q1',clock:'10:30',contextUpdatedAt:NOW,footballIdentity:{yesTeamId:yesId,noTeamId:noId},
+    football:{possessionTeam:'Synthetic A',possessionTeamId:yesId,down:2,yardsToGo:7,fieldPosition:{team:'Synthetic B',teamId:noId,yard:30},timeouts:[]},
+    execution:{...input(NOW).market.execution!,slug,league:'CFB'}});
+  const held=footballMarket('synthetic-tennis','112943','1','2'),pending=footballMarket('synthetic-football-pending','112944','3','4');
+  session.positions=[{slug:held.slug,status:'open',market:held,lastContext:held} as unknown as typeof session.positions[number]];
+  session.pending={slug:pending.slug,action:'BUY',market:pending} as NonNullable<typeof session.pending>;
+  const rawMarket=(market:TennisMarket)=>({...marketRaw(market.slug),sportsMarketType:'football_team_full_game_winner',marketSides:[
+    {long:true,teamId:market.footballIdentity!.yesTeamId,team:{id:market.footballIdentity!.yesTeamId,name:market.yesName,league:'CFB'}},
+    {long:false,teamId:market.footballIdentity!.noTeamId,team:{id:market.footballIdentity!.noTeamId,name:market.noName,league:'CFB'}}]});
+  const report=(market:TennisMarket,down:number)=>Response.json({events:[{...eventRaw(market.slug),id:market.eventId,slug:market.eventSlug,score:'7-0',period:'Q1',
+    eventState:{type:'football',live:true,period:'Q1',elapsed:'10:20',updatedAt:new Date(now-500).toISOString(),footballState:{driveState:{
+      possessionTeamId:market.footballIdentity!.yesTeamId,down,yfd:7,fieldPosition:{teamId:market.footballIdentity!.noTeamId,yard:30}}}},markets:[rawMarket(market)]}]},
+    {headers:{'CF-Cache-Status':'DYNAMIC'}});
+  let releaseHeld!:(response:Response)=>void;
+  const delayedHeld=new Promise<Response>(resolve=>{releaseHeld=resolve;}),requestedReports:string[]=[];
+  t.mock.method(globalThis,'fetch',async(url:string)=>{
+    const source=new URL(url);
+    if(source.pathname==='/v1/events'){
+      const eventId=source.searchParams.get('id')!;requestedReports.push(eventId);
+      if(eventId===held.eventId)return delayedHeld;
+      if(eventId===pending.eventId)return report(pending,4);
+    }
+    const market=source.pathname.includes(pending.slug)?pending:held;
+    if(source.pathname.startsWith('/v1/market/slug/'))return Response.json({market:rawMarket(market)});
+    if(source.pathname.endsWith('/book'))return Response.json({...bookRaw(now),marketData:{...bookRaw(now).marketData,marketSlug:market.slug}},
+      {headers:{'CF-Cache-Status':'DYNAMIC'}});
+    throw new Error('Unexpected source route: '+source.pathname);
+  });
+  const tasks:Promise<unknown>[]=[];const adapter=new PolymarketInputAdapter(store,async()=>null,task=>tasks.push(task));
+  let completed:Awaited<ReturnType<typeof adapter.gather>>|undefined;
+  const gathering=adapter.gather(session).then(result=>{completed=result;return result;});
+  try{
+    // Flush immediate transports; the held report remains explicitly unresolved.
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.ok(completed,'A pending buy on B must not make the held A book wait for A\'s report.');
+    assert.deepEqual(requestedReports.sort(),[held.eventId,pending.eventId]);
+    assert.deepEqual(completed.failures,[]);assert.equal(completed.inputs.length,2);
+    const heldInput=completed.inputs.find(value=>value.market.slug===held.slug)!,pendingInput=completed.inputs.find(value=>value.market.slug===pending.slug)!;
+    assert.equal(heldInput.receivedAt,now);assert.equal(heldInput.market.football?.down,2);
+    assert.equal(pendingInput.market.football?.down,4,'The pending B input must include its completed current report.');
+    assert.equal(pendingInput.market.contextUpdatedAt,now-500);assert.equal(pendingInput.market.observedAt,now);
+  }finally{
+    releaseHeld(report(held,3));await Promise.all(tasks);await gathering;adapter.close();
+  }
 });
 
 test('large event detail accepts a realistic 195-market payload without lifting metadata or book limits',async(t)=>{
@@ -142,3 +193,32 @@ for(const [name,maxBytes] of [['event',4_000_000],['metadata',1_000_000],['leagu
     if(name==='league')assert.match(store.get<{error:string}>('discovery:ATP')!.error,/16000000 bytes/);
   });
 }
+
+test('each running bot fetches its own focus, and a paused flat bot leaves only its peer in the source selection',async(t)=>{
+  const {store}=await active();let now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const footballSlug='synthetic-football',session=store.session()!;session.status='running';session.config.leagues=['CFB'];session.config.focusSlug=footballSlug;
+  const football:TennisMarket={...input(now).market,slug:footballSlug,eventId:'900001',eventSlug:'cfb-synthetic',league:'CFB',score:'7-7',period:'Q2',clock:'10:00',contextUpdatedAt:now,
+    footballIdentity:{yesTeamId:'11',noTeamId:'22'},football:{possessionTeam:'Synthetic A',possessionTeamId:'11',down:1,yardsToGo:10,fieldPosition:{team:'Synthetic A',teamId:'11',yard:25},timeouts:[]},
+    execution:{...input(now).market.execution!,slug:footballSlug,league:'CFB'}};
+  const account=applyAccountAction(session,{action:'start',botId:'tennis',commandId:'dual-focus-start',config:{focusSlug:'synthetic-tennis'}},[],now);
+  assert.equal(account.bots?.tennis?.status,'running');store.set('focused-market:'+footballSlug,football);store.set('focused-market:synthetic-tennis',input(now).market);
+  const footballMetadata={...marketRaw(footballSlug),sportsMarketType:'football_team_full_game_winner',marketSides:[
+    {long:true,description:'Synthetic A',teamId:11,team:{id:11,name:'Synthetic A',league:'CFB',ordering:'away'}},
+    {long:false,description:'Synthetic B',teamId:22,team:{id:22,name:'Synthetic B',league:'CFB',ordering:'home'}}]};
+  const requests:string[]=[];t.mock.method(globalThis,'fetch',async(url:string)=>{
+    const source=new URL(url);requests.push(source.pathname);
+    if(source.pathname==='/v1/events')return Response.json({events:[{id:'900001',slug:'cfb-synthetic',title:'Synthetic A vs Synthetic B',startTime:new Date(NOW).toISOString(),active:true,live:true,ended:false,score:'7-7',period:'Q2',
+      eventState:{type:'football',live:true,period:'Q2',elapsed:'10:00',updatedAt:new Date(now).toISOString(),footballState:{driveState:{possessionTeamId:'11',down:1,yfd:10,fieldPosition:{teamId:'11',yard:25}}}},markets:[footballMetadata]}]},
+      {headers:{'CF-Cache-Status':'DYNAMIC'}});
+    if(source.pathname.startsWith('/v1/events/slug/'))return Response.json(eventRaw());
+    if(source.pathname.startsWith('/v1/market/slug/'))return Response.json({market:source.pathname.endsWith(footballSlug)?footballMetadata:marketRaw()});
+    if(source.pathname.endsWith('/book'))return Response.json({...bookRaw(now),marketData:{...bookRaw(now).marketData,marketSlug:source.pathname.includes(footballSlug)?footballSlug:'synthetic-tennis'}},{headers:{'CF-Cache-Status':'DYNAMIC'}});
+    throw new Error('Unexpected source route: '+source.pathname);
+  });
+  const adapter=new PolymarketInputAdapter(store,async()=>null),both=await adapter.gather(account);
+  assert.deepEqual(both.inputs.map(book=>book.market.slug).sort(),[footballSlug,'synthetic-tennis'].sort(),both.failures.join('; '));
+  now++;requests.length=0;const pausedFootball=applyAccountAction(account,{action:'pause',botId:'football',commandId:'pause-football-focus'},[],now),tennisOnly=await adapter.gather(pausedFootball);
+  assert.deepEqual(tennisOnly.inputs.map(book=>book.market.slug),['synthetic-tennis']);assert.ok(!requests.some(path=>path.includes(footballSlug)));
+  now++;requests.length=0;const pausedTennis=applyAccountAction(account,{action:'pause',botId:'tennis',commandId:'pause-tennis-focus'},[],now),footballOnly=await adapter.gather(pausedTennis);
+  assert.deepEqual(footballOnly.inputs.map(book=>book.market.slug),[footballSlug]);assert.ok(!requests.some(path=>path.includes('synthetic-tennis')));adapter.close();
+});

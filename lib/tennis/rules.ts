@@ -13,7 +13,9 @@ export const tennisRulesSchema=z.object({
   chaosSlugs:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(6).optional(),
   octopusAuto:z.boolean().optional(),
   octopusSkip:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(30).optional(),
-  explore:z.array(z.enum(['comeback-drive'])).max(5).optional(),
+  explore:z.array(z.enum(['comeback-drive','tennis-recovery','tennis-momentum'])).max(5).optional(),
+  tennisStrategy:z.enum(['auto','recovery','momentum']).optional(),
+  tennisTradeStyle:z.enum(['classic-v1','adaptive-v2']).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB','MLB'])).min(1).max(5),
@@ -47,6 +49,18 @@ export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
   return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1',maker:'paper-v1'};
 }
 
+/** Dedicated tennis paper experiments. The historical factory remains unchanged for saved sessions. */
+export function tennisBetSize(startingCash:number,fraction=.1):number {
+  const cap=Math.floor(Math.min(100,startingCash*.2)*1e6+1e-9)/1e6;
+  return Math.min(cap,Math.round(Math.max(1,startingCash*fraction)*1e6)/1e6);
+}
+
+export function defaultTennisBotConfig(startingCash=100,tennisStrategy:'auto'|'recovery'|'momentum'='auto'):TennisConfig {
+  return {...defaultTennisConfig(startingCash),entryBudget:tennisBetSize(startingCash),decisionPolicy:'price-v1',tennisStrategy,strategy:tennisStrategy,evidenceGate:'evidence-v1',
+    tennisTradeStyle:tennisStrategy==='auto'?'adaptive-v2':'classic-v1',stopReturn:tennisStrategy==='auto'?.25:.08,
+    explore:tennisStrategy==='auto'?['tennis-recovery','tennis-momentum']:[tennisStrategy==='recovery'?'tennis-recovery':'tennis-momentum']};
+}
+
 /** Add newly introduced fields without rewriting saved balances or historical rules. */
 export function normalizeTennisConfig(config:TennisConfig):TennisConfig {
   // Old exports retain their original price-only semantics during replay.
@@ -59,6 +73,17 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   if(!Number.isFinite(startingCash)||startingCash<5||startingCash>MAX_BALANCE||Math.round(startingCash*1e6)/1e6!==startingCash)return 'Starting fake balance must be $5–$10,000 with at most six decimal places.';
   const parsed=tennisRulesSchema.safeParse(rules);
   if(!parsed.success)return `Check ${parsed.error.issues[0].path.join(' ')}: ${parsed.error.issues[0].message}`;
+  if(config.tennisStrategy){
+    if(config.strategy!==config.tennisStrategy)return 'The Tennis strategy and its entry pattern must match.';
+    if(config.evidenceGate!=='evidence-v1')return 'Tennis experiments need the evidence gate.';
+    if(config.leagues.some(league=>league!=='ATP'&&league!=='WTA'))return 'The Tennis bot only trades ATP and WTA matches.';
+    if(config.decisionEngine||config.maker||config.autoMode||config.chaosSlugs?.length||config.octopusAuto)return 'Tennis uses Recovery and Momentum experiments with one position at a time.';
+    if(config.explore?.includes('comeback-drive'))return 'Comeback drives belong to the football bot.';
+  }
+  if(config.tennisTradeStyle&&!config.tennisStrategy)return 'Choose a Tennis strategy before its trade style.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&config.tennisStrategy!=='auto')return 'Adaptive trade management belongs to Tennis Auto.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&(config.minimumHistoryMs<30000||config.minSamples<10||config.baselineWindowMs<30000))return 'Adaptive Tennis Auto requires at least 30 seconds and 10 quotes of history.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&(config.maxSpreadPoints>2||config.maxBookAgeMs>5000))return 'Adaptive Tennis Auto requires a spread of at most two cents and quotes at most five seconds old.';
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
   if((config.chaosSlugs?.length||config.octopusAuto)&&(!config.maker||config.evidenceGate!=='evidence-v1'))return 'The Octopus needs resting orders and the evidence gate: press Use decision engine first.';
   if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Octopus game can be added once.';
@@ -76,10 +101,11 @@ export function validateTennisConfig(config:TennisConfig):string|null {
 }
 
 export function describeTennisRules(config:TennisConfig):string {
+  if(config.tennisStrategy==='auto'&&config.tennisTradeStyle==='adaptive-v2')return `Auto checks confirmed recoveries and rises, adjusting to recent quote noise. Spend up to $${config.entryBudget.toFixed(2)} including fees. Let gains continue, then protect them when fresh buyer prices reverse. The original entry fixes a ${+(config.stopReturn*100).toFixed(2)}% dollar loss allowance; one confirmed lower-price addition may reduce average cost within that same allowance and the shared spending limit. There is no fixed sell price or two-minute exit. Entries and exits need fresh executable books. Paper experiment; no measured profit result yet.`;
   if(config.decisionEngine==='local-move-v1')return `Local volatility-adjusted move analysis checks drop speed, buyer recovery, order-book pressure and executable costs. Spend up to $${config.entryBudget.toFixed(2)} in your focused live game. Entry plans freeze risk limits; volatility trailing and setup invalidation can exit before the −${+(config.stopReturn*100).toFixed(2)}% loss threshold or ${+(config.maxHoldMs/60000).toFixed(2)}-minute deadline. Entry books must pass the 2¢ spread and five-second freshness limits. No model or cloud inference calls.`;
   const entry=config.strategy==='auto'?'Automatically compare a recovery and a sustained rise on each live match, adjusting the move size to recent quote noise'
     :config.strategy==='momentum'
     ?`Follow a ${config.momentumPoints}¢ rise after ${config.momentumConfirmations} confirming quotes`
     :`Wait for a ${config.declinePoints}¢ drop, then a ${config.recoveryPoints}¢ recovery confirmed ${config.recoveryConfirmations} times`;
-  return `${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match${config.focusSlug?' in your focused game':''}. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
+  return `${config.tennisStrategy?'Paper experiments; these Tennis rules have no measured profit result yet. ':''}${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match${config.focusSlug?' in your focused game':''}. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
 }

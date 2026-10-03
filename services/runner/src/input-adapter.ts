@@ -3,6 +3,8 @@ import {streamBookForDisplay} from '../../../lib/trading/stream-types.ts';
 import {marketSocketHeaders} from '../../../lib/trading/us-signature.ts';
 import {fetchFreshMarketBook} from '../../../lib/trading/fresh-book.ts';
 import {fetchFreshFootballEvent} from '../../../lib/trading/fresh-event.ts';
+import {fetchFreshEspnFootballSummary} from '../../../lib/trading/fresh-espn-football.ts';
+import {accountBotIds,accountBotView} from '../../../lib/tennis/account.ts';
 import {publicRetryAfterMs} from '../../../lib/bot/public-source-budget.ts';
 import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from '../../../lib/tennis/normalize.ts';
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
@@ -161,17 +163,21 @@ export class PolymarketInputAdapter implements InputAdapter {
   }
   async gather(session:TennisSession){
     const gatheringGeneration=this.generation,failures:string[]=[],held=session.positions.filter(p=>p.status==='open');
-    const markets=held.map(p=>p.lastContext??p.market);
-    if(session.pending&&!markets.some(m=>m.slug===session.pending!.slug))markets.push(session.pending.market);
+    const bots=accountBotIds(session).map(botId=>accountBotView(session,botId));
+    const pending=bots.flatMap(bot=>bot.pending?[bot.pending]:[]);
+    const markets=[...new Map(held.map(p=>[p.slug,p.lastContext??p.market])).values()];
+    for(const intent of pending)if(!markets.some(m=>m.slug===intent.slug))markets.push(intent.market);
     // The bot's game is fetched even while shares are held on another game (switching games keeps those managed).
-    const focus=session.config.focusSlug;
-    if(session.status==='running'&&focus&&!markets.some(m=>m.slug===focus)){
+    for(const bot of bots){
+    const focus=bot.config.focusSlug;
+    if(bot.status==='running'&&focus&&!markets.some(m=>m.slug===focus)){
       const known=this.store.get<TennisMarket>('focused-market:'+focus);
       if(known)markets.push(known);
       else{let catalog:TennisMarket[]=[];
-        try{catalog=await this.catalog(session,AbortSignal.timeout(3500));}catch(error){failures.push(errorText(error));}
+        try{catalog=await this.catalog(bot,AbortSignal.timeout(3500));}catch(error){failures.push(errorText(error));}
         markets.push(...catalog.filter(m=>m.slug===focus).slice(0,1));
       }
+    }
     }
     // Octopus auto picks, when due, from the cached game list; returned so the check records them (exact replays).
     let octopus:string[]|undefined;
@@ -193,25 +199,27 @@ export class PolymarketInputAdapter implements InputAdapter {
     // Reports and handshake run alongside books. Held exits wait only for books.
     const connection=this.ensureSocket(markets).catch(()=>{});
     this.keepAlive(connection);
-    const requireReport=!held.length||session.pending?.action==='BUY',reportTasks:Promise<unknown>[]=[];
+    const reportTasks:Promise<unknown>[]=[];
     const latest=new Map<string,TennisMarket>();
     const results=await Promise.allSettled(markets.map(m=>{
+      const requireReport=!held.some(position=>position.slug===m.slug)||pending.some(intent=>intent.action==='BUY'&&intent.slug===m.slug);
       if(m.league==='NFL'||m.league==='CFB'){
-        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
-        reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
+        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal),fetchEspn:fetchFreshEspnFootballSummary}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
+        if(requireReport)reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
       }
       let context:TennisMarket|undefined;
       const report=this.focused(m).then(value=>{context=value;latest.set(m.slug,value);},error=>{failures.push(errorText(error));});
-      reportTasks.push(report);this.keepAlive(report);
+      if(requireReport)reportTasks.push(report);this.keepAlive(report);
       return this.load(m,AbortSignal.timeout(4000)).then(async value=>{if(requireReport)await report;return context?{...value,market:currentTennisContext(value.market,context,now(),value.market.active)}:value;});
     }));
     // A failed post-game book must not hide a confirmed final game report.
-    if(requireReport)await Promise.allSettled(reportTasks);
+    await Promise.allSettled(reportTasks);
     const inputs:TennisInput[]=[];for(const r of results)if(r.status==='fulfilled'){inputs.push(r.value);
       // The saved copy only seeds the next pass; rewrite it when the game changes or once a minute (each save is a write).
       const key='focused-market:'+r.value.market.slug;if(gameCopyDue(this.store.get<TennisMarket>(key),r.value.market,60_000))this.store.set(key,r.value.market);}else failures.push(errorText(r.reason));
     if(!inputs.length)this.setHealth('error',failures[0]??'Current market data is unavailable.');
-    const endedMarket=markets.map(m=>latest.get(m.slug)??m).find(m=>m.slug===session.config.focusSlug&&m.ended&&m.observedAt<=now()&&now()-m.observedAt<=45000);
-    return {inputs,failures:[...failures],...(endedMarket?{endedMarket}:{}),...(octopus?{octopus}:{})};
+    const endedMarkets=markets.map(m=>latest.get(m.slug)??m).filter(m=>bots.some(bot=>bot.config.focusSlug===m.slug)&&m.ended&&m.observedAt<=now()&&now()-m.observedAt<=45000);
+    const endedMarket=endedMarkets.find(m=>m.slug===session.config.focusSlug);
+    return {inputs,failures:[...failures],...(endedMarket?{endedMarket}:{}),...(endedMarkets.length?{endedMarkets}:{}),...(octopus?{octopus}:{})};
   }
 }

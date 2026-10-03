@@ -65,3 +65,19 @@ This covers the ChatGPT review ("Improve Dugout with small, targeted changes") a
 ## To deploy
 
 Merge `claude/decision-engine-bot-alternative-ifuig1` into `main` (or ask Claude to). Then check Cloudflare → Workers → Deployments for both `dugout` and `dugout-paper-runner`.
+
+## Update: merged with Codex's main (same day)
+
+The branch now includes `origin/main` as of Codex's commit `f98322c` (tennis bot, shared wallet, loss acknowledgement). How the overlaps were settled:
+
+- **Combined spending limit:** Codex added a 50% cap for accounts running both bots on a shared wallet (`lib/tennis/wallet-risk.ts`). Where that wallet exists, Codex's version is used; for a single bot, the branch's `committed()` limit applies. Both are 50% of the balance.
+- **Bold dip buy:** both had the same three fixes, but Codex's applied only with a shared wallet. Now they always apply, and use Codex's `remainingLossAllowance`, which respects loss acknowledgements.
+  - A failed dip buy retries on the next fresh book, as in Codex's version and test. The one-minute wait remains only after a loss-limit refusal.
+- **Valuation:** the shared-wallet balance uses `accountValue(account)`, and old prices still show with their age. Codex's test expected an old price to be hidden, so it was updated.
+- **Error messages:** Codex made the same "routine check doesn't clear errors" fix.
+- **Idle polling:** the 30 s rate applies only when every bot on the account is stopped or idle with nothing held or pending.
+- **Write guard:** `RUNNER_ENTRY_WRITE_LIMIT` is raised from 90,000 to **1,000,000 rows a day**.
+  - **Why:** on Workers Paid, Durable Object SQLite writes include 50 million rows a month, then $1 per million (Cloudflare docs, checked October 3, 2026). The 100,000-a-day figure was the Free plan's.
+  - **Docs:** updated to match.
+
+**Checks:** 945 of 945 tests pass. `tsc`, `runner:check`, lint on changed files, `pnpm build` and `pnpm runner:build` are clean.

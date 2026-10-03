@@ -1,11 +1,13 @@
 'use client';
 
-import {useCallback,useEffect,useRef,useState} from 'react';
-import type {FootballAssessment,TennisAction,TennisCatalog,TennisInput,TennisMarket,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import type {BotId,FootballAssessment,TennisAction,TennisCatalog,TennisInput,TennisMarket,TennisRuntime,TennisSession,TennisSessionResponse} from '@/lib/tennis/types';
 import type {StreamHealth,StreamQuote,StreamSnapshot} from '@/lib/trading/stream-types';
 import {mergeTennisHistory,marketWithSessionQuotes,marketWithStreamQuote,marketWithWatchedBook,marketWithWatchedContext} from '@/lib/tennis/chart-data';
 import {managedMarketStream} from '@/lib/trading/managed-market-stream';
 import {recordContextCheck,type ContextCheckState} from '@/lib/tennis/context-check';
+import {accountBotIds,accountBotView} from '@/lib/tennis/account';
+import {botAction,botQuery,walletNeedsCheck} from './bot-controls';
 
 async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   const response=await fetch(url,{cache:'no-store',...init,signal:init?.signal?AbortSignal.any([init.signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)}).catch(cause=>{
@@ -19,9 +21,10 @@ async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
 
 /** Background-runner accounts that are stopped (or not started) with nothing held or pending are checked this often. */
 const IDLE_POLL_MS=30_000;
-export function useTennis() {
+export function useTennis(botId:BotId='football') {
   const [catalog,setCatalog]=useState<TennisCatalog|null>(null);
-  const [session,setSession]=useState<TennisSession|null>(null);
+  const [account,setAccount]=useState<TennisSession|null>(null);
+  const session=useMemo(()=>account?accountBotView(account,botId):null,[account,botId]);
   const [runtime,setRuntime]=useState<TennisRuntime|null>(null);
   const [loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false);
   const [error,setError]=useState<string|null>(null),[feedError,setFeedError]=useState<string|null>(null);
@@ -39,28 +42,35 @@ export function useTennis() {
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
   const focusSlug=session?.config.focusSlug;
+  const watchedMarket=catalog?.markets.find(m=>m.slug===watchedSlug);
+  const watchedTennisSlug=watchedMarket&&(watchedMarket.league==='ATP'||watchedMarket.league==='WTA')?watchedMarket.slug:null;
   const contextSlugs=[...new Set([session?.pending?.market,...(session?.positions.filter(p=>p.status==='open').map(p=>p.lastContext??p.market)??[]),catalog?.markets.find(m=>m.slug===watchedSlug)].filter(m=>m&&(m.league==='CFB'||m.league==='NFL')).map(m=>m!.slug))].join(',');
-  const inflight=useRef(false),lastPoll=useRef(0),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
+  const inflight=useRef(false),lastPoll=useRef(0),mounted=useRef(true),accountRef=useRef<TennisSession|null>(null),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
+  const runtimeRef=useRef<TennisRuntime|null>(null);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   // One failed background check is usually a passing blip (a 503 from the host); say so only after two in a row.
   const pollFailures=useRef(0),catalogFailures=useRef(0);
   const accept=useCallback((response:TennisSessionResponse)=>{
     if(!mounted.current)return;
-    if(sessionRef.current&&sessionRef.current.revision>response.session.revision)return;
-    sessionRef.current=response.session;
-    setSession(response.session);
+    if(accountRef.current&&accountRef.current.revision>response.session.revision)return;
+    accountRef.current=response.session;
+    const selected=accountBotView(response.session,botId);
+    sessionRef.current=selected;
+    setAccount(response.session);
     // The research sweep summary may arrive at the top level (runner pass-through) rather than inside runtime.
-    setRuntime(response.runtime&&{...response.runtime,sweep:response.runtime.sweep??response.sweep??null});
+    runtimeRef.current=response.runtime;
+    const health=response.runtime.botHealth?.[botId];
+    setRuntime(response.runtime&&{...response.runtime,...(health??(botId==='tennis'?{lastSuccessfulCheck:undefined,quoteAgeMs:null,gameReportAgeMs:null}:{})),sweep:response.runtime.sweep??response.sweep??null});
     setNow(Date.now());
     setConnectionIssue(null);pollFailures.current=0;
-    setCatalog(current=>current?{...current,markets:[...current.markets,...response.session.positions.filter(p=>p.status==='open'&&!current.markets.some(m=>m.slug===p.slug)).map(p=>({...p.lastContext??p.market,active:false}))].map(m=>marketWithSessionQuotes(m,response.session))}:current);
+    setCatalog(current=>current?{...current,markets:[...current.markets,...selected.positions.filter(p=>p.status==='open'&&!current.markets.some(m=>m.slug===p.slug)).map(p=>({...p.lastContext??p.market,active:false}))].map(m=>marketWithSessionQuotes(m,selected))}:current);
     if(response.error)setError(response.error);
-  },[]);
+  },[botId]);
   const refresh=useCallback(async function refreshCatalog(){
     if(catalogBusy.current){catalogRerun.current=true;return;}
     catalogBusy.current=true;catalogRerun.current=false;setRefreshing(true);
     try{
-      const data=await readJson<TennisCatalog>('/api/tennis');
+      const data=await readJson<TennisCatalog>(botQuery('/api/tennis',botId));
       if(!mounted.current)return;
       const selected=sessionRef.current?.config.leagues;
       if(selected&&data.leagues&&[...selected].sort().join(',')!==[...data.leagues].sort().join(',')){catalogRerun.current=true;return;}
@@ -74,10 +84,10 @@ export function useTennis() {
       })}));setFeedError(null);catalogFailures.current=0;
     }catch(cause){if(mounted.current&&++catalogFailures.current>=2)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
     finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);setCatalogAttempt(value=>value+1);if(catalogRerun.current)void refreshCatalog();}}
-  },[]);
+  },[botId]);
   // A command can be a function of the latest saved session: it is built after any in-flight check finishes, so a
   // rule change never carries a stale rules revision. Built commands retry once if the rules changed meanwhile.
-  const perform=useCallback(async(request:TennisAction|((session:TennisSession|null)=>TennisAction|null),background=false)=>{
+  const perform=useCallback(async(request:TennisAction|((session:TennisSession|null,account:TennisSession|null)=>TennisAction|null),background=false)=>{
     // User commands wait behind the one in-flight check.
     if(background&&(inflight.current||commandQueued.current))return false;
     if(!background){
@@ -85,7 +95,7 @@ export function useTennis() {
       commandQueued.current=true;setBusy(true);setError(null);
       if(runningRequest.current)await runningRequest.current;
     }
-    const build=()=>typeof request==='function'?request(sessionRef.current):request;
+    const build=()=>{const action=typeof request==='function'?request(sessionRef.current,accountRef.current):request;return action?botAction(action,botId,runtimeRef.current):null;};
     let action=build();
     if(!action){if(!background){commandQueued.current=false;if(mounted.current)setBusy(false);}return false;}
     inflight.current=true;
@@ -93,11 +103,11 @@ export function useTennis() {
       for(let attempt=0;;attempt++)try{
         const response=await readJson<TennisSessionResponse>('/api/tennis/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});
         accept(response);
-        const result=response.session;
+        const result=accountBotView(response.session,botId);
         const rejected=action.action==='start'?result.status!=='running'
           :action.action==='reset'?result.config.startingCash!==action.bankroll||result.status!=='idle'
           :action.action==='update-rules'?(result.rulesRevision??0)!==action.expectedRulesRevision+1
-          :action.action==='resume'?result.status!=='running':false;
+          :action.action==='resume'||action.action==='acknowledge-loss'?result.status!=='running':false;
         if(rejected&&!response.error&&typeof request==='function'&&attempt===0&&action.action==='update-rules'&&/another tab/i.test(result.lastReason??'')){
           const next=build();if(next){action=next;continue;}
         }
@@ -119,7 +129,7 @@ export function useTennis() {
       inflight.current=false;
       if(!background){commandQueued.current=false;if(mounted.current)setBusy(false);}
     }
-  },[accept]);
+  },[accept,botId]);
   useEffect(()=>{
     mounted.current=true;
     queueMicrotask(()=>{if(mounted.current)void refresh();});
@@ -149,7 +159,7 @@ export function useTennis() {
       // Held/pending games are first. Their reports never wait behind discovery or chart history.
       await Promise.all(contextSlugs.split(',').map(async slug=>{
         try{
-          const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null;successfulCheckAt?:number|null}>(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,{signal:controller.signal});
+          const data=await readJson<{market:TennisMarket;assessment:FootballAssessment;error:string|null;successfulCheckAt?:number|null}>(botQuery(`/api/tennis/context?slug=${encodeURIComponent(slug)}`,botId),{signal:controller.signal});
           if(controller.signal.aborted)return;
           // Render new receipt timestamps against this response's clock, rather
           // than the previous one-second UI tick (which can look like future data).
@@ -168,13 +178,33 @@ export function useTennis() {
     };
     queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedContextError(null);void load();}});
     return()=>{controller.abort();clearTimeout(timer);};
-  },[visible,contextSlugs,watchedSlug]);
+  },[visible,contextSlugs,watchedSlug,botId]);
+  useEffect(()=>{
+    if(!visible||!watchedTennisSlug)return;
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async()=>{
+      try{
+        const data=await readJson<{market:TennisMarket;error:string|null;successfulCheckAt:number|null}>(botQuery(`/api/tennis/scoreboard?slug=${encodeURIComponent(watchedTennisSlug)}`,botId),{signal:controller.signal});
+        if(controller.signal.aborted)return;
+        setNow(Date.now());
+        setContextChecks(current=>({...current,[watchedTennisSlug]:recordContextCheck(current[watchedTennisSlug],data)}));
+        setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===watchedTennisSlug?marketWithWatchedContext(m,data.market,Date.now()):m)}:current);
+        setWatchedContextError(data.error);
+      }catch(cause){if(!controller.signal.aborted){
+        const message=cause instanceof Error?cause.message:'The scoreboard is unavailable. Checking again shortly.';
+        setContextChecks(current=>({...current,[watchedTennisSlug]:recordContextCheck(current[watchedTennisSlug],{error:message})}));
+        setWatchedContextError(message);
+      }}finally{if(!controller.signal.aborted)timer=setTimeout(()=>void load(),5000);}
+    };
+    queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedContextError(null);void load();}});
+    return()=>{controller.abort();clearTimeout(timer);};
+  },[visible,watchedTennisSlug,botId]);
   useEffect(()=>{
     if(!visible||!watchedSlug)return;
     let cancelled=false;
     const load=async()=>{
       try{
-        const data=await readJson<TennisCatalog>(`/api/tennis?slug=${encodeURIComponent(watchedSlug)}`);
+        const data=await readJson<TennisCatalog>(botQuery(`/api/tennis?slug=${encodeURIComponent(watchedSlug)}`,botId));
         if(cancelled)return;
         const detail=data.markets.find(m=>m.slug===watchedSlug);
         if(!detail)return;
@@ -184,13 +214,13 @@ export function useTennis() {
     };
     void load();const timer=setInterval(()=>void load(),30000);
     return()=>{cancelled=true;clearInterval(timer);};
-  },[visible,watchedSlug]);
+  },[visible,watchedSlug,botId]);
   useEffect(()=>{
     if(!visible||!watchedSlug)return;
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
     const load=async()=>{
       try{
-        const {input}=await readJson<{input:TennisInput}>(`/api/tennis/book?slug=${encodeURIComponent(watchedSlug)}`,{signal:controller.signal});
+        const {input}=await readJson<{input:TennisInput}>(botQuery(`/api/tennis/book?slug=${encodeURIComponent(watchedSlug)}`,botId),{signal:controller.signal});
         if(controller.signal.aborted)return;
         setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===watchedSlug?marketWithWatchedBook(m,input,sessionRef.current,Date.now()):m)}:current);
         setWatchedBookError(null);
@@ -199,21 +229,21 @@ export function useTennis() {
     };
     queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedBookError(null);void load();}});
     return()=>{controller.abort();clearTimeout(timer);};
-  },[visible,watchedSlug]);
+  },[visible,watchedSlug,botId]);
   useEffect(()=>{
     if(!visible||!sessionId)return;
     const tick=()=>{
-      const current=sessionRef.current;
+      const current=accountRef.current;
       if(!current||inflight.current)return;
       if(runtime?.mode==='service'||runtime?.mode==='migrating'){
         // A stopped or not-started run with nothing held or pending changes only when you act: check every 30 s.
-        const quiet=['idle','stopped'].includes(current.status)&&!current.pending&&!current.positions.some(position=>position.status==='open');
+        const quiet=accountBotIds(current).map(id=>accountBotView(current,id)).every(bot=>['idle','stopped'].includes(bot.status)&&!bot.pending&&!bot.positions.some(position=>position.status==='open'));
         if(quiet&&Date.now()-lastPoll.current<IDLE_POLL_MS)return;
         if(!commandQueued.current){lastPoll.current=Date.now();inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current&&++pollFailures.current>=2)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
         return;
       }
       // Pausing entries does not pause exit checks; existing positions still need monitoring.
-      if(['running','paused','stopping'].includes(current.status)||current.pending||current.positions.some(position=>position.status==='open')){
+      if(walletNeedsCheck(current)){
         void perform({action:'tick',sessionId:current.id},true);
       }
     };
@@ -231,14 +261,14 @@ export function useTennis() {
       setCatalog(current=>!current?current:{...current,markets:current.markets.map(market=>marketWithStreamQuote(market,quote,sessionRef.current,Date.now()))});
     };
     const health=(status:StreamHealth)=>setStreamStatus(status.market.state==='connected'?'live':status.market.state==='connecting'?'connecting':'rest');
-    return managedMarketStream(()=>new EventSource(`/api/tennis/stream${watchedSlug?`?watch=${encodeURIComponent(watchedSlug)}`:''}`),{
+    return managedMarketStream(()=>new EventSource(botQuery(`/api/tennis/stream${watchedSlug?`?watch=${encodeURIComponent(watchedSlug)}`:''}`,botId)),{
       snapshot:event=>{try{const data=JSON.parse((event as MessageEvent).data) as StreamSnapshot;health(data.health);data.quotes.forEach(merge);}catch{setStreamStatus('rest');}},
       quote:event=>{try{merge(JSON.parse((event as MessageEvent).data) as StreamQuote);}catch{setStreamStatus('rest');}},
       status:event=>{try{health(JSON.parse((event as MessageEvent).data) as StreamHealth);}catch{setStreamStatus('rest');}},
     },setStreamStatus);
-  },[visible,runtime?.streamConfigured,leagueKey,focusSlug,watchedSlug]);
+  },[visible,runtime?.streamConfigured,leagueKey,focusSlug,watchedSlug,botId]);
   const reloadAccount=useCallback(async()=>{
     try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));setError(null);}catch(cause){setError(cause instanceof Error?cause.message:'Could not reload paper account.');}
   },[accept]);
-  return {catalog,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,contextChecks,advisorEnabled,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
+  return {catalog,account,session,runtime,loading,refreshing,error,feedError,connectionIssue,watchedBookError,watchedContextError,contextAssessments,contextChecks,advisorEnabled,busy,visible,streamStatus:!visible?'paused':runtime?.streamConfigured?streamStatus:'rest',now,perform,refresh,reloadAccount,watchMarket,clearError:()=>setError(null)};
 }

@@ -27,7 +27,7 @@ The page shows only what's needed to run the bot:
 - **Search box:** live and upcoming college games.
 - **Bot card:**
   - **Steady / Bold / Auto**, balance, and **Reset balance** ($5–$10,000, any time; open paper trades are dropped).
-  - **Start / Pause / Resume / End run / New run**.
+  - **Start / Pause / Resume / End run / New run**. After a loss-limit stop, **Acknowledge loss and resume** keeps the same run, balance and history, with the original dollar loss allowance for the next period.
   - A plain-English **status box** with a **Both sides** line per team.
   - **Open orders & shares:** every resting offer and holding, across the main game and the Octopus's arms.
 - **Game tracker:** score, clock and field drawing from Polymarket game reports.
@@ -109,5 +109,5 @@ Claude is an optional chat adviser for the owner. It makes no automatic decision
 - **Free-plan limits:**
   - Each request gets 10 ms of CPU, and requests over it return a plain 503. The site avoids re-parsing large runner state to stay under it.
   - D1 allows 100,000 rows written a day. Game-list caching was cut about 20×.
-  - Durable Objects also have a daily write allowance. The runner checks every 10 s before kickoff and every 2.5 s live, and pauses new entries at 90,000 rows a day.
+  - Durable Objects also have a daily write allowance. The runner checks every 10 s before kickoff and every 2.5 s live, and pauses new entries at 1,000,000 rows a day (Workers Paid includes 50 million a month).
   - The Workers Paid plan ($5/month) removes these as practical concerns.

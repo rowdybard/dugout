@@ -4,14 +4,14 @@ export type FreshEventReceipt={requestedAt:number;receivedAt:number;cacheStatus:
 type Dependencies={fetcher?:(url:string,init:RequestInit)=>Promise<Response>;now?:()=>number;nonce?:()=>string};
 const MAX_BYTES=1_000_000;
 
-/** One compact public event request, inside the existing source budget/backoff. No retries. */
-export async function fetchFreshFootballEvent(eventId:string,signal?:AbortSignal,dependencies:Dependencies={}){
-  if(!/^[1-9]\d{0,19}$/.test(eventId))throw new Error('Choose a verified numeric football event ID.');
+/** One compact public winner-event request, inside the existing source budget/backoff. No retries. */
+async function fetchFreshWinnerEvent(eventId:string,winnerType:'football_team_full_game_winner'|'tennis_match_winner',sport:'football'|'tennis',signal?:AbortSignal,dependencies:Dependencies={}){
+  if(!/^[1-9]\d{0,19}$/.test(eventId))throw new Error(`Choose a verified numeric ${sport} event ID.`);
   const fetcher=dependencies.fetcher??fetch,now=dependencies.now??Date.now;
   const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(3000)]):AbortSignal.timeout(3000);
   requestSignal.throwIfAborted();
   const nonce=(dependencies.nonce??(()=>crypto.randomUUID()))();
-  const url=`https://gateway.polymarket.us/v1/events?id=${encodeURIComponent(eventId)}&sportsMarketTypes=football_team_full_game_winner&dugout_read=${encodeURIComponent(nonce)}`;
+  const url=`https://gateway.polymarket.us/v1/events?id=${encodeURIComponent(eventId)}&sportsMarketTypes=${winnerType}&dugout_read=${encodeURIComponent(nonce)}`;
   const requestedAt=now();
   const response=await fetcher(url,{cache:'no-store',signal:requestSignal});
   if(!response.ok){
@@ -46,4 +46,11 @@ export async function fetchFreshFootballEvent(eventId:string,signal?:AbortSignal
   if(!Number.isFinite(requestedAt)||!Number.isFinite(receivedAt)||receivedAt<requestedAt)throw new Error('The game-report receipt time could not be verified.');
   const receipt:FreshEventReceipt={requestedAt,receivedAt,cacheStatus,cacheAgeSeconds:age===null?null:0};
   return {data:JSON.parse(text) as unknown,receipt};
+}
+
+export function fetchFreshFootballEvent(eventId:string,signal?:AbortSignal,dependencies:Dependencies={}){
+  return fetchFreshWinnerEvent(eventId,'football_team_full_game_winner','football',signal,dependencies);
+}
+export function fetchFreshTennisEvent(eventId:string,signal?:AbortSignal,dependencies:Dependencies={}){
+  return fetchFreshWinnerEvent(eventId,'tennis_match_winner','tennis',signal,dependencies);
 }

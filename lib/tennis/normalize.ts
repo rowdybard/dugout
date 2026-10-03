@@ -2,6 +2,7 @@ import type {Book} from '../market/types';
 import type {ExecutionMarket} from '../trading/types';
 import type {BaseballContext,FootballContext,TennisLeague,TennisMarket} from './types';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
+import {tennisPlayerIdentity,tennisScoreboardState} from './scoreboard.ts';
 
 /** Only fields verified against the Polymarket US retail schema are consumed. */
 type Raw=Record<string,unknown>;
@@ -84,6 +85,8 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
   const event=object(raw),eventId=typeof event.id==='number'?String(event.id):string(event.id),eventSlug=string(event.slug);
   if(!eventId||!eventSlug||!Number.isFinite(observedAt)||event.hidden===true||event.archived===true)return [];
   const state=object(event.eventState),tennis=object(state.tennisState),football=isFootball(league),team=isTeamLeague(league),baseball=league==='MLB';
+  const tennisTour=league==='ATP'||league==='WTA';
+  if(tennisTour&&string(state.type)&&state.type!=='tennis')return [];
   if(football&&string(state.type)&&state.type!=='football')return [];
   if(baseball&&string(state.type)&&state.type!=='baseball')return [];
   const tournament=string(tennis.tournamentName)||null;
@@ -102,14 +105,17 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
     if(team&&sides.some(side=>!object(side.team).id||String(side.teamId)!==String(object(side.team).id)||string(object(side.team).league).toUpperCase()!==league))continue;
     if(team&&String(object(yes[0].team).id)===String(object(no[0].team).id))continue;
     const startTime=string(event.startTime)||string(market.gameStartTime),start=timestamp(startTime);
-    const period=string(event.period)||string(state.period)||null;
-    const live=event.live===true&&state.live!==false,ended=event.ended===true||state.ended===true||event.closed===true||(football&&/^(FT|FINAL|ENDED)$/i.test(period??''));
+    // Tennis set/point scores, server and report timestamp belong to the same eventState snapshot.
+    const period=(tennisTour?string(state.period)||string(event.period):string(event.period)||string(state.period))||null;
+    const phaseLive=tennisTour&&typeof state.live==='boolean'?state.live:event.live;
+    const live=tennisTour?phaseLive===true:event.live===true&&state.live!==false;
+    const ended=(tennisTour&&typeof state.ended==='boolean'?state.ended:event.ended===true||state.ended===true)||event.closed===true||(football&&/^(FT|FINAL|ENDED)$/i.test(period??''));
     const interrupted=/sus|delay|postpon|cancel|retir|walkover|abandon|interrupt/i.test(period??'');
     const execution=normalizeTennisExecution(market,league);
     // Pregame events carry no live flag, only period "NS" (not started): verified for MLB on Sep 27, 2026 and for
     // college football on Oct 2, 2026. Live play still needs an explicit live flag, so an unclear state is never tradable.
-    const pregameScheduled=event.live!==true&&/^NS$/i.test(period??'')&&start!==null&&start>observedAt;
-    const validPhase=!ended&&!interrupted&&(live||(event.live===false&&start!==null&&start>observedAt)||pregameScheduled);
+    const pregameScheduled=phaseLive!==true&&/^NS$/i.test(period??'')&&start!==null&&start>observedAt;
+    const validPhase=!ended&&!interrupted&&(live||(phaseLive===false&&start!==null&&start>observedAt)||pregameScheduled);
     const active=event.active===true&&execution?.active===true&&validPhase;
     const bid=price(market.bestBidQuote),ask=price(market.bestAskQuote);
     const unavailableReason=!execution?'Exchange fee or order-size rules are missing.'
@@ -117,10 +123,12 @@ export function normalizeTennisEvent(raw:unknown,league:TennisLeague,observedAt:
       :interrupted?'Match is suspended or interrupted. New entries are blocked.'
       :!validPhase?'Match live status is unconfirmed. New entries are blocked.'
       :!execution.active||event.active!==true?'Market is not accepting new trades.':undefined;
+    const tennisIdentity=!team?tennisPlayerIdentity(yes[0],no[0]):null;
     result.push({slug,eventId,eventSlug,title:string(event.title)||`${yesName} vs ${noName}`,league,
-      yesName,noName,startTime,live,ended,score:string(event.score)||string(state.score)||null,period,tournament,
+      yesName,noName,startTime,live,ended,score:(tennisTour?string(state.score)||string(event.score):string(event.score)||string(state.score))||null,period,tournament,
       ...(football?{clock:string(state.elapsed)||null,football:footballContext(state.footballState,sides),footballIdentity:{yesTeamId:String(object(yes[0].team).id),noTeamId:String(object(no[0].team).id)}}:{}),
       ...(baseball&&live?{baseball:baseballContext(period,state.baseballState)}:{}),
+      ...(tennisIdentity?{tennisIdentity,tennis:tennisScoreboardState(state,yes[0],no[0])}:{}),
       ...(team?{yesOrdering:orderingOf(object(yes[0].team).ordering,object(no[0].team).ordering)}:{}),
       active,bid,ask,price:bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null,
       observedAt,quoteObservedAt:observedAt,quoteSource:'CATALOG',contextUpdatedAt:timestamp(state.updatedAt),history:[],execution,unavailableReason});

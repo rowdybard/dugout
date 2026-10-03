@@ -122,7 +122,7 @@ Finally, sign in to the new site and press the background setup button (Settings
 **6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. With `DUGOUT_RUNNER_USERS=*` and `RUNNER_OWNERS:*`, each person presses the background setup button once (Settings & history) and their bot keeps running with the tab closed, in their own runner instance: nobody can see or touch another's. Ask Claude and the live price stream stay yours (they use your paid keys); friends' runners check prices over REST. The all-games research sweep runs only in your runner. Cost: each running bot checks every 10 s before kickoff and every 2.5 s once its game is live (or while it holds anything).
 - **Storage:** about 6 rows per check, so very roughly 2,000 rows an hour before kickoff and 8,000 an hour live.
 - **Free plan:**
-  - Each runner pauses new entries at 90,000 rows a day.
+  - Each runner pauses new entries at 1,000,000 rows a day (Workers Paid includes 50 million a month).
   - Each site request gets 10 ms of CPU; over that, a request returns a plain 503.
 - **Paid plan:** the Workers Paid plan ($5/month) is comfortable for a few friends.
 

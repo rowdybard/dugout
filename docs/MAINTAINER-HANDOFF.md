@@ -6,9 +6,9 @@ GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Clou
 
 ## Current product
 
-- **UI:** `app/page.tsx` renders `components/tennis/tennis-dashboard.tsx`. The view shows college football only (`lib/tennis/leagues.ts`, `VISIBLE_LEAGUES`). The engine and data paths still support ATP/WTA, NFL and MLB.
-- **Layout:** game search, the bot card, game tracker, Trades & balance, and a closed Settings & history section.
-  - **Bot card:** Steady/Bold/Auto, the Octopus, balance and reset, Pause/Resume/End run/New run, the status box, Both sides, and Open orders & shares.
+- **UI:** `app/page.tsx` renders `components/tennis/tennis-dashboard.tsx`. Football and Tennis tabs use the same layout. Tennis lists ATP/WTA matches and starts idle; opening either tab never resets the wallet.
+- **Layout:** game search, the bot card, game tracker, Trades & balance, a closed Bot activity section, and closed Settings & history. Trade and decision lists scroll independently and freeze their displayed rows while being read; this never pauses the bot.
+  - **Bot card:** Football has Steady/Bold/Auto and the Octopus; Tennis has Auto/Recovery/Momentum. Focus, Start/Pause/Resume/End run and status belong to the selected bot. The balance, history, Reset balance and Sell everything belong to the shared account.
 - **Hosting:** the site is a Cloudflare Worker behind Cloudflare Access with Google sign-in; [CLOUDFLARE-HOSTING.md](CLOUDFLARE-HOSTING.md) has setup.
   - Each invited email gets its own D1 paper account.
   - Background runners are one SQLite Durable Object per account, allowed by `DUGOUT_RUNNER_USERS` / `RUNNER_OWNERS`.
@@ -17,8 +17,17 @@ GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Clou
   - **Bold:** bigger offers plus hold-to-final bets the evidence allows; after a one-sided fill it pairs, buys once on a 5¢ dip, and has a 10¢ loss limit after that.
   - **Auto:** picks Bold while the research allows a bet on the game and the run is down less than 10%, Steady otherwise (`decideAuto`).
   - **Comeback test:** Bold and Auto paper-trade `comeback-drive@1` (`config.explore`) to measure it.
+  - **Tennis:** new Auto uses `tennisTradeStyle: adaptive-v2`, selecting registered `tennis-recovery@2` or `tennis-momentum@2`. Responsive confirmed signals and later fill checks preserve spread, freshness, evidence and wallet limits. No fixed entry price, profit quote or holding timer applies to v2. `trend-exit.ts` protects fully executable gains after fees with a ratcheting noise buffer and two independent reversal confirmations. The first fill freezes its dollar loss allowance (25% of actual initial cost by default).
+    - One confirmed lower-price addition may merge into that position through `position-averaging.ts`. Actual purchase value/quantity sets the weighted average; fees and remaining cost basis stay separate. The original dollar loss allowance never increases. Total lifetime purchase cost stays within 20% of starting cash, and all shared wallet reservations still count. A partly sold position cannot add again. Added positions can exit early.
+    - New Tennis bots default to 10% of starting cash per bet ($10 on $100), bounded by the existing cap and $1 minimum. Small/Default/Large change saved size explicitly. Saved Auto with absent/classic trade style remains v1 until an explicit Auto rule command; existing positions keep frozen exits. Manual Recovery/Momentum and v1 strategy hashes/replays remain unchanged. These are paper experiments, not established profitable behavior.
   - **Octopus** (experimental, `lib/tennis/octopus.ts`): up to 6 extra games in either mode, pinned or auto-picked every 5 minutes, all offers within 50% of the balance with the main game first, logged as tiny JSONL files.
 - **Paper only:** real money is not connected (`lib/live/README.md`). Connecting it is the owner's decision.
+
+**Shared account:** `lib/tennis/account.ts` coordinates the two bots through one cash balance, ledger and revision stream. Held cost, pending buys and all resting offers across both bots share the 50% spending limit. A loss stop stops entries for both bots; acknowledgement keeps the account/history and grants the original dollar allowance again. Ordinary stopped bots restart without resetting money. Reset balance is the explicit account reset. Untagged historical positions remain managed by the Football compatibility path, including older tennis holdings.
+
+**Football reports:** Polymarket keeps scoreboard, clock, prices, market status and settlement authority. A reviewed ESPN mapping can fill missing drives; see `ARCHITECTURE.md` for timing and identity checks. The tracker retains the last verified scorer and play type through report gaps. A bare score change names the scorer and points without guessing field goal versus another play.
+
+**Tennis scoreboard:** The selected ATP/WTA match refreshes through a read-only score endpoint every five seconds, independently of its prices. Competitor IDs map set scores and serving; point scores require unambiguous ordering against those sets. Ambiguous points remain a raw reported score. A five-second public cache bounds checks, and failed checks retain the last score and its original age. This display does not change strategy inputs, quote timestamps, wallet state or bot controls.
 
 ## Components and authority
 
@@ -26,6 +35,8 @@ GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Clou
 | --- | --- |
 | Dashboard and panels | `components/tennis/` (dashboard, `open-book.tsx`, `octopus-panel.tsx`, `decision-card.tsx`, `use-tennis.ts`) |
 | Session engine, resting orders, pairing/exit, Bold rules | `lib/tennis/engine.ts`, `lib/tennis/maker.ts`, `lib/tennis/modes.ts` |
+| Adaptive Tennis exits and one additional purchase | `lib/tennis/trend-exit.ts`, `lib/tennis/position-averaging.ts` |
+| Shared wallet and independent bot controls | `lib/tennis/account.ts`, `lib/tennis/wallet-risk.ts` |
 | Decision engine, strategies, evidence | `lib/decision/` |
 | Status text, open orders view | `lib/tennis/decision-view.ts`, `lib/tennis/open-book.ts` |
 | Game reports | `lib/tennis/priority-context.ts`, `lib/trading/fresh-event.ts` |
@@ -47,11 +58,11 @@ On October 2–3, 2026 the owner's account and invited accounts ran on Cloudflar
 ## Preserve these constraints
 
 1. **Paper only:** no real orders, automatic AI calls, forced fills or profit promises.
-2. **Gates stay:** live resting orders require a game report under 45 s, and are pulled for 30 s after each play. The engine's evidence verdicts decide what is allowed.
+2. **Gates stay:** Polymarket game reports expire after 45 s; verified ESPN drive reports after 90 s, with matching scoreboard facts and at most 90 s behind Polymarket. Resting offers are pulled after plays. The engine's evidence verdicts decide what is allowed.
 3. **Fail closed:** missing or stale reports block entries, never risk exits. The site refuses everyone without valid Access settings.
 4. **Runner identity:** keep the Durable Object namespace, the runner fences and each account's epoch. Don't reset write counters or restore browser writes for a migrated account.
 5. **No secrets in the repo:** never commit API keys, signing secrets, `.wrangler` state or `.env` files. Secrets go in Cloudflare (type Secret).
-6. **Free-plan limits are real:** 10 ms CPU per site request, 100,000 D1 rows written a day, and the runner's own 90,000-row entry pause. Keep per-poll work small.
+6. **Plan limits:** the account is on Workers Paid (October 2026): Durable Object and D1 writes include 50 million rows a month, then $1 per million. The runner's own guard pauses entries at 1,000,000 rows a day. Keep per-poll work small anyway.
 
 ## Evidence still needed
 

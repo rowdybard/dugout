@@ -9,7 +9,45 @@ import {specSchema,specKey,type StrategySpec} from './spec.ts';
 
 const FOOTBALL_LATENCY='Game reports arrive seconds after the play; books are polled about every 2.5 s; paper fills need a later book after a 1 s delay.';
 
+function tennisSpec(pattern:'recovery'|'momentum'):StrategySpec {
+  return {id:`tennis-${pattern}`,version:'1',title:pattern==='recovery'?'Tennis price drop and confirmed buyer recovery':'Tennis confirmed price and buyer momentum',
+    family:'temporary-mispricing',sports:['ATP','WTA'],phases:['live'],edgeSource:'temporary-mispricing',
+    hypothesis:pattern==='recovery'?'A temporary Tennis price drop followed by recovery in executable buyers continues far enough to cover entry and exit fees.':'A Tennis price rise confirmed by executable buyers continues far enough to cover entry and exit fees.',
+    mechanism:'This tests the existing price-only signal against later executable books. It assumes short-lived mispricing after public match information; no Tennis study has established that the move survives spread, fees or feed delay.',
+    basis:{kind:'speculative',support:[],against:['No ATP or WTA evidence establishes a profit for these rules.','Price moves can reflect new match information, and both taker fees and spread can consume a small move.']},
+    requiredFeatures:['signal.tennis.yes.'+pattern+'.confirmed','signal.tennis.no.'+pattern+'.confirmed','bid','price','quoteAgeMs'],
+    entry:{rule:pattern==='recovery'?'Use the existing rolling-median drop/recovery state machine: a qualifying drop, then midpoint and buyer recovery on independent confirming books. Enter only before fully recovering the baseline, with fee-aware headroom. Auto rounds noise-adjusted thresholds to market ticks. Freeze the selected rules on the delayed intent.'
+      :'Use the existing rolling-median momentum state machine: midpoint and buyers both rise above their baselines on independent confirming books. Auto rounds noise-adjusted thresholds to market ticks. Freeze the selected rules on the delayed intent.',
+      params:{baselineWindowMs:60000,minimumHistoryMs:30000,minSamples:10,declinePoints:3,recoveryPoints:1,momentumPoints:3,recoveryConfirmations:2,momentumConfirmations:2,
+        targetReturn:.03,stopReturn:.08,maxHoldMs:120000,cooldownMs:60000,maxSpreadPoints:2,maxBookAgeMs:5000,executionDelayMs:1000,
+        configurable:true,autoRule:'Recovery=max(1,noise,spread); drop=max(3,3*noise,2*spread,recovery+tick); rise=max(3,3*noise,2*spread); round up to ticks',
+        configurationBounds:'tennisRulesSchema; signalConfig freezes every actual threshold and exit for replay'}},
+    exits:{primary:[{kind:'target',netReturn:.03},{kind:'stop',netReturn:.08},{kind:'time',ms:120000}],alternatives:[{id:'settlement',rules:[{kind:'settlement'}]}]},
+    style:'taker-scalp',maxSpread:.02,latency:{assumedMs:1000,note:'At least a one-second delay and a later authoritative book; entry and exit prices are bounded, with both taker fees included.'},
+    expectedHold:{minMs:1000,maxMs:120000},sizing:'paper-fixed',
+    invalidation:['After the minimum forward sample, return after executable spread, fees and delay is not above zero.','Report ATP and WTA separately and keep actual signal rules and Auto selections with each trade.'],
+    minSample:{trades:150,games:60},research:{status:'specified',result:'Unmeasured Tennis paper experiment; no performance evidence is claimed.'},forward:{status:'paper',note:'Explicit paper exploration only; evidence naming this version replaces the experiment permission.'}};
+}
+
 const RAW:StrategySpec[]=[
+  tennisSpec('recovery'),tennisSpec('momentum'),
+  ...(['recovery','momentum'] as const).map(pattern=>{
+    const prior=tennisSpec(pattern);
+    return {...prior,version:'2',title:`Adaptive Tennis ${pattern} with protected gains`,
+      hypothesis:'A smaller independently confirmed Tennis price move can continue beyond a short scalp; a quote-noise trailing exit may preserve gains after spread and fees.',
+      mechanism:'Observed buyer prices define entries and trailing reversals, without forecasting fair value or match results. Profits may continue until explicit settlement. One confirmed lower-price addition is permitted only inside the original dollar loss allowance; it never enlarges that allowance.',
+      requiredFeatures:[...prior.requiredFeatures,`signal.tennis.yes.${pattern}.strategyVersion`,`signal.tennis.no.${pattern}.strategyVersion`,`signal.tennis.yes.${pattern}.executionDelayMs`,`signal.tennis.no.${pattern}.executionDelayMs`,`signal.tennis.yes.${pattern}.tickSize`,`signal.tennis.no.${pattern}.tickSize`],
+      entry:{rule:`Use a rolling-median ${pattern==='recovery'?'drop followed by midpoint and buyer recovery before fully recovering its baseline':'midpoint and buyer rise above their baselines'} on two independent confirming books. Adaptive thresholds round quote noise and spread to market ticks; freeze the selected rules for a later executable fill. No fixed entry ceiling, target price, prior-baseline profit forecast or holding timer. Freeze the original dollar loss allowance at the first actual fill.`,
+        params:{baselineWindowMs:60000,minimumHistoryMs:30000,minSamples:10,recoveryConfirmations:2,momentumConfirmations:2,
+          stopReturn:.25,maxSpreadPoints:2,maxBookAgeMs:5000,executionDelayMs:1000,
+          autoRule:'Recovery=max(1,noise,spread); drop=max(2,2*noise,1.5*spread,recovery+tick); rise=max(2,2*noise,1.5*spread); round up to ticks',
+          trailingNoiseMultiplier:2,trailingMinimumTicks:2,trailingConfirmations:2,maxConfirmationGapMs:30000,lossBasis:'initial actual all-in cost; fixed after adding',
+          averagingBuys:1,averagingDrop:'max(2*tick,2*noise,2*spread)',averagingRecovery:'max(tick,noise,spread)',averagingConfirmations:2,averagingWindowMs:60000,totalPositionBankrollCap:.2,
+          configurable:true,configurationBounds:'tennisRulesSchema; frozen signalConfig and initial dollar loss allowance; shared wallet caps'}},
+      exits:{primary:[{kind:'initial-loss' as const,fraction:.25},{kind:'noise-trailing' as const,noiseMultiplier:2,minimumTicks:2,confirmations:2},{kind:'settlement' as const}],alternatives:[]},
+      style:'taker-hold' as const,expectedHold:'settlement' as const,
+      invalidation:[...prior.invalidation,'Report additions and actual signal/exit rules separately; dynamic exit counterfactuals are not yet modeled.'],supersedes:`tennis-${pattern}@1`};
+  }),
   {id:'favourite-hold',version:'1',title:'Pregame favourite, held to the final',family:'favourite-longshot',sports:['CFB','NFL','MLB'],phases:['pregame'],
     hypothesis:'Bettors overpay for longshots and underpay for favourites (the favourite-longshot bias), so buying the favourite at the pregame close and holding it earns more than fees in markets where the bias is strong.',
     mechanism:'Misperception of small probabilities (Snowberg & Wolfers 2010). The bias should be strongest where casual money dominates and weakest where books are sharp: expected in college football, not in NFL or MLB pregame (both match sportsbook closes internally). False if the forward test\'s interval is not above zero.',

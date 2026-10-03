@@ -1,6 +1,7 @@
 'use client';
 
-import {useSyncExternalStore} from 'react';
+import {useState,useSyncExternalStore} from 'react';
+import type {BotId} from '@/lib/tennis/types';
 import {TennisDashboard} from './tennis-dashboard';
 
 const subscribe=()=>()=>{};
@@ -11,5 +12,6 @@ const subscribe=()=>()=>{};
  */
 export function DashboardShell(){
   const inBrowser=useSyncExternalStore(subscribe,()=>true,()=>false);
-  return inBrowser?<TennisDashboard/>:<div className="tennis-app"><p style={{padding:'48px 16px',textAlign:'center',color:'#979da6'}}>Loading Dugout…</p></div>;
+  const [botId,setBotId]=useState<BotId>('football');
+  return inBrowser?<TennisDashboard key={botId} botId={botId} onBotChange={setBotId}/>:<div className="tennis-app"><p style={{padding:'48px 16px',textAlign:'center',color:'#979da6'}}>Loading Dugout…</p></div>;
 }

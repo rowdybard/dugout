@@ -1,13 +1,14 @@
 import type {TennisMarket,TennisPosition,TennisSession} from './types';
 import {BOLD_STOP,BOLD_TAKE_PROFIT,PAIR_WINDOW_MS} from './maker.ts';
 import {tradeMode} from './modes.ts';
+import {purchaseAverageWithFees} from './position-average.ts';
 
 /**
  * Everything the bot has working right now, in one list: resting buy offers (main game and Chaos games), a queued
  * order, and the shares it holds. Names come from the live game list when available, else from the saved market.
  */
-export type OpenOrder={key:string;slug:string;game:string;team:string;side:'YES'|'NO';kind:'offer'|'queued-buy'|'queued-sell';price:number;quantity:number|null;reserved:number|null};
-export type Holding={key:string;slug:string;game:string;team:string;side:'YES'|'NO';quantity:number;averagePrice:number;cost:number;value:number|null;result:number|null;
+export type OpenOrder={key:string;slug:string;game:string;team:string;side:'YES'|'NO';kind:'offer'|'queued-buy'|'queued-add'|'queued-sell';price:number;quantity:number|null;reserved:number|null};
+export type Holding={key:string;slug:string;game:string;team:string;side:'YES'|'NO';quantity:number;averagePrice:number;averageWithFees:number|null;cost:number;value:number|null;result:number|null;
   policy:'offer fill'|'hold to final'|'drive'|'managed';partial:boolean;
   /** How current the value is (priceOf), and a plain note when it isn't current. */
   price:PriceState;priceNote:string|null;
@@ -66,8 +67,11 @@ export function openBook(session:TennisSession,markets:TennisMarket[],now:number
     orders.push({key:`offer:${maker.slug}:${side}`,slug:maker.slug,game:game(maker.slug),team:team(maker.slug,side),side,kind:'offer',price:quote.price,quantity:quote.quantity,reserved:exact(quote.price*quote.quantity)});
   }
   const pending=session.pending;
-  if(pending)orders.push({key:`queued:${pending.id}`,slug:pending.slug,game:game(pending.slug),team:team(pending.slug,pending.side),side:pending.side,
-    kind:pending.action==='BUY'?'queued-buy':'queued-sell',price:pending.limitPrice,quantity:null,reserved:pending.action==='BUY'?pending.budget??null:null});
+  if(pending){
+    const adding=pending.action==='BUY'&&pending.tennisAdd===true&&!!pending.positionId&&session.positions.some(p=>p.status==='open'&&p.id===pending.positionId&&p.slug===pending.slug&&p.side===pending.side);
+    orders.push({key:`queued:${pending.id}`,slug:pending.slug,game:game(pending.slug),team:team(pending.slug,pending.side),side:pending.side,
+      kind:pending.action==='BUY'?adding?'queued-add':'queued-buy':'queued-sell',price:pending.limitPrice,quantity:null,reserved:pending.action==='BUY'?pending.budget??null:null});
+  }
   const makerQty=(slug:string,side:'YES'|'NO')=>session.positions.filter(p=>p.status==='open'&&p.exitPolicy==='maker'&&p.slug===slug&&p.side===side).reduce((sum,p)=>sum+p.quantity,0);
   const holdings:Holding[]=session.positions.filter(p=>p.status==='open').map(p=>{
     const mine=p.exitPolicy==='maker'?makerQty(p.slug,p.side):0,theirs=p.exitPolicy==='maker'?makerQty(p.slug,p.side==='YES'?'NO':'YES'):0;
@@ -75,7 +79,7 @@ export function openBook(session:TennisSession,markets:TennisMarket[],now:number
     const price=priceOf(p,now),marked=price.value!==null;
     // A partly priced holding is compared with the cost of the shares that are priced.
     const pricedCost=p.quantity>0?p.costBasis*price.pricedQuantity/p.quantity:0;
-    return {key:p.id,slug:p.slug,game:game(p.slug),team:team(p.slug,p.side)||p.name,side:p.side,quantity:p.quantity,averagePrice:p.entryPrice,cost:p.costBasis,
+    return {key:p.id,slug:p.slug,game:game(p.slug),team:team(p.slug,p.side)||p.name,side:p.side,quantity:p.quantity,averagePrice:p.entryPrice,averageWithFees:purchaseAverageWithFees(p),cost:p.costBasis,
       value:price.value,result:marked?exact(price.value!-pricedCost):null,price:price.state,priceNote:priceNote(price,p.quantity),
       policy:p.exitPolicy==='maker'?'offer fill':p.exitPolicy==='hold-to-settlement'?'hold to final':p.exitPolicy==='drive'?'drive':'managed',
       partial:price.state==='partial',sellBy:unpairedSide&&tradeMode(session)==='steady'?p.openedAt+PAIR_WINDOW_MS:null,paired,boldHold:unpairedSide&&tradeMode(session)==='bold',

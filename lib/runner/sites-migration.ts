@@ -1,4 +1,4 @@
-import {applyTennisAction} from '../tennis/engine.ts';
+import {accountBotIds,accountBotView,applyAccountAction} from '../tennis/account.ts';
 import {normalizeTennisConfig} from '../tennis/rules.ts';
 import {toUnits} from '../trading/money.ts';
 import {polymarketSecrets} from '../trading/credentials.ts';
@@ -7,7 +7,7 @@ import {boundedBody,RunnerError,sha256} from './protocol.ts';
 import {requireRunnerOrigin,requireSitesOwner,runnerConfiguration,runnerRequest} from './sites-proxy.ts';
 import type {RunnerBindings,RunnerDatabase} from './sites-proxy';
 import type {MigrationData,MigrationManifest,RunnerJournalRow,RunnerObservation,RunnerState} from './contracts';
-import type {TennisSession} from '../tennis/types';
+import type {TennisAction,TennisSession} from '../tennis/types';
 
 export const MIGRATION_CHUNK_TARGET=128*1024;
 export const MIGRATION_CHUNK_MAX=240000;
@@ -29,7 +29,7 @@ export async function readMigration(database:RunnerDatabase,owner:string):Promis
   return database.prepare('SELECT * FROM tennis_runner_owners WHERE owner_id=?').bind(owner).first<MigrationOwner>();
 }
 export function reconcileMigrationSession(session:TennisSession):void{
-  if(session.mode!=='paper'||!Array.isArray(session.positions)||!Array.isArray(session.ledger)||session.pending||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Let the open paper position and pending order finish before moving history.');
+  if(session.mode!=='paper'||!Array.isArray(session.positions)||!Array.isArray(session.ledger)||session.pending||session.bots?.tennis?.pending||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Let both bots finish open paper positions and pending orders before moving history.');
   const expected=session.ledger.reduce((sum,row)=>sum+toUnits(row.cashDelta),toUnits(session.config.startingCash));
   if(expected!==toUnits(session.cash)||session.cash<0||new Set(session.ledger.map(row=>row.id)).size!==session.ledger.length)throw new RunnerError(409,'The saved paper ledger does not reconcile. History has not moved.');
 }
@@ -85,11 +85,14 @@ export async function prepareMigration(database:RunnerDatabase,owner:string,env:
   const original=JSON.parse(source.value) as TennisSession;
   const session={...original,revision:source.revision,config:normalizeTennisConfig(original.config)};
   reconcileMigrationSession(session);
-  if(session.status==='stopping')throw new RunnerError(409,'Let the saved stop command finish before moving history.');
-  const migrationId=crypto.randomUUID(),epoch=crypto.randomUUID(),commandId=crypto.randomUUID();
-  const action={action:'pause' as const,sessionId:session.id,commandId};
-  const paused=session.status==='running'?applyTennisAction(session,action,[],Math.max(now,session.lastTickAt)):session;
-  if(paused.status==='running')throw new RunnerError(409,'The paper session could not be paused.');
+  if(accountBotIds(session).some(botId=>accountBotView(session,botId).status==='stopping'))throw new RunnerError(409,'Let the saved stop commands finish before moving history.');
+  const migrationId=crypto.randomUUID(),epoch=crypto.randomUUID(),actions:TennisAction[]=[];
+  let paused=session;
+  for(const botId of accountBotIds(session))if(accountBotView(session,botId).status==='running'){
+    const action:TennisAction={action:'pause',...(session.bots?{botId}:{}),sessionId:session.id,commandId:crypto.randomUUID()};
+    paused=applyAccountAction(paused,action,[],Math.max(now,paused.lastTickAt));actions.push(action);
+  }
+  if(accountBotIds(paused).some(botId=>accountBotView(paused,botId).status==='running'))throw new RunnerError(409,'The paper bots could not be paused.');
   reconcileMigrationSession(paused);
   const snapshot=JSON.stringify(paused);
   // Leaves room for the complete chunk manifest inside the 1 MB signed envelope.
@@ -99,8 +102,8 @@ export async function prepareMigration(database:RunnerDatabase,owner:string,env:
   const statements:D1PreparedStatement[]=[];
   if(paused!==session){
     statements.push(database.prepare('UPDATE tennis_sessions SET value=?,revision=? WHERE owner_id=? AND revision=? AND value=? AND NOT EXISTS(SELECT 1 FROM tennis_runner_owners WHERE owner_id=?)').bind(snapshot,paused.revision,owner,source.revision,source.value,owner));
-    statements.push(database.prepare("INSERT INTO tennis_journal(id,owner_id,session_id,kind,value,created_at) SELECT ?,?,?, 'control',?,? FROM tennis_sessions WHERE owner_id=? AND revision=? AND value=? AND NOT EXISTS(SELECT 1 FROM tennis_runner_owners WHERE owner_id=?)")
-      .bind(`${owner}:command:${commandId}`,owner,session.id,JSON.stringify({fingerprint:JSON.stringify(action),action,sessionId:session.id}),now,owner,paused.revision,snapshot,owner));
+    for(const action of actions)statements.push(database.prepare("INSERT INTO tennis_journal(id,owner_id,session_id,kind,value,created_at) SELECT ?,?,?, 'control',?,? FROM tennis_sessions WHERE owner_id=? AND revision=? AND value=? AND NOT EXISTS(SELECT 1 FROM tennis_runner_owners WHERE owner_id=?)")
+      .bind(`${owner}:command:${action.commandId}`,owner,session.id,JSON.stringify({fingerprint:JSON.stringify(action),action,sessionId:session.id}),now,owner,paused.revision,snapshot,owner));
   }
   const expectedValue=paused===session?source.value:snapshot;
   statements.push(database.prepare(`INSERT INTO tennis_runner_owners(owner_id,mode,epoch,migration_id,source_session_id,source_revision,original_snapshot,snapshot,journal_through,journal_total,phase,created_at,updated_at)
@@ -215,6 +218,10 @@ export async function activateMigration(database:RunnerDatabase,owner:string,env
   const expected=JSON.parse(row.snapshot) as TennisSession;
   const expectedStatus=expected.status==='stopped'?'stopped':'paused';
   if(active.runner?.epoch!==row.epoch||active.session?.id!==row.source_session_id||active.session.status!==expectedStatus||active.session.pending||active.session.positions.some(p=>p.status==='open')||toUnits(active.session.cash)!==toUnits(expected.cash)||JSON.stringify(active.session.ledger)!==JSON.stringify(expected.ledger))throw new RunnerError(409,'The activated account does not match its verified inactive snapshot. Browser trading remains fenced.');
+  if(expected.bots?.tennis){
+    const tennis=active.session.bots?.tennis;
+    if(!tennis||tennis.pending||tennis.status!==(expected.bots.tennis.status==='stopped'?'stopped':'paused')||JSON.stringify(tennis.config)!==JSON.stringify(expected.bots.tennis.config))throw new RunnerError(409,'The activated Tennis bot does not match its verified inactive snapshot.');
+  }
   return checkpoint(database,row,[],[],{mode:'active',phase:'active'},now());
 }
 export async function handleRunnerMigration(request:Request,database:RunnerDatabase,env:RunnerBindings):Promise<Response>{

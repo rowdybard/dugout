@@ -33,7 +33,7 @@ These are only saved when they change, or once a minute:
 - copies of the watched games;
 - the write counter itself.
 
-Before kickoff, with nothing held or pending, the runner checks every 10 s; once a watched game is live, or anything is held or pending, every 2.5 s. New entries pause at 90,000 rows a day (the Free plan allows 100,000).
+Before kickoff, with nothing held or pending, the runner checks every 10 s; once a watched game is live, or anything is held or pending, every 2.5 s. New entries pause at 1,000,000 rows a day (Workers Paid includes 50 million rows a month, then $1 per million).
 
 **Deploy from GitHub (Cloudflare Workers Builds).** Connect the `dugout-paper-runner` Worker to the repo and use these settings. Every push to `main` then redeploys the runner, so it stays in step with the site.
 - **Root directory:** the repo root.
@@ -105,7 +105,7 @@ Reports and connection setup run alongside books using platform `waitUntil`. Hel
 
 Confirmed final context is returned separately when a final book is unavailable, so a completed game still records an automatic pause. That lifecycle cause and verified context are preserved in the control/replay journal. Existing exits continue. Starting/resuming without an explicit duration clears the old browser observation window, with that transition recorded in the replay frame; the service then runs until the focused game ends, a user pauses/stops it, or a safety limit pauses entries.
 
-SQL cursor row-write counts and alarm writes feed a persisted UTC-day count (saved at most once a minute). At 90,000 rows, new entries pause while existing exits remain managed. Start/resume cannot bypass that pause. This is an account-local estimate, not a hard guarantee against Cloudflare account-wide limits; other Workers, reads, duration and other quotas still apply. No billing plan upgrade occurs automatically.
+SQL cursor row-write counts and alarm writes feed a persisted UTC-day count (saved at most once a minute). At 1,000,000 rows, new entries pause while existing exits remain managed. Start/resume cannot bypass that pause. This is an account-local estimate, not a hard guarantee against Cloudflare account-wide limits; other Workers, reads, duration and other quotas still apply. No billing plan upgrade occurs automatically.
 
 Every committed action and tick—including no-input ticks—records exact inputs by content hash, engine/build identity, timestamp, source failures and before/after state hashes in the same transaction as session and journal changes. Reset IDs are captured as replay entropy. `lib/runner/replay.ts` reproduces frames from the initial migration checkpoint. Older imported histories retain their original evidence limitations and are not presented as exact whole-strategy replay.
 
