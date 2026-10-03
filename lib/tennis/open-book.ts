@@ -1,4 +1,5 @@
 import type {TennisMarket,TennisSession} from './types';
+import {PAIR_WINDOW_MS} from './maker.ts';
 
 /**
  * Everything the bot has working right now, in one list: resting buy offers (main game and Chaos games), a queued
@@ -6,7 +7,9 @@ import type {TennisMarket,TennisSession} from './types';
  */
 export type OpenOrder={key:string;slug:string;game:string;team:string;side:'YES'|'NO';kind:'offer'|'queued-buy'|'queued-sell';price:number;quantity:number|null;reserved:number|null};
 export type Holding={key:string;slug:string;game:string;team:string;side:'YES'|'NO';quantity:number;averagePrice:number;cost:number;value:number|null;result:number|null;
-  policy:'offer fill'|'hold to final'|'drive'|'managed';partial:boolean};
+  policy:'offer fill'|'hold to final'|'drive'|'managed';partial:boolean;
+  /** Offer-fill shares with no matching fill on the other team: sold at the best bid at this time if still unpaired. */
+  sellBy:number|null;paired:boolean};
 
 const exact=(x:number)=>Math.round(x*1e6)/1e6;
 
@@ -23,12 +26,15 @@ export function openBook(session:TennisSession,markets:TennisMarket[],now:number
   const pending=session.pending;
   if(pending)orders.push({key:`queued:${pending.id}`,slug:pending.slug,game:game(pending.slug),team:team(pending.slug,pending.side),side:pending.side,
     kind:pending.action==='BUY'?'queued-buy':'queued-sell',price:pending.limitPrice,quantity:null,reserved:pending.action==='BUY'?pending.budget??null:null});
+  const makerQty=(slug:string,side:'YES'|'NO')=>session.positions.filter(p=>p.status==='open'&&p.exitPolicy==='maker'&&p.slug===slug&&p.side===side).reduce((sum,p)=>sum+p.quantity,0);
   const holdings:Holding[]=session.positions.filter(p=>p.status==='open').map(p=>{
+    const mine=p.exitPolicy==='maker'?makerQty(p.slug,p.side):0,theirs=p.exitPolicy==='maker'?makerQty(p.slug,p.side==='YES'?'NO':'YES'):0;
+    const paired=p.exitPolicy==='maker'&&theirs>0&&mine<=theirs+1e-9,unpairedSide=p.exitPolicy==='maker'&&mine>theirs+1e-9;
     const marked=p.netLiquidationValue!==null&&!!p.markedAt&&now-p.markedAt<=15_000;
     return {key:p.id,slug:p.slug,game:game(p.slug),team:team(p.slug,p.side)||p.name,side:p.side,quantity:p.quantity,averagePrice:p.entryPrice,cost:p.costBasis,
       value:marked?p.netLiquidationValue:null,result:marked?exact(p.netLiquidationValue!-p.costBasis):null,
       policy:p.exitPolicy==='maker'?'offer fill':p.exitPolicy==='hold-to-settlement'?'hold to final':p.exitPolicy==='drive'?'drive':'managed',
-      partial:marked&&p.liquidationQuantity+1e-7<p.quantity};
+      partial:marked&&p.liquidationQuantity+1e-7<p.quantity,sellBy:unpairedSide?p.openedAt+PAIR_WINDOW_MS:null,paired};
   });
   return {orders,holdings,reserved:exact(orders.reduce((sum,o)=>sum+(o.reserved??0),0)),held:exact(holdings.reduce((sum,h)=>sum+h.cost,0))};
 }

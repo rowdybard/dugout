@@ -60,8 +60,10 @@ test('pregame CFB: two-sided quotes rest at the best bids and fill only when sel
   assert.equal(entry.action,'BUY');assert.equal(entry.side,'YES');assert.equal(entry.execution!.filledQty,8);
   assert.equal(entry.cashDelta,Math.round((makerRebate(.6,8)-8*.6)*1e6)/1e6);
   assert.equal(position.quantity,8);assert.equal(position.status,'open');assert.equal(session.maker!.fills,1);
-  // The quote re-joins the new best bid after the delay; the NO side did not fill (YES bid never reached 61¢).
-  assert.equal(session.maker!.quotes.YES?.price,.59);assert.equal(session.maker!.quotes.NO?.price,.40);
+  // Only YES filled: no more YES is bought, and the NO offer is set to complete the pair for 8 shares. The pair pays
+  // $1, so NO may cost at most 1 − 59.98¢ (paid, after the rebate) − 0.5¢ = 39.5¢, below the 40¢ NO bid here.
+  assert.equal(session.maker!.quotes.YES,undefined);
+  assert.deepEqual({price:session.maker!.quotes.NO?.price,quantity:session.maker!.quotes.NO?.quantity},{price:.395,quantity:8});
   assert.equal(session.positions.filter(p=>p.exitPolicy==='maker').length,1);
   assertReconciles(session);
 });
@@ -142,4 +144,31 @@ test('market making replays exactly',()=>{
     return session;
   };
   assert.equal(JSON.stringify(run()),JSON.stringify(run()));
+});
+
+test('one-sided fill: the pair completes when the other side fills, and both are kept to the final',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  session=step(session,T0+7000,{bid:.60,ask:.61});            // NO pairing offer at 39.5¢ goes live
+  session=step(session,T0+9000,{bid:.605,ask:.615});          // YES buyers reach 60.5¢ = 1 − 39.5¢: NO fills
+  const yes=session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!,no=session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='NO')!;
+  assert.equal(no.quantity,8);assert.equal(yes.quantity,8);
+  assert.ok(yes.costBasis+no.costBasis<8,'the pair cost less than the $8 it pays at the end');
+  // Paired: ten minutes later nothing is sold.
+  session=step(session,T0+5000+11*60_000,{bid:.60,ask:.61});
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
+  assertReconciles(session);
+});
+
+test('one-sided fill: with no pair within 10 minutes the unpaired shares are sold at the best bid',()=>{
+  let session=step(started(),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  session=step(session,T0+5000+9*60_000,{bid:.59,ask:.60});   // 9 minutes: still held
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
+  session=step(session,T0+5000+10*60_000+1000,{bid:.58,ask:.59});
+  const sale=session.ledger.find(e=>e.action==='SELL')!;
+  assert.ok(sale,'sold after 10 minutes');assert.equal(sale.side,'YES');assert.equal(sale.execution!.filledQty,8);
+  assert.match(sale.reason,/unpaired/);
+  assert.equal(session.positions.filter(p=>p.status==='open').length,0);
+  assertReconciles(session);
 });

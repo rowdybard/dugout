@@ -24,7 +24,7 @@ import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
-import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -396,35 +396,63 @@ function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeS
 }
 
 /** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
+/**
+ * One-sided fills (lib/tennis/maker.ts strategy, chosen 2026-10-03): when only one team's offer fills, the bot stops
+ * buying that team, raises its offer on the other team (the pair pays $1 at the end, so the pair may cost at most
+ * 1 − PAIR_MIN_EDGE), and if no pair forms within PAIR_WINDOW_MS of the first fill it sells the unpaired shares at
+ * the best bid. Nothing is left riding to the final whistle by accident.
+ */
+function unpaired(session: TennisSession, slug: string) {
+  const held = makerPositions(session).filter(p => p.slug === slug);
+  const yes = held.find(p => p.side === 'YES'), no = held.find(p => p.side === 'NO');
+  const quantity = exact((yes?.quantity ?? 0) - (no?.quantity ?? 0));
+  if (Math.abs(quantity) < EPSILON) return null;
+  const position = quantity > 0 ? yes! : no!;
+  return { side: position.side, quantity: Math.abs(quantity), position };
+}
+
+/** Sell maker shares at the best bid (IOC on this book). One sale attempt per book, like every other paper fill. */
+function sellMakerShares(session: TennisSession, input: TennisInput, now: number, position: TennisPosition, quantity: number, why: string) {
+  const quote = quotes(input, position.side);
+  if (quote.bid === undefined) { record(session, now, position.slug, position.side, 'SKIP', 'NO_BUYERS', `No buyers for these shares yet; retrying on later books. (${why})`, input); return; }
+  const command = { ...freshCommand(session, input, position.side, 'SELL', now, quote.bids.at(-1)!.price), commandId: `${position.id}:exit:${now}`, quantity: Math.min(quantity, position.quantity) };
+  const result = simulate(session, input, command, now, position);
+  if (!result.apply || result.filledQty <= 0) { record(session, now, position.slug, position.side, 'SKIP', 'MAKER_EXIT_UNFILLED', `Share sale did not fill. ${result.reason}`, input); return; }
+  const full = Math.abs(result.filledQty - position.quantity) < EPSILON;
+  const allocated = full ? position.costBasis : exact(position.costBasis * result.filledQty / position.quantity);
+  const pnl = exact(result.cashDelta - allocated);
+  session.cash = exact(session.cash + result.cashDelta);
+  position.quantity = full ? 0 : exact(position.quantity - result.filledQty);
+  position.costBasis = full ? 0 : exact(position.costBasis - allocated);
+  position.realizedPnl = exact(position.realizedPnl + pnl);
+  position.proceeds = exact(position.proceeds + result.cashDelta);
+  position.exitFees = exact(position.exitFees + result.fees);
+  position.exitPrice = exact((position.proceeds + position.exitFees) / (position.initialQuantity - position.quantity));
+  position.netLiquidationValue = null; position.liquidationQuantity = 0; position.markedAt = null;
+  if (full) { position.status = 'closed'; position.closedAt = now; }
+  session.ledger.push({ id: command.commandId, time: now, slug: position.slug, side: position.side, action: 'SELL', source: 'AUTOMATIC', positionId: position.id,
+    reason: why, execution: result, cashDelta: result.cashDelta, realizedPnl: pnl,
+    quotedPrice: quote.bid, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt, executionBookTime: input.receivedAt,
+    rulesRevision: session.rulesRevision ?? 0 });
+  record(session, now, position.slug, position.side, 'SELL', result.status.toUpperCase(), `${why} ${result.reason}`, input);
+}
+
+/** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
 function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
   const held = makerPositions(session).filter(p => p.slug === input.market.slug);
   if (!held.length || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
-  // One sale attempt per book, like every other paper fill.
   session.consumedBooks[input.market.slug] = input.receivedAt;
-  for (const position of held) {
-    const quote = quotes(input, position.side);
-    if (quote.bid === undefined) { record(session, now, position.slug, position.side, 'SKIP', 'NO_BUYERS', 'No buyers for market-making inventory yet; retrying on later books.', input); continue; }
-    const command = { ...freshCommand(session, input, position.side, 'SELL', now, quote.bids.at(-1)!.price), commandId: `${position.id}:exit:${now}`, quantity: position.quantity };
-    const result = simulate(session, input, command, now, position);
-    if (!result.apply || result.filledQty <= 0) { record(session, now, position.slug, position.side, 'SKIP', 'MAKER_EXIT_UNFILLED', `Inventory sale did not fill. ${result.reason}`, input); continue; }
-    const full = Math.abs(result.filledQty - position.quantity) < EPSILON;
-    const allocated = full ? position.costBasis : exact(position.costBasis * result.filledQty / position.quantity);
-    const pnl = exact(result.cashDelta - allocated);
-    session.cash = exact(session.cash + result.cashDelta);
-    position.quantity = full ? 0 : exact(position.quantity - result.filledQty);
-    position.costBasis = full ? 0 : exact(position.costBasis - allocated);
-    position.realizedPnl = exact(position.realizedPnl + pnl);
-    position.proceeds = exact(position.proceeds + result.cashDelta);
-    position.exitFees = exact(position.exitFees + result.fees);
-    position.exitPrice = exact((position.proceeds + position.exitFees) / (position.initialQuantity - position.quantity));
-    position.netLiquidationValue = null; position.liquidationQuantity = 0; position.markedAt = null;
-    if (full) { position.status = 'closed'; position.closedAt = now; }
-    session.ledger.push({ id: command.commandId, time: now, slug: position.slug, side: position.side, action: 'SELL', source: 'AUTOMATIC', positionId: position.id,
-      reason: 'Closing market-making inventory because the bot is stopping.', execution: result, cashDelta: result.cashDelta, realizedPnl: pnl,
-      quotedPrice: quote.bid, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt, executionBookTime: input.receivedAt,
-      rulesRevision: session.rulesRevision ?? 0 });
-    record(session, now, position.slug, position.side, 'SELL', result.status.toUpperCase(), `Closing market-making inventory: ${result.reason}`, input);
-  }
+  for (const position of held) sellMakerShares(session, input, now, position, position.quantity, 'Closing market-making inventory because the bot is stopping.');
+}
+
+/** No pair within the window: sell only the unpaired shares (a completed pair is kept; it pays $1 at the end). */
+function exitUnpaired(session: TennisSession, input: TennisInput, now: number) {
+  const open = unpaired(session, input.market.slug);
+  if (!open || now - open.position.openedAt < PAIR_WINDOW_MS || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  const minimum = input.market.execution?.minimumTradeQty ?? 0;
+  if (open.quantity + EPSILON < minimum) return;
+  session.consumedBooks[input.market.slug] = input.receivedAt;
+  sellMakerShares(session, input, now, open.position, open.quantity, `No matching ${open.side === 'YES' ? 'NO' : 'YES'} fill within ${PAIR_WINDOW_MS / 60_000} minutes: selling the unpaired shares at the best bid.`);
 }
 
 /** Every tick: settle, match resting quotes against the new book, mark inventory, and withdraw quotes when not allowed. */
@@ -453,6 +481,7 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
     for (const input of current) flattenMaker(session, input, now);
     return;
   }
+  for (const input of current) exitUnpaired(session, input, now);
   if (!state) return;
   if (session.status !== 'running') cancelMakerQuotes(session, 'Entries are paused; existing inventory is held to settlement.', now);
   else if (holding(session) || session.pending) cancelMakerQuotes(session, 'A planned position or order has the account slot.', now);
@@ -515,6 +544,17 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
     if ((inventory?.costBasis ?? 0) >= action.stake * INVENTORY_MULTIPLE - EPSILON) continue;
     const quantity = quoteQuantity(action.stake, action.proposal.price, execution.quantityIncrement, execution.minimumTradeQty);
     if (quantity > 0) targets[side] = { price: action.proposal.price, quantity, stake: action.stake };
+  }
+  // One side filled alone: stop adding to it, and raise the other side's offer to complete the pair.
+  const open = unpaired(session, slug);
+  if (open) {
+    delete targets[open.side];
+    const other: TradeSide = open.side === 'YES' ? 'NO' : 'YES', book = quotes(input, other), tick = execution.priceIncrement;
+    const cap = exact(Math.floor((1 - open.position.entryPrice - PAIR_MIN_EDGE + EPSILON) / tick) * tick);
+    const price = book.ask === undefined ? cap : Math.min(cap, exact(book.ask - tick));
+    const quantity = exact(Math.floor(open.quantity / execution.quantityIncrement + EPSILON) * execution.quantityIncrement);
+    if (price > 0 && price < 1 && quantity + EPSILON >= execution.minimumTradeQty) targets[other] = { price, quantity, stake: exact(price * quantity) };
+    else delete targets[other];
   }
   // Both resting buys must be payable at once.
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);

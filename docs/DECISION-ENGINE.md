@@ -108,6 +108,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **Fills are conservative:** a quote fills only when the price trades through it.
     - **Rebates:** the rebate is credited on every fill, rounded to the cent like the exchange's.
     - **Limits:** inventory is capped at twice the stake per side, and both quotes' cash is reserved.
+    - **One-sided fills (pair or exit):** if only one team's offer fills, the bot stops buying that team and raises its offer on the other team to complete the pair. A pair pays $1 at the end, so the completing price keeps the pair's cost at most 99.5¢. If no pair forms within 10 minutes of the first fill, it sells the unpaired shares at the best bid. A completed pair is kept to the final.
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.

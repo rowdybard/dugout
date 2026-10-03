@@ -18,6 +18,10 @@ export const MAKER_REBATE_COEFFICIENT=0.0125;
 export const MAX_QUOTE_SPREAD=0.05;
 /** Stop adding to one side once its inventory cost reaches this multiple of the quote stake. */
 export const INVENTORY_MULTIPLE=2;
+/** One-sided fill: how long to wait for the other team's offer to fill before selling the unpaired shares. */
+export const PAIR_WINDOW_MS=10*60_000;
+/** A completing offer keeps the pair's total cost at most 1 − this (a pair pays $1 at the end). */
+export const PAIR_MIN_EDGE=0.005;
 
 export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};
 export type MakerState={
