@@ -70,6 +70,13 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
  * on both teams, rule saves) under the first team, so "latest note for this team" left the second team looking
  * unchecked. Each line comes from that team's own state: what is held, the resting offer, the engine's verdict.
  */
+/** The engine card's plan, offers and reason: only the focused game's (after switching games the last plan is the old game's). */
+export function focusedEngine(session:TennisSession){
+  const focus=session.config.focusSlug;
+  return {plan:session.enginePlan?.slug===focus?session.enginePlan:undefined,maker:session.maker?.slug===focus?session.maker:undefined,
+    why:session.whyNot?.slug===focus?session.whyNot:null,otherGame:!!session.enginePlan&&session.enginePlan.slug!==focus};
+}
+
 export function sideLines(session:TennisSession,focus:string|null|undefined,names:{yesName?:string;noName?:string}|undefined){
   return (['YES','NO'] as const).map(side=>{
     const name=(side==='YES'?names?.yesName:names?.noName)??side;

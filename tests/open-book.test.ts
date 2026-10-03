@@ -21,6 +21,7 @@ test('one list: offers on the main and Chaos games, and held shares with value i
   assert.equal(book.holdings.length,1);
   assert.deepEqual({team:book.holdings[0].team,result:book.holdings[0].result,policy:book.holdings[0].policy},{team:'Gamma',result:0.3,policy:'offer fill'});
   assert.equal(book.held,5.9);
-  // A stale mark is not shown as a value.
-  assert.equal(openBook(session,[],NOW+60_000).holdings[0].value,null);
+  // An old mark still counts (as in the balance), and says how old it is.
+  const old=openBook(session,[],NOW+60_000).holdings[0];
+  assert.equal(old.value,6.2);assert.equal(old.price,'old');assert.equal(old.priceNote,'price 61 s old');
 });

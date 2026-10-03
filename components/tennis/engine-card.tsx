@@ -4,6 +4,7 @@ import {NO_TRADE,type NoTradeCode} from '@/lib/decision/why';
 import {scoreRows} from '@/lib/decision/scorecard';
 import {specOf} from '@/lib/decision/catalog';
 import {sessionTradeRecords} from '@/lib/tennis/research-tracking';
+import {focusedEngine} from '@/lib/tennis/decision-view';
 
 const cents=(value:number)=>`${(value*100).toFixed(value*100%1<.01?0:1)}¢`;
 const money=(value:number)=>`$${value.toFixed(2)}`;
@@ -24,12 +25,12 @@ export function EngineCard({session,market,sweep,now}:{session:TennisSession;mar
 }
 
 function EngineDetails({session,market,sweep,now}:{session:TennisSession;market?:TennisMarket;sweep:SweepSummary|null;now:number}){
-  const plan=session.enginePlan,maker=session.maker;
+  // Only this game's plan, quotes and reason: after switching games the last plan belongs to the old one.
+  const {plan,maker,why,otherGame}=focusedEngine(session);
   const name=(side:'YES'|'NO')=>market?(side==='YES'?market.yesName:market.noName):side;
   const actions=plan?.considered.filter(trade=>trade.result==='ACTION')??[];
   const quotes=maker?(['YES','NO'] as const).flatMap(side=>maker.quotes[side]?[`${name(side)} ${cents(maker.quotes[side]!.price)}`]:[]):[];
-  const why=session.whyNot;
-  const line=!plan?'Waiting for the first plan.':actions.length?actions.map(trade=>`${label(trade.strategy)}: ${name(trade.side)} at ${cents(trade.price)}${trade.code&&CODE[trade.code]?` (${CODE[trade.code]})`:''}`).join(' · ')
+  const line=!plan?(otherGame?'Waiting for the first check on this game.':'Waiting for the first plan.'):actions.length?actions.map(trade=>`${label(trade.strategy)}: ${name(trade.side)} at ${cents(trade.price)}${trade.code&&CODE[trade.code]?` (${CODE[trade.code]})`:''}`).join(' · ')
     :why?`No trade: ${NO_TRADE[why.code].toLowerCase()}. ${why.detail.replace(/^Decision engine( recheck)?: /,'').split(/(?<=\.)\s/)[0]}`:`No trade. ${plan.summary.replace(/^No action\.\s*/,'')}`;
   const stale=plan&&now-plan.time>60_000;
   const counts=Object.entries(session.whyCounts??{}).sort((a,b)=>b[1]-a[1]).slice(0,4) as [NoTradeCode,number][];

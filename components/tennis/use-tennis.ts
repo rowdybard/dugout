@@ -100,7 +100,8 @@ export function useTennis() {
           const next=build();if(next){action=next;continue;}
         }
         if(response.error||rejected){setError(response.error||result.lastReason);return false;}
-        setError(null);return true;
+        // A routine check never clears a failed action's message; only the next action (or Dismiss) does.
+        if(!background)setError(null);return true;
       }catch(cause){
         const message=cause instanceof Error?cause.message:'The paper account could not be updated.';
         if(mounted.current){if(!background)setError(message);else if(++pollFailures.current>=2)setConnectionIssue(message);}

@@ -287,3 +287,4 @@ body:has(.tennis-app){background:#17191e}
 /* Octopus: red Experimental label */
 .tennis-tag.tennis-experimental{color:#f3b7bb;border:1px solid #b5454d;background:#4a1f23}
 .tennis-chaos-games small .tennis-tag{font-size:10px;padding:1px 6px;margin-right:4px}
+.tennis-controls .tennis-control-help{flex-basis:100%;margin:0;order:9}

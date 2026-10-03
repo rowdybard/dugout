@@ -27,6 +27,7 @@ import {FeedKey} from './feed-key';
 import {DecisionCard} from './decision-card';
 import {EngineCard} from './engine-card';
 import {OpenBook,SellEverything} from './open-book';
+import {accountValue} from '@/lib/tennis/open-book';
 import {OctopusPanel,downloadOctopusLog,type OctopusRules} from './octopus-panel';
 import {octopusSlugs} from '@/lib/tennis/octopus';
 import {boldSize,choiceOf,modeRules,steadySize,tradeMode,type ModeChoice} from '@/lib/tennis/modes';
@@ -85,11 +86,9 @@ export function TennisDashboard() {
 
   const open=session?.positions.filter(position=>position.status==='open')??[];
 
-  const liquidCash=(session?.cash??0)+open.reduce((sum,position)=>sum+(position.netLiquidationValue??0),0);
-
-  const incompleteMark=open.some(position=>position.netLiquidationValue===null||position.liquidationQuantity+1e-7<position.quantity||!position.markedAt||now-position.markedAt>15000);
-
-  const pnl=session?liquidCash-session.config.startingCash:0;
+  // One valuation for the balance, the holdings list and "Sell everything" (lib/tennis/open-book.ts accountValue).
+  const valuation=session?accountValue(session,now):null;
+  const liquidCash=valuation?.value??0,incompleteMark=!!valuation&&!valuation.complete,pnl=valuation?.pnl??0;
 
   const availableMarkets=[...new Map([...(catalog?.markets??[]).filter(m=>VISIBLE_LEAGUES.includes(m.league)),...open.map(p=>catalog?.markets.find(m=>m.slug===p.slug)??p.lastContext??p.market)].map(m=>[m.slug,m])).values()];
 
@@ -193,7 +192,7 @@ export function TennisDashboard() {
           <div className="tennis-bot-money">
             <span className="tennis-label">{incompleteMark?'Cash + priced exits':'Balance'}</span>
             <strong className="tennis-balance">{session?money(liquidCash):'—'}</strong>
-            <span className={`tennis-pnl ${pnl<0?'tennis-negative':'tennis-positive'}`}>{session?`${signed(pnl)}${incompleteMark?' · partly unpriced':''}`:'Loading'}</span>
+            <span className={`tennis-pnl ${pnl<0?'tennis-negative':'tennis-positive'}`}>{session?`${signed(pnl)}${incompleteMark?` · ${valuation!.note}`:''}`:'Loading'}</span>
             <button className="tennis-link tennis-reset-link" disabled={!session||bot.busy||migrating} onClick={openReset}>Reset balance</button>
           </div>
         </div>
@@ -206,6 +205,7 @@ export function TennisDashboard() {
             :<button className="tennis-primary tennis-big" disabled={bot.busy||migrating||!session?.config.focusSlug||(isIdle&&(entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)))} onClick={()=>void startBot()}>{bot.busy?<LoaderCircle size={17}/>:<Play size={17}/>}{bot.busy?'Starting…':isPaused?'Resume':'Start bot'}</button>}
           {(isRunning||isPaused)&&<button className="tennis-secondary" disabled={bot.busy||migrating} onClick={()=>void bot.perform({action:'stop',commandId:tennisCommandId()})}><Square size={13}/>End run</button>}
           {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}
+          {session&&!isIdle&&!isStopped&&<p className="tennis-order-help tennis-control-help"><b>Pause</b> stops new offers and bets; shares already held stay, and their exits still run. <b>End run</b> sells what is held at the best bids, then stops. {open.length>0&&<><b>Sell everything</b> sells all shares on the next fresh price check and pauses. </>}<b>Reset balance</b> starts a new run and drops open paper trades.</p>}
           <span className="tennis-runtime"><Clock3 size={13}/>{background?'Keeps running with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still managed':''}</span>
         </div>
 
@@ -257,7 +257,7 @@ export function TennisDashboard() {
 
     {advisorOpen&&<TennisAdvisor onClose={()=>setAdvisorOpen(false)}/>}
 
-    <Dialog open={resetOpen} onOpenChange={setResetOpen}><DialogContent className="tennis-market-dialog"><DialogTitle className="tennis-dialog-title">Reset your balance.</DialogTitle><DialogDescription className="tennis-dialog-description">Starts a fresh paper run with the amount you choose, up to $10,000. The bot stops, and your Steady or Bold choice is kept.{tradesOpen?' Your open paper trade is dropped with the old run. It is fake money, so nothing is lost.':''}</DialogDescription><div className="tennis-reset-form"><label htmlFor="tennis-reset-balance">Starting paper balance</label><input className="tennis-reset-input" id="tennis-reset-balance" type="text" inputMode="decimal" autoComplete="off" placeholder="100" value={resetText} onChange={event=>setResetText(event.target.value.replace(/[^0-9.]/g,''))} onKeyDown={event=>{if(event.key==='Enter')void reset();}}/><div className="tennis-amounts">{[100,1000,10000].map(value=><button key={value} aria-pressed={resetBalance===value} onClick={()=>setResetText(String(value))}>${value.toLocaleString()}</button>)}</div>{resetText.trim()!==''&&!resetValid&&<p className="tennis-order-help" role="status">Choose $5 to ${MAX_BALANCE.toLocaleString()}.</p>}{bot.error&&<div className="tennis-dialog-error" role="alert">{bot.error}</div>}<div className="tennis-reset-actions"><button className="tennis-secondary" onClick={()=>setResetOpen(false)}>Cancel</button><button className="tennis-primary" disabled={bot.busy||!resetValid} onClick={()=>void reset()}>{bot.busy?'Resetting…':tradesOpen?'Drop the trade and reset':'Reset balance'}</button></div></div></DialogContent></Dialog>
+    <Dialog open={resetOpen} onOpenChange={setResetOpen}><DialogContent className="tennis-market-dialog"><DialogTitle className="tennis-dialog-title">Reset your balance.</DialogTitle><DialogDescription className="tennis-dialog-description">Starts a fresh paper run with the amount you choose, up to $10,000. The bot stops, and your Steady, Bold or Auto choice is kept.{tradesOpen?' Your open paper trade is dropped with the old run. It is fake money, so nothing is lost.':''}</DialogDescription><div className="tennis-reset-form"><label htmlFor="tennis-reset-balance">Starting paper balance</label><input className="tennis-reset-input" id="tennis-reset-balance" type="text" inputMode="decimal" autoComplete="off" placeholder="100" value={resetText} onChange={event=>setResetText(event.target.value.replace(/[^0-9.]/g,''))} onKeyDown={event=>{if(event.key==='Enter')void reset();}}/><div className="tennis-amounts">{[100,1000,10000].map(value=><button key={value} aria-pressed={resetBalance===value} onClick={()=>setResetText(String(value))}>${value.toLocaleString()}</button>)}</div>{resetText.trim()!==''&&!resetValid&&<p className="tennis-order-help" role="status">Choose $5 to ${MAX_BALANCE.toLocaleString()}.</p>}{bot.error&&<div className="tennis-dialog-error" role="alert">{bot.error}</div>}<div className="tennis-reset-actions"><button className="tennis-secondary" onClick={()=>setResetOpen(false)}>Cancel</button><button className="tennis-primary" disabled={bot.busy||!resetValid} onClick={()=>void reset()}>{bot.busy?'Resetting…':tradesOpen?'Drop the trade and reset':'Reset balance'}</button></div></div></DialogContent></Dialog>
 
   </div>;
 

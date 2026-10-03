@@ -15,11 +15,13 @@ const qty=(value:number)=>value.toLocaleString('en-US',{maximumFractionDigits:2}
 export function SellEverything({session,markets,now,busy,onSell}:{session:TennisSession;markets:TennisMarket[];now:number;busy:boolean;onSell:()=>void}) {
   const {holdings}=openBook(session,markets,now);
   if(!holdings.length)return null;
-  const priced=holdings.every(h=>h.result!==null),result=holdings.reduce((sum,h)=>sum+(h.result??0),0);
-  const tone=!priced?'':result>=0?'is-up':'is-down',selling=!!session.exitAll;
+  // The same valuation as the balance: known sale values, including old or partial prices, which the label names.
+  const priced=holdings.some(h=>h.result!==null),current=holdings.every(h=>h.price==='current');
+  const result=holdings.reduce((sum,h)=>sum+(h.result??0),0),selling=!!session.exitAll;
+  const tone=!current?'':result>=0?'is-up':'is-down',caveat=current?'':` (${holdings.filter(h=>h.price!=='current').length} not current)`;
   return <button className={`tennis-sell-all ${tone}`} disabled={busy||selling} onClick={onSell}>
     <strong>{selling?'Selling everything…':'Sell everything now'}</strong>
-    <span>{selling?'At the best price on the next fresh price check':priced?`${signed(result)} if sold now`:'Waiting for a current price'}</span>
+    <span>{selling?'At the best price on the next fresh price check':priced?`About ${signed(result)} if sold now${caveat}`:'Waiting for a current price'}</span>
   </button>;
 }
 
@@ -42,7 +44,7 @@ export function OpenBook({session,markets,now}:{session:TennisSession;markets:Te
       <tbody>{holdings.map(holding=><tr key={holding.key}>
         <td><strong>{holding.team}</strong><small>{games>1?`${holding.game} · `:''}{holding.policy==='offer fill'?(holding.paired?'paired: pays $1 per pair at the end':holding.stopAt!==null?`Bold: sells at ${cents(holding.takeAt!)} (profit) or ${cents(holding.stopAt)} (loss limit)`:holding.boldHold?`Bold: pairing · sells at ${cents(holding.takeAt!)} for a profit · may buy once more on a 5¢ dip`:holding.sellBy?`waiting for a pair · sells ${holding.sellBy<=now?'now':`at ${new Date(holding.sellBy).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`} if none`:'from a filled offer'):holding.policy==='hold to final'?'holding to final':holding.policy==='drive'?'riding the drive':'managed'}</small></td>
         <td>{qty(holding.quantity)}</td><td>{cents(holding.averagePrice)}</td><td>{money(holding.cost)}</td>
-        <td className={holding.result===null?'':holding.result<0?'tennis-negative':'tennis-positive'}>{holding.result===null?'Waiting for a price':`${signed(holding.result)}${holding.partial?' (part)':''}`}</td>
+        <td className={holding.result===null?'':holding.result<0?'tennis-negative':'tennis-positive'}>{holding.result===null?'No price yet':signed(holding.result)}{holding.priceNote&&holding.result!==null&&<small>{holding.priceNote}</small>}</td>
       </tr>)}</tbody></table>}
     {holdings.length>0&&lastChange&&now-lastChange.time<30*60_000&&<p className="tennis-order-help">Rules changed {Math.max(1,Math.round((now-lastChange.time)/60_000))} min ago{lastChange.modeBefore!==lastChange.modeAfter?` (${lastChange.modeBefore} → ${lastChange.modeAfter})`:''}. {lastChange.holdings}</p>}
     {!orders.length&&!holdings.length&&<p className="tennis-order-help">{session.status==='running'?'No offers posted right now. The bot posts them when the book is quiet and the research allows it.':'Start the bot to post offers.'}</p>}
