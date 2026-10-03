@@ -6,6 +6,9 @@ import {checkRisk,DEFAULT_RISK} from '../lib/decision/risk.ts';
 import {canAcknowledgeLoss,lossAllowance,lossFloor,lossLimitReached} from '../lib/tennis/loss-limit.ts';
 import {defaultLiveTennisConfig} from '../lib/tennis/rules.ts';
 import type {TennisInput,TennisMarket,TennisPosition,TennisSession} from '../lib/tennis/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 const NOW=Date.parse('2026-10-04T18:00:00Z'),SLUG='synthetic-cfb-loss-ack';
 const exact=(value:number)=>Math.round(value*1e6)/1e6;

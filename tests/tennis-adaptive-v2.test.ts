@@ -7,6 +7,9 @@ import {sessionTradeRecords} from '../lib/tennis/research-tracking.ts';
 import {measureExitMarket} from '../lib/tennis/exit-analysis.ts';
 import {bindWalletProjection} from '../lib/tennis/wallet-risk.ts';
 import type {TennisInput,TennisSession} from '../lib/tennis/types.ts';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 const NOW=Date.parse('2026-10-03T20:00:00Z'),SLUG='synthetic-adaptive-tennis';
 function input(time:number,bid:number,ask:number,league:'ATP'|'WTA'='ATP'):TennisInput {

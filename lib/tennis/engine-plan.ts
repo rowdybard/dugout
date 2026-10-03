@@ -7,7 +7,8 @@ import {QUARTER_SECONDS,tennisSignalKey} from '../decision/sports/index.ts';
 import type {FeatureValue} from '../decision/context.ts';
 import type {TennisConfig,TennisInput,TennisMarket,TennisSession,TennisSignal} from './types';
 import type {NoTradeCode} from '../decision/why.ts';
-import {restingCost,SPEND_LIMIT_FRACTION} from './maker.ts';
+import {restingCost} from './maker.ts';
+import {accountLimitsOn,spendFraction} from './account-limits.ts';
 import {dayRiskPnl,lossAllowance,sessionPnl} from './loss-limit.ts';
 import {walletCommitments,walletProjection} from './wallet-risk.ts';
 
@@ -58,8 +59,9 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
   if(!entry)return {error:`Evidence pack ${session.config.evidencePack} is not loaded on this host. New entries are blocked until it is.`};
   const cap=Math.min(100,session.config.startingCash*0.25);
   // A shared wallet (tennis + football bots) has its own 50% cap; a single bot uses SPEND_LIMIT_FRACTION of its balance.
-  const exposureCap=walletProjection(session)?walletCommitments(session).cap:session.config.startingCash*SPEND_LIMIT_FRACTION;
-  const lossLimit=lossAllowance(session);
+  const exposureCap=walletProjection(session)?walletCommitments(session).cap:session.config.startingCash*spendFraction(session);
+  // Paper accounts run without the account loss limits (lib/tennis/account-limits.ts).
+  const lossLimit=accountLimitsOn(session)?lossAllowance(session):Number.POSITIVE_INFINITY;
   return {engine:createEngine({pack:entry.pack,trust:entry.trust,
     sizing:{bankroll:session.config.startingCash,kellyFraction:0.25,maxStake:Math.min(session.config.entryBudget,cap),maxBankrollFraction:0.25,paperStake:session.config.entryBudget},
     // Each bet is capped at `cap` (maxStake); everything committed together at the account's spending limit.

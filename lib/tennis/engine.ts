@@ -11,6 +11,7 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {choiceOf,modeRules,tradeBudget,tradeMode} from './modes.ts';
 import {tennisPressure} from './tennis-pressure.ts';
+import {spendFraction} from './account-limits.ts';
 import {canAcknowledgeLoss,dayPnl,lossAllowance,lossLimitReached,realizedPnl,remainingLossAllowance} from './loss-limit.ts';
 import {bindWalletProjection,copyWalletProjection,walletProjection,walletEquity,walletCommitments,walletMainMaker,type WalletProjection} from './wallet-risk.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
@@ -30,7 +31,7 @@ import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
 import {applyOctopusPicks,octopusSlugs} from './octopus.ts';
-import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,SPEND_LIMIT_FRACTION,restingCost,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,restingCost,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -798,7 +799,7 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + restingCost(other), 0);
   const restingElsewhere = isArm ? arms + Math.max(restingCost(main), 2 * tradeBudget(session)) : arms;
   const cashLeft = Math.max(0, session.cash - restingElsewhere);
-  const limitLeft = Math.max(0, SPEND_LIMIT_FRACTION * tennisEquity(session) - committed({ ...session, maker: undefined, chaos: undefined }) - restingElsewhere);
+  const limitLeft = Math.max(0, spendFraction(session) * tennisEquity(session) - committed({ ...session, maker: undefined, chaos: undefined }) - restingElsewhere);
   // A shared wallet (tennis + football bots) uses its own commitments across both bots.
   const available = walletProjection(session) ? walletCommitments(session, state).available : open ? cashLeft : Math.min(cashLeft, limitLeft);
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);

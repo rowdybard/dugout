@@ -61,7 +61,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 - **Start bot:** pick a game first, then press it.
 - **Pause:** no new trades. Anything already held stays managed. **Resume** carries on.
 - **End run:** sells that bot's holdings and stops it. **Start bot** can start it again with the same balance and history.
-- **Acknowledge loss and resume:** appears after the bot hits its loss limit and finishes selling. Keeps the same run, balance and history. Each acknowledgement allows the original dollar amount again: with a $100 start and a 20% limit, a stop at $79.94 can resume with another $20 allowance, reaching the next limit at $59.94. It never resumes a loss stop automatically.
+- **No loss limit or daily cap on paper:** the paper bots keep trading however the run is going. There's no stop at 20% down, no 20-trades-a-day cap, and no half-the-balance spending limit; bets are limited only by the cash available and each bet's own size cap. These limits are still built in for real money, and **Acknowledge loss and resume** only appears if they're switched back on.
 - **Sell everything now:** the big button that appears while the bot holds shares. It's green when they're up and red when down, and shows the amount. It sells everything at the best price on the next price check (a few seconds) and pauses the bot. Press Resume to carry on.
 - **Reset balance:** explicitly starts the whole shared wallet over at any amount from $5 to $10,000. It resets both bots and drops open paper trades.
 - **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game. The Engine line under Settings & history waits for the new game's first check instead of showing the old game's plan.
@@ -80,7 +80,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 | **Watching** | It's checking, but the research doesn't allow a trade right now. |
 | **Bot is behind** | No check from the bot for 30–45 seconds. If it lasts more than a minute, reload the page. |
 | **Paused / Ready / Stopped** | This bot is not trading. Press Resume or Start; a loss stop needs acknowledgement first. |
-| **Loss limit hit** | Trading stopped at the loss limit. After exits finish, acknowledge the loss to continue the same run. |
+| **Loss limit hit** | Only if the account limits are switched back on (they're off for paper). After exits finish, acknowledge the loss to continue the same run. |
 | **Managing position** | It holds shares and is handling them (see Open orders & shares). |
 
 ## Why it isn't trading
@@ -91,8 +91,7 @@ These are all normal. It's the bot being careful, not broken:
 - **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
 - **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.
 - **Market closed or its status is out of date:** offers and Bold's extra dip buy don't fill on a market that's closed or suspended, or whose status is over 45 seconds old. Selling still works.
-- **Spending limit:** shares held, a queued purchase and every waiting offer (main game and Octopus) together stay within half the balance, so offers shrink or stop as the bot holds more.
-- **Loss limit:** Bold's dip buy is limited to what's left of the run's loss allowance, and skipped when none is left.
+- **Out of cash:** shares held, a queued purchase and every waiting offer together can't spend more than the cash there is, so offers shrink or stop as the bot holds more.
 
 Don't reset or change rules just to make it trade. If something looks wrong, note the game, the time and what the status box says, and tell the owner.
 
@@ -101,7 +100,7 @@ Don't reset or change rules just to make it trade. If something looks wrong, not
 - **The Octopus** (red **Experimental** label, on the bot card): the bot works up to 6 extra games ("arms") at once, with the same offers and rules as your main game, at your Steady or Bold size.
   - **Auto-pick on:** it chooses calm, liquid college games itself and re-checks every 5 minutes.
   - **Your own picks:** use the search box to pin games. × removes a pinned game, or skips an auto one so it won't be picked again.
-  - **Spending limit:** both bots' holdings, queued purchases and offers together use at most half the available account limit. They cannot each spend a separate half of the same wallet.
+  - **Shared cash:** both bots' holdings, queued purchases and offers come out of the same cash. They cannot each spend the same dollar.
 - **Your own Polymarket key** (Settings & history → Live prices): gives your bot instant price updates instead of a check every few seconds. Make a separate read-only key for it; it's stored encrypted and never shown again.
 - **Download Octopus log / saved history:** a full record of what the bot did, under Settings & history.
 

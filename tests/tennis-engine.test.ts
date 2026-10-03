@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyTennisAction, createTennisSession, defaultTennisConfig, stepTennisSession, tennisEquity, validateTennisConfig } from '../lib/tennis/engine.ts';
 import type { TennisInput, TennisSession } from '../lib/tennis/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 // Entirely synthetic execution experiments; no fabricated game is exposed by the app.
 const epoch = Date.parse('2026-09-25T18:00:00Z');

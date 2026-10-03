@@ -1,5 +1,6 @@
 import type {TennisSession} from './types';
 import {otherMarksComplete,walletProjection} from './wallet-risk.ts';
+import {accountLimitsOn} from './account-limits.ts';
 
 const exact=(value:number)=>Math.round(value*1e6)/1e6;
 const storedPrecision=(session:TennisSession)=>!!session.lossCheckpoint||!!session.bots||!!walletProjection(session);
@@ -38,6 +39,7 @@ export function dayRiskPnl(session:TennisSession,utcDay:string):number {
 
 /** Missing or partial marks do not invent a loss; realised losses still stop the bot. */
 export function lossLimitReached(session:TennisSession,markedEquity?:number|null):boolean {
+  if(!accountLimitsOn(session))return false;
   const sinceAcknowledgement=sessionPnl(session);
   return sinceAcknowledgement<=-lossAllowance(session)
     || otherMarksComplete(session)&&typeof markedEquity==='number'&&Number.isFinite(markedEquity)&&markedEquity<=lossFloor(session);
@@ -45,6 +47,7 @@ export function lossLimitReached(session:TennisSession,markedEquity?:number|null
 
 /** A dip buy cannot consume loss room already lost in this shared account period. */
 export function remainingLossAllowance(session:TennisSession,markedEquity?:number|null):number {
+  if(!accountLimitsOn(session))return Number.POSITIVE_INFINITY;
   const room=Math.max(0,exact(lossAllowance(session)+Math.min(0,sessionPnl(session))));
   return otherMarksComplete(session)&&typeof markedEquity==='number'&&Number.isFinite(markedEquity)?Math.min(room,Math.max(0,exact(markedEquity-lossFloor(session)))):room;
 }

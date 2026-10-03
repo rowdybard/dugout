@@ -6,6 +6,9 @@ import {normalizeTennisEvent} from '../lib/tennis/normalize.ts';
 import {defaultLiveTennisConfig,validateTennisConfig} from '../lib/tennis/rules.ts';
 import {modeRules} from '../lib/tennis/modes.ts';
 import type {TennisConfig,TennisInput,TennisMarket,TennisSession} from '../lib/tennis/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 const NOW=Date.parse('2026-10-03T14:00:00Z');
 const listed=(slug:string,bid:number,ask:number,over:Partial<TennisMarket>={})=>({slug,league:'CFB',active:true,ended:false,live:false,

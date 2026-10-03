@@ -11,6 +11,9 @@ import type {RunnerStore} from '../src/store';
 import {createTennisSession,defaultTennisConfig} from '../../../lib/tennis/engine.ts';
 import {accountBotView} from '../../../lib/tennis/account.ts';
 import type {TennisSession} from '../../../lib/tennis/types.ts';
+import {setPaperAccountLimits} from '../../../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 // Load the actual Worker entry with only the runtime base class substituted.
 // All reducer, signing, SQL transactions and request dispatch remain real.

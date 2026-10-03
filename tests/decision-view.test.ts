@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {decisionView,sideLines} from '../lib/tennis/decision-view.ts';
 import {createTennisSession,defaultTennisConfig} from '../lib/tennis/engine.ts';
 import type {TennisMarket,TennisPosition,TennisRuntime} from '../lib/tennis/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 const now=100000;
 const market=(slug='focus'):TennisMarket=>({slug,eventId:slug,eventSlug:slug,title:slug,league:'CFB',yesName:`${slug} A`,noName:`${slug} B`,

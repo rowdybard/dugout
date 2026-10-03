@@ -8,6 +8,9 @@ import type {ReplayFrame} from '../../../lib/runner/contracts';
 import type {TennisInput} from '../../../lib/tennis/types';
 import {replayFrame} from '../../../lib/runner/replay.ts';
 import {accountBotView,applyAccountAction} from '../../../lib/tennis/account.ts';
+import {setPaperAccountLimits} from '../../../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 test('runner freshness follows the accepted focused book, never a newer rejected receipt',async(t)=>{
   const {store}=await active();let time=NOW+2000;t.mock.method(Date,'now',()=>time);

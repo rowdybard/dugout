@@ -126,8 +126,19 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 
 The engine only posts where the evidence permits resting orders ([DECISION-ENGINE.md](DECISION-ENGINE.md)).
 
+**Account limits off for paper (October 3, 2026, owner's decision):** `lib/tennis/account-limits.ts` keeps these limits in the code for real money but switches them off for paper accounts (`PAPER_ACCOUNT_LIMITS=false`):
+- the run loss limit (stop at `maxSessionLossFraction`, and the acknowledgement flow);
+- the daily loss limit;
+- the dip-buy loss allowance;
+- the daily trade count (removed from the engine limits);
+- the 50% spending limit (paper uses the whole balance: `spendFraction` is 1).
+
+**Still enforced:** cash, each bet's 25%/$100 cap, and every strategy's own exit rules.
+
+**Tests:** the tests of the limits themselves call `setPaperAccountLimits(true)`. Set the constant to `true` to turn the limits back on for paper.
+
 **Safeguards (October 3, 2026 review):**
-- **Spending limit:** held shares at cost, a queued purchase and every resting offer (main game and Octopus arms) together stay within 50% of the balance. With both bots on the shared wallet, `walletCommitments` (`lib/tennis/wallet-risk.ts`) applies across both; a single bot uses `committed()` (`lib/tennis/engine-plan.ts`). Each bet keeps its own 25%/$100 cap. An offer that completes a pair only needs the cash.
+- **Spending limit** (off for paper, see above): held shares at cost, a queued purchase and every resting offer (main game and Octopus arms) together stay within 50% of the balance. With both bots on the shared wallet, `walletCommitments` (`lib/tennis/wallet-risk.ts`) applies across both; a single bot uses `committed()` (`lib/tennis/engine-plan.ts`). Each bet keeps its own 25%/$100 cap. An offer that completes a pair only needs the cash.
 - **No fills on closed or stale markets:** resting offers and Bold dip buys fill only when the market is open, active, not ended, and its status is under 45 s old (`unfillable` in `engine.ts`). Exits and settlement don't use this check.
 - **Bold dip buy:** limited to what's left of the run's loss allowance (`remainingLossAllowance`). The run's loss limit refuses it once ("DIP_BUY_LOSS_LIMIT") and it retries after a minute. Only a filled dip buy counts, and only that arms the 10¢ loss limit. A failed one retries on the next fresh book. The holding is re-valued right after the buy.
 

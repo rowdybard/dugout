@@ -4,6 +4,9 @@ import {applyTennisAction,createTennisSession,stepTennisSession} from '../lib/te
 import {defaultLiveTennisConfig} from '../lib/tennis/rules.ts';
 import {committed} from '../lib/tennis/engine-plan.ts';
 import type {TennisInput,TennisPosition,TennisSession} from '../lib/tennis/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 // Trading safeguards (docs/BOT-MANUAL.md, October 3 2026 review): the combined spending limit, no fills on closed or
 // stale markets, and Bold's dip buy (loss limit, only a filled buy counts).

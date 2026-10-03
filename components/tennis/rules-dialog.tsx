@@ -41,7 +41,7 @@ export function TennisRulesDialog({botId='football',session,busy,error,onClose,o
       {field('cooldownMs','Rest between trades','Seconds for this match',0,3600,1000)}
       {field('executionDelayMs','Simulated delay','Seconds plus a later fresh quote',1,30,1000)}
       {field('maxBookAgeMs','Oldest allowed quote','Seconds',.1,local||tennis?5:30,1000,.1)}
-      {!tennis&&field('maxSessionLossFraction','Stop the wallet at','Percent lost from the original starting balance',.1,50,.01,.1)}
+      {!tennis&&field('maxSessionLossFraction','Stop the wallet at','Real money only: paper runs have no loss limit',.1,50,.01,.1)}
     </div>}
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
     {local&&<p className="tennis-order-help">Profit exits follow executable gains, measured price noise and the remaining recovery scenario. There is no fixed profit-percentage trigger. Local calculations make no AI calls and do not predict the winner.</p>}

@@ -1,5 +1,6 @@
 import type {BotId,TennisIntent,TennisPosition,TennisSession} from './types';
 import type {MakerState} from './maker';
+import {spendFraction} from './account-limits.ts';
 
 /** Reducer-only context. WeakMap storage keeps projections out of persisted state and exports. */
 export type WalletProjection={botId:BotId;otherPositions:TennisPosition[];otherPending:TennisIntent[];otherResting:number;startingCash:number;lossFraction:number;now:number};
@@ -25,7 +26,7 @@ export function walletCommitments(session:TennisSession,exclude?:MakerState,igno
   const projection=walletProjection(session),open=openCommitments(session.positions)+openCommitments(projection?.otherPositions??[]);
   const pending=(ignoreOwnPending?0:pendingCommitment(session.pending))+(projection?.otherPending??[]).reduce((sum,p)=>sum+pendingCommitment(p),0);
   const resting=restingCommitments(session,exclude)+(projection?.otherResting??0);
-  const total=exact(open+pending+resting),cap=exact(Math.max(0,Math.min(projection?.startingCash??session.config.startingCash,walletEquity(session))*.5));
+  const total=exact(open+pending+resting),cap=exact(Math.max(0,Math.min(projection?.startingCash??session.config.startingCash,walletEquity(session))*spendFraction(session)));
   return {open:exact(open),pending:exact(pending),resting:exact(resting),total,cap,
     available:exact(Math.max(0,Math.min(cap-total,session.cash-pending-resting)))};
 }

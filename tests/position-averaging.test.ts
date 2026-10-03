@@ -9,6 +9,9 @@ import {bindWalletProjection} from '../lib/tennis/wallet-risk.ts';
 import {tennisScoreMarket,TENNIS_SCORE_NOW as NOW} from './helpers/tennis-scoreboard-fixture.ts';
 import type {TennisPosition,TennisIntent} from '../lib/tennis/types';
 import type {PaperCommand,ExecutionPolicy} from '../lib/trading/types';
+import {setPaperAccountLimits} from '../lib/tennis/account-limits.ts';
+// These tests check the account limits themselves, which are off for paper accounts by default (lib/tennis/account-limits.ts).
+setPaperAccountLimits(true);
 
 const exact=(value:number)=>Math.round(value*1e6)/1e6;
 const market={...tennisScoreMarket().execution!,quantityIncrement:.01,minimumTradeQty:.01,priceIncrement:.01,feeCoefficient:.08};
