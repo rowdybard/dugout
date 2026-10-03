@@ -120,6 +120,8 @@ export type TennisPosition={
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
   lastContext?:TennisMarket;
+  /** The rules the first purchase was made under (evidence-engine accounts). Later buys carry their own on the ledger. */
+  openedUnder?:PurchaseTerms;
   /** Bold: extra buys that filled on a dip while one-sided (at most one). Only a filled one arms the loss limit. */
   dipBuys?:number;
   /** Bold: when a dip buy last failed to fill or was refused by the loss limit (the next try waits a minute). */
@@ -137,8 +139,12 @@ export type TennisPosition={
   mae?:number;mfe?:number;entrySpread?:number;
 };
 export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
-export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
-export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
+/** The rules a purchase was made under (evidence-engine accounts): the rules revision, the mode in force, and the order size. */
+export type PurchaseTerms={rulesRevision:number;mode:'steady'|'bold';auto:boolean;orderSize:number;game:'main'|'octopus'};
+/** One saved rule change: each changed setting as [before, after], and the mode before and after. */
+export type RuleChange={time:number;revision:number;changes:Record<string,[unknown,unknown]>;modeBefore:string;modeAfter:string;holdings:string};
+export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment;ruleChange?:RuleChange};
+export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy'];terms?:PurchaseTerms};
 export type TennisSession={
   id:string;revision:number;scanCursor?:number;decisionSequence?:number;mode:'paper';status:'idle'|'running'|'paused'|'stopping'|'stopped';
   rulesRevision?:number;coverage?:Record<string,{league:TennisLeague;time:number;live:boolean}>;
@@ -153,6 +159,8 @@ export type TennisSession={
   maker?:MakerState;
   /** Octopus: resting-order state for each extra game (the main game keeps `maker`). */
   chaos?:Record<string,MakerState>;
+  /** The latest rule changes, newest last (at most 50; every one is also a RULES_UPDATED decision in the history). */
+  ruleChanges?:RuleChange[];
   /** Auto's current pick, why, and when it last switched (config.autoMode only). */
   autoMode?:{mode:'steady'|'bold';reason:string;since:number};
   /** Octopus auto picks, recorded on the check that chose them (so replays are exact). */

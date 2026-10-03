@@ -111,3 +111,30 @@ test('dip buy: limited by the run loss allowance, and the holding is re-valued a
   assert.equal(full.ledger.filter(e=>e.id.includes(':dip:')).length,0);
   assert.ok(full.decisions.some(d=>d.code==='DIP_BUY_LOSS_LIMIT'));
 });
+
+test('a rule change is saved with before/after values, the modes, and what it means for held shares',()=>{
+  let session=step(started('all'),T0,.60,.61);
+  session=step(session,T0+5000,.59,.60);                         // YES fills: shares are held
+  session=applyTennisAction(session,{action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:'to-steady',
+    rules:{entries:'steady',entryBudget:3}},[],T0+6000);
+  const change=session.ruleChanges?.at(-1);
+  assert.ok(change);
+  assert.deepEqual(change.changes.entries,['all','steady']);
+  assert.deepEqual(change.changes.entryBudget,[5,3]);
+  assert.equal(change.modeBefore,'Bold');assert.equal(change.modeAfter,'Steady');
+  assert.match(change.holdings,/held now follow Steady/);
+  const row=session.decisions.findLast(d=>d.code==='RULES_UPDATED');
+  assert.match(row!.reason,/entryBudget 5 → 3; entries all → steady/);
+  assert.deepEqual(row!.ruleChange,change);
+});
+
+test('each purchase saves the rules it was made under (resting fill and Bold dip buy)',()=>{
+  let session=step(started('all'),T0,.60,.61);
+  session=step(session,T0+5000,.59,.60);
+  const fill=session.ledger.find(e=>e.action==='BUY')!;
+  assert.deepEqual(fill.terms,{rulesRevision:session.rulesRevision??0,mode:'bold',auto:false,orderSize:5,game:'main'});
+  assert.deepEqual(yes(session).openedUnder,fill.terms);
+  session=step(session,T0+120_000,.54,.55);
+  const dip=session.ledger.find(e=>e.id.includes(':dip:'))!;
+  assert.equal(dip.terms?.mode,'bold');
+});

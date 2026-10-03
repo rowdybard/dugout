@@ -1,7 +1,7 @@
 import { executePaperCommand, executionDataIssue } from '../trading/execution.ts';
 import { feeUnits, fromUnits, notionalUnits, toUnits } from '../trading/money.ts';
 import type { PaperCommand, PaperExecution, TradeSide } from '../trading/types';
-import type { TennisAction, TennisConfig, TennisDecision, TennisInput, TennisIntent, TennisPosition, TennisSession, TennisSignal } from './types';
+import type { PurchaseTerms, RuleChange, TennisAction, TennisConfig, TennisDecision, TennisInput, TennisIntent, TennisPosition, TennisSession, TennisSignal } from './types';
 
 const exact = (value: number) => Math.round(value * 1_000_000) / 1_000_000;
 const EPSILON = 0.0000001;
@@ -98,6 +98,12 @@ function unfillable(input: TennisInput, now: number): string | null {
   if (!market.active || market.ended || !market.execution?.active || input.book.state !== 'MARKET_STATE_OPEN') return 'The market is closed, suspended or inactive.';
   if (!Number.isFinite(market.observedAt) || market.observedAt > now + 1000 || now - market.observedAt > MARKET_STATUS_FILL_MS) return 'The market status is out of date.';
   return null;
+}
+
+/** The rules a purchase is made under, saved on its ledger row (evidence-engine accounts; older replays stay byte for byte). */
+function purchaseTerms(session: TennisSession, slug: string): { terms?: PurchaseTerms } {
+  if (session.config.evidenceGate !== 'evidence-v1') return {};
+  return { terms: { rulesRevision: session.rulesRevision ?? 0, mode: tradeMode(session), auto: !!session.config.autoMode, orderSize: tradeBudget(session), game: chaosGame(session, slug) ? 'octopus' : 'main' } };
 }
 
 /** The taker position slot. Market-making inventory (exitPolicy 'maker') is managed separately. */
@@ -306,6 +312,26 @@ function evaluateEngine(session: TennisSession, current: TennisInput[], now: num
   return out;
 }
 
+const modeLabel = (session: TennisSession) => session.config.autoMode ? `Auto (${tradeMode(session) === 'bold' ? 'Bold' : 'Steady'} now)` : tradeMode(session) === 'bold' ? 'Bold' : 'Steady';
+const show = (value: unknown) => value === undefined ? 'unset' : Array.isArray(value) ? `[${value.join(', ')}]` : typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value);
+
+/**
+ * A rule change, saved with the time and each changed setting before and after. `holdings` says plainly what it
+ * means for shares already held: the one-sided rules (pair-or-exit, Bold's take-profit, dip buy and loss limit)
+ * follow the mode in force; sizes, the Octopus and the focus only change new offers.
+ */
+function ruleChange(session: TennisSession, before: TennisConfig, modeBefore: string, now: number): RuleChange {
+  const changes: Record<string, [unknown, unknown]> = {};
+  for (const key of new Set([...Object.keys(before), ...Object.keys(session.config)]) as Set<keyof TennisConfig>)
+    if (JSON.stringify(before[key]) !== JSON.stringify(session.config[key])) changes[key] = [structuredClone(before[key]), structuredClone(session.config[key])];
+  const modeAfter = modeLabel(session), held = session.positions.some(p => p.status === 'open');
+  const modeChanged = before.entries !== session.config.entries || !!before.autoMode !== !!session.config.autoMode;
+  const holdings = !held ? 'Nothing is held, so only new orders are affected.'
+    : modeChanged ? `Shares already held now follow ${modeAfter}'s rules for one-sided shares; everything else applies to new orders only.`
+    : 'Shares already held keep their current plan; this applies to new orders only.';
+  return { time: now, revision: session.rulesRevision ?? 0, changes, modeBefore, modeAfter, holdings };
+}
+
 /** Auto: a run down this fraction of its starting balance trades Steady until it recovers. */
 export const AUTO_DRAWDOWN = 0.10;
 /** Auto: Bold stays on this long after the research last allowed a bet, so the mode doesn't flicker between checks. */
@@ -418,7 +444,7 @@ function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeS
     position = { id: `${session.id}:maker:${input.market.slug}:${side}:${now}`, slug: input.market.slug, league: input.market.league, title: input.market.title, side,
       name: side === 'YES' ? input.market.yesName : input.market.noName, quantity: 0, initialQuantity: 0, costBasis: 0, entryCost: 0, entryPrice: quote.price, entryFees: 0,
       openedAt: now, status: 'open', realizedPnl: 0, exitFees: 0, proceeds: 0, netLiquidationValue: null, liquidationQuantity: 0, markedAt: null,
-      market: structuredClone(input.market), exitPolicy: 'maker',
+      market: structuredClone(input.market), exitPolicy: 'maker', ...(purchaseTerms(session, input.market.slug).terms ? { openedUnder: purchaseTerms(session, input.market.slug).terms } : {}),
       exitRules: { targetReturn: session.config.targetReturn, stopReturn: session.config.stopReturn, maxHoldMs: session.config.maxHoldMs, source: 'entry' } };
     session.positions.push(position);
   }
@@ -436,7 +462,7 @@ function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeS
     replayed: false, apply: true, feeModel: 'AGGREGATED_DEPTH_ESTIMATE' };
   session.ledger.push({ id, time: now, slug: input.market.slug, side, action: 'BUY', source: 'AUTOMATIC', positionId: position.id, reason, execution, cashDelta, realizedPnl: 0,
     quotedPrice: quote.price, actualPrice: quote.price, executionDelayMs: now - quote.placedAt, signalBookTime: quote.placedBookTime, executionBookTime: input.receivedAt,
-    rulesRevision: session.rulesRevision ?? 0 });
+    rulesRevision: session.rulesRevision ?? 0, ...purchaseTerms(session, input.market.slug) });
   session.maker!.fills++;
   session.maker!.rebates = exact(session.maker!.rebates + rebate);
   record(session, now, input.market.slug, side, 'BUY', 'MAKER_FILLED', reason, input);
@@ -527,7 +553,7 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   const reason = `Bold dip buy: ${position.side} fell to ${(ask * 100).toFixed(1)}¢, at least ${DIP_STEP * 100}¢ below what was paid; bought ${result.filledQty} more (once per game).`;
   session.ledger.push({ id: command.commandId, time: now, slug, side: position.side, action: 'BUY', source: 'AUTOMATIC', positionId: position.id, reason, execution: result,
     cashDelta: result.cashDelta, realizedPnl: 0, quotedPrice: ask, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt,
-    executionBookTime: input.receivedAt, rulesRevision: session.rulesRevision ?? 0 });
+    executionBookTime: input.receivedAt, rulesRevision: session.rulesRevision ?? 0, ...purchaseTerms(session, slug) });
   record(session, now, slug, position.side, 'BUY', 'DIP_BUY', reason, input);
   markPosition(session, position, input, now);
 }
@@ -831,7 +857,8 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
         status: 'open', realizedPnl: 0, exitFees: 0, proceeds: 0, netLiquidationValue: null, liquidationQuantity: 0, markedAt: null,
         market: structuredClone(input.market),strategy:intent.signalConfig?.strategy==='auto'?undefined:intent.signalConfig?.strategy,decisionMode:intent.decisionMode??session.config.strategy,
         exitRules:{targetReturn:(intent.signalConfig??session.config).targetReturn,stopReturn:(intent.signalConfig??session.config).stopReturn,maxHoldMs:(intent.signalConfig??session.config).maxHoldMs,source:'entry'},
-        ...(intent.contextSnapshot?{entryContext:structuredClone(intent.contextSnapshot)}:{}) });
+        ...(intent.contextSnapshot?{entryContext:structuredClone(intent.contextSnapshot)}:{}),
+        ...(purchaseTerms(session,intent.slug).terms?{openedUnder:purchaseTerms(session,intent.slug).terms}:{}) });
       if(intent.plan){
         const opened=session.positions.at(-1)!;
         opened.exitPolicy=intent.plan.exit;opened.plan=structuredClone(intent.plan);
@@ -869,7 +896,8 @@ function applyFill(session: TennisSession, intent: TennisIntent, result: PaperEx
   session.ledger.push({ id: intent.id, time: now, slug: intent.slug, side: intent.side, action: intent.action,
     source: intent.source, positionId, reason: intent.reason, execution: result, rulesRevision:session.rulesRevision??0,strategy:intent.signalConfig?.strategy??oldPosition?.strategy??session.config.strategy,
     cashDelta: result.cashDelta, realizedPnl: pnl, quotedPrice: intent.limitPrice, actualPrice: result.averagePrice || undefined,
-    executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt });
+    executionDelayMs: now - intent.createdAt, signalBookTime: intent.observedAt, executionBookTime: input.receivedAt,
+    ...(intent.action === 'BUY' && result.apply ? purchaseTerms(session, intent.slug) : {}) });
   record(session, now, intent.slug, intent.side, result.apply ? intent.action : 'SKIP', result.apply ? result.status.toUpperCase() : 'FILL_FAILED',
     `${intent.reason} ${result.reason}`, input,intent.analysis?{analysis:intent.analysis}:{});
   if (!result.apply && intent.action === 'BUY') setCooldown(session, intent.slug, now,true);
@@ -1404,11 +1432,16 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
       session.pending = null;
     }
     cancelMakerQuotes(session, 'The bot rules changed.', now);
+    const before = session.config, modeBefore = modeLabel(session);
     session.config = structuredClone(config);
     session.rulesRevision = (session.rulesRevision ?? 0) + 1;
+    const change = session.config.evidenceGate === 'evidence-v1' || before.evidenceGate === 'evidence-v1' ? ruleChange(session, before, modeBefore, now) : null;
     const keepCooldowns=(signals:Record<string,TennisSignal>)=>Object.fromEntries(Object.entries(signals).filter(([,signal])=>(signal.cooldownUntil??0)>now).map(([key,signal])=>[key,{phase:'COOLDOWN' as const,confirmations:0,cooldownUntil:signal.cooldownUntil,reason:'Resting after the previous attempt; rule changes keep this rest period.'}]));
     session.histories = {}; session.signals = keepCooldowns(session.signals); session.autoSignals=keepCooldowns(session.autoSignals??{});session.autoStatus=undefined;
-    record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}). Gathering a new baseline; balance and history preserved.`);
+    if (!change) { record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}). Gathering a new baseline; balance and history preserved.`); return session; }
+    const listed = Object.entries(change.changes).map(([key, [from, to]]) => `${key} ${show(from)} → ${show(to)}`).join('; ');
+    record(session, now, '', 'YES', 'WAIT', 'RULES_UPDATED', `Bot rules saved (revision ${session.rulesRevision}): ${listed || 'no change'}. ${change.holdings}`, undefined, { ruleChange: change });
+    session.ruleChanges = [...(session.ruleChanges ?? []), change].slice(-50);
     return session;
   }
   if (action.action === 'reset') {

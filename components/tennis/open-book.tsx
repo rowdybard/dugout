@@ -26,7 +26,7 @@ export function SellEverything({session,markets,now,busy,onSell}:{session:Tennis
 /** One always-visible list of the bot's working orders and the shares it holds, across the main and Chaos games. */
 export function OpenBook({session,markets,now}:{session:TennisSession;markets:TennisMarket[];now:number}) {
   const {orders,holdings,reserved,held}=openBook(session,markets,now);
-  const games=new Set([...orders,...holdings].map(row=>row.slug)).size;
+  const games=new Set([...orders,...holdings].map(row=>row.slug)).size,lastChange=session.ruleChanges?.at(-1);
   return <section className="tennis-open-book" aria-label="Open orders and shares">
     <div className="tennis-open-book-head"><b>Open orders &amp; shares</b>
       <span>{orders.length||holdings.length?`${money(reserved)} in offers · ${money(held)} in shares${games>1?` · ${games} games`:''}`:'Nothing open'}</span></div>
@@ -44,6 +44,7 @@ export function OpenBook({session,markets,now}:{session:TennisSession;markets:Te
         <td>{qty(holding.quantity)}</td><td>{cents(holding.averagePrice)}</td><td>{money(holding.cost)}</td>
         <td className={holding.result===null?'':holding.result<0?'tennis-negative':'tennis-positive'}>{holding.result===null?'Waiting for a price':`${signed(holding.result)}${holding.partial?' (part)':''}`}</td>
       </tr>)}</tbody></table>}
+    {holdings.length>0&&lastChange&&now-lastChange.time<30*60_000&&<p className="tennis-order-help">Rules changed {Math.max(1,Math.round((now-lastChange.time)/60_000))} min ago{lastChange.modeBefore!==lastChange.modeAfter?` (${lastChange.modeBefore} → ${lastChange.modeAfter})`:''}. {lastChange.holdings}</p>}
     {!orders.length&&!holdings.length&&<p className="tennis-order-help">{session.status==='running'?'No offers posted right now. The bot posts them when the book is quiet and the research allows it.':'Start the bot to post offers.'}</p>}
   </section>;
 }
