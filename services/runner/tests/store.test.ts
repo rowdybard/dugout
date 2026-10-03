@@ -115,9 +115,12 @@ test('cutover rejects a missing execution journal, open holdings and a ledger-le
 test('reset revisions stay monotonic, racing stale commands lose, and budget cannot be bypassed by resume',async()=>{
   const {store}=await active();const beforeReset=store.session()!;await store.advance({action:'reset',bankroll:100,commandId:'initial-reset'},[],NOW+2);const old=store.session()!;assert.equal(old.revision,beforeReset.revision+1);
   const result=await Promise.allSettled([store.advance({action:'reset',bankroll:90,commandId:'race-reset'},[],NOW+3),store.advance({action:'update-rules',rules:{entryBudget:6},expectedRulesRevision:0,sessionId:old.id,commandId:'race-rules'},[],NOW+3)]);
-  assert.equal(result.filter(r=>r.status==='fulfilled').length,1);assert.notEqual(store.session()?.id,old.id);assert.equal(store.session()?.cash,90);
+  // Both start together; whichever commits first wins and the other is refused (either order is legitimate).
+  assert.equal(result.filter(r=>r.status==='fulfilled').length,1);
+  if(result[0].status==='fulfilled'){assert.notEqual(store.session()?.id,old.id);assert.equal(store.session()?.cash,90);}
+  else{assert.equal(store.session()?.id,old.id);assert.equal(store.session()?.config.entryBudget,6);}
   assert.equal(store.session()?.revision,old.revision+1);
-  await assert.rejects(()=>store.advance({action:'tick',sessionId:old.id},[],NOW+4,[],0),/changed/);
+  await assert.rejects(()=>store.advance({action:'tick',sessionId:old.id},[],NOW+4,[],old.revision),/changed/);
   store.set('usage',{day:new Date(NOW).toISOString().slice(0,10),estimatedRowsWritten:RUNNER_ENTRY_WRITE_LIMIT+1,alarmChecks:1,entryPauseAt:75000});await assert.rejects(()=>store.advance({action:'resume',commandId:'over-budget'},[],NOW+5),/write-budget/);
 });
 test('reset is accepted by revision-monotonic UI polling and delayed old account responses remain older',async()=>{

@@ -40,14 +40,17 @@ export function useTennis() {
   const contextSlugs=[...new Set([session?.pending?.market,...(session?.positions.filter(p=>p.status==='open').map(p=>p.lastContext??p.market)??[]),catalog?.markets.find(m=>m.slug===watchedSlug)].filter(m=>m&&(m.league==='CFB'||m.league==='NFL')).map(m=>m!.slug))].join(',');
   const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
+  // One failed background check is usually a passing blip (a 503 from the host); say so only after two in a row.
+  const pollFailures=useRef(0),catalogFailures=useRef(0);
   const accept=useCallback((response:TennisSessionResponse)=>{
     if(!mounted.current)return;
     if(sessionRef.current&&sessionRef.current.revision>response.session.revision)return;
     sessionRef.current=response.session;
     setSession(response.session);
-    setRuntime(response.runtime);
+    // The research sweep summary may arrive at the top level (runner pass-through) rather than inside runtime.
+    setRuntime(response.runtime&&{...response.runtime,sweep:response.runtime.sweep??response.sweep??null});
     setNow(Date.now());
-    setConnectionIssue(null);
+    setConnectionIssue(null);pollFailures.current=0;
     setCatalog(current=>current?{...current,markets:[...current.markets,...response.session.positions.filter(p=>p.status==='open'&&!current.markets.some(m=>m.slug===p.slug)).map(p=>({...p.lastContext??p.market,active:false}))].map(m=>marketWithSessionQuotes(m,response.session))}:current);
     if(response.error)setError(response.error);
   },[]);
@@ -66,8 +69,8 @@ export function useTennis() {
         const history=mergeTennisHistory(market.history,(existing?.history??[]).filter(point=>!rejected.has(point.time)));
         const newest=existing&&(existing.quoteObservedAt??existing.observedAt)>(market.quoteObservedAt??market.observedAt)?{...market,bid:existing.bid,ask:existing.ask,price:existing.price,quoteObservedAt:existing.quoteObservedAt,quoteSource:existing.quoteSource,quoteSourceTime:existing.quoteSourceTime,history}:{...market,history};
         return marketWithSessionQuotes(existing?marketWithWatchedContext(newest,existing,Date.now()):newest,sessionRef.current);
-      })}));setFeedError(null);
-    }catch(cause){if(mounted.current)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
+      })}));setFeedError(null);catalogFailures.current=0;
+    }catch(cause){if(mounted.current&&++catalogFailures.current>=2)setFeedError(cause instanceof Error?cause.message:'Market data is unavailable.');}
     finally{catalogBusy.current=false;if(mounted.current){setLoading(false);setRefreshing(false);setCatalogAttempt(value=>value+1);if(catalogRerun.current)void refreshCatalog();}}
   },[]);
   // A command can be a function of the latest saved session: it is built after any in-flight check finishes, so a
@@ -100,7 +103,7 @@ export function useTennis() {
         setError(null);return true;
       }catch(cause){
         const message=cause instanceof Error?cause.message:'The paper account could not be updated.';
-        if(mounted.current){if(background)setConnectionIssue(message);else setError(message);}
+        if(mounted.current){if(!background)setError(message);else if(++pollFailures.current>=2)setConnectionIssue(message);}
         if(/session changed|another request|conflict|updated by|connection/i.test(message)){
           try{accept(await readJson<TennisSessionResponse>('/api/tennis/session'));}catch{/* Keep the actionable original error. */}
         }
@@ -200,7 +203,7 @@ export function useTennis() {
       const current=sessionRef.current;
       if(!current||inflight.current)return;
       if(runtime?.mode==='service'||runtime?.mode==='migrating'){
-        if(!commandQueued.current){inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
+        if(!commandQueued.current){inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current&&++pollFailures.current>=2)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
         return;
       }
       // Pausing entries does not pause exit checks; existing positions still need monitoring.

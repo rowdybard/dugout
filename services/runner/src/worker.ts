@@ -4,7 +4,7 @@ import {PolymarketInputAdapter} from './input-adapter.ts';
 import {json,verifyRunnerRequest,runnerError,RunnerError} from '../../../lib/runner/protocol.ts';
 import {runnable} from '../../../lib/runner/contracts.ts';
 import {runnerAllowed} from '../../../lib/runner/owners.ts';
-import type {MigrationStart,MigrationChunk,RunnerCommand,SourceHealth} from '../../../lib/runner/contracts';
+import type {MigrationStart,MigrationChunk,RunnerCommand,RunnerState,SourceHealth} from '../../../lib/runner/contracts';
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
 import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
@@ -19,6 +19,8 @@ type LakeBindings={LAKE?:R2Put;LAKE_PREFIX?:string};
 /** Optional: more accounts that may have their own runner (lib/runner/owners.ts). */
 type AllowList={RUNNER_OWNERS?:string};
 const response=(value:unknown)=>Response.json(value,{headers:{'Cache-Control':'no-store'}});
+/** Session state for the site: the small status block also goes in a header so the site never re-parses the session. */
+const stateResponse=(state:RunnerState)=>new Response(JSON.stringify(state),{headers:{'Content-Type':'application/json','Cache-Control':'no-store','x-dugout-runner':encodeURIComponent(JSON.stringify(state.runner))}});
 function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
   if(!c||!['start','resume','pause','stop','reset','update-rules'].includes(c.action)||typeof c.commandId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(c.commandId))throw new RunnerError(400,'A supported command and unique commandId are required.');
@@ -46,7 +48,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       if(!runnerAllowed(verified.owner,this.env.RUNNER_OWNER_ID,(this.env as RunnerEnv&AllowList).RUNNER_OWNERS))throw new RunnerError(403,'Runner owner is not authorized.');
       this.store.assertIdentity(verified.owner,verified.epoch);this.store.acceptNonce(verified.nonce,Date.now());
       const url=new URL(request.url),method=request.method,path=url.pathname;
-      if(method==='GET'&&path==='/v1/state')return response(this.store.state());
+      if(method==='GET'&&path==='/v1/state')return stateResponse(this.store.state());
       if(method==='GET'&&path==='/v1/export')return response(this.store.exportPage(url.searchParams.get('exportId'),Number(url.searchParams.get('after')??0),Number(url.searchParams.get('limit')??250),Date.now()));
       if(method==='GET'&&path==='/v1/migration/status')return response(this.store.importStatus(url.searchParams.get('migrationId')??''));
       if(method==='POST'&&path==='/v1/feed-credentials'){
@@ -69,7 +71,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       if(method==='POST'&&path==='/v1/command'){
         const command=parseCommand(verified.body);
         const result=await this.store.advance(command,[],Date.now());
-        await this.schedule();return response(result);
+        await this.schedule();return stateResponse(result);
       }
       throw new RunnerError(404,'Runner route was not found.');
     }catch(error){return runnerError(error);}finally{this.store.saveUsage();}

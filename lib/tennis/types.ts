@@ -183,4 +183,4 @@ export type TennisRuntime={mode:'browser'|'migrating'|'service';intervalMs:numbe
   sweep?:SweepSummary|null;
   /** This account's runner holds its own Polymarket key (live price stream). Only a yes/no; the key never comes back. */
   feedKey?:boolean};
-export type TennisSessionResponse={session:TennisSession;runtime:TennisRuntime;error?:string};
+export type TennisSessionResponse={session:TennisSession;runtime:TennisRuntime;error?:string;sweep?:TennisRuntime['sweep']};

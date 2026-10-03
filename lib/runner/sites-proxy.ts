@@ -34,16 +34,20 @@ export async function readRunnerOwnedSession(request:Request,database:RunnerData
   const session=fence.mode==='frozen'?JSON.parse(fence.snapshot) as TennisSession:(await runnerRequest<RunnerState>(env,owner,fence.epoch,'/v1/state')).session;
   return {ownerId:owner,session,stored:true};
 }
-async function boundedJson(response:Response):Promise<unknown>{
+async function boundedText(response:Response):Promise<string>{
   if(!response.body)throw new RunnerError(502,'Background runner returned no response.');
   const reader=response.body.getReader(),decoder=new TextDecoder('utf-8',{fatal:true});let size=0,text='';
   try{while(true){const item=await reader.read();if(item.done)break;size+=item.value.byteLength;if(size>4_000_000)throw new RunnerError(502,'Background runner response is too large.');text+=decoder.decode(item.value,{stream:true});}text+=decoder.decode();}
   catch(error){await reader.cancel().catch(()=>{});throw error;}finally{reader.releaseLock();}
+  return text;
+}
+async function boundedJson(response:Response):Promise<unknown>{
+  const text=await boundedText(response);
   let parsed:unknown;try{parsed=JSON.parse(text);}catch{throw new RunnerError(502,'Background runner returned an unreadable response.');}
   if(!response.ok){const message=parsed&&typeof parsed==='object'&&'error'in parsed&&typeof parsed.error==='string'?parsed.error:'Background runner request failed.';throw new RunnerError(response.status>=400&&response.status<600?response.status:502,message);}
   return parsed;
 }
-export async function runnerRequest<T>(env:RunnerBindings,owner:string,epoch:string,path:string,method:'GET'|'POST'='GET',value?:unknown,fetcher:typeof fetch=fetch):Promise<T>{
+async function runnerFetch(env:RunnerBindings,owner:string,epoch:string,path:string,method:'GET'|'POST'='GET',value?:unknown,fetcher:typeof fetch=fetch):Promise<Response>{
   const config=runnerConfiguration(env);
   if(!/^\/v1\/(?:state|command|export|feed-credentials|migration\/(?:start|chunk|status|activate))(?:\?[^#]*)?$/.test(path))throw new RunnerError(400,'Unsupported runner route.');
   const url=config.url+path,body=value===undefined?'':JSON.stringify(value);
@@ -58,10 +62,30 @@ export async function runnerRequest<T>(env:RunnerBindings,owner:string,epoch:str
     throw new RunnerError(503,'Background runner is unreachable. Browser trading remains disabled for this account.');
   }
   if(response.status>=300&&response.status<400){await response.body?.cancel();throw new RunnerError(502,'The background runner returned a redirect. Its signed request was not forwarded.');}
-  return await boundedJson(response) as T;
+  return response;
 }
-function sessionResponse(state:RunnerState,env:RunnerBindings){
-  return Response.json({...state,runtime:{mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:state.runner.lastEngineCheck,quoteAgeMs:state.runner.quoteAgeMs,gameReportAgeMs:state.runner.contextAgeMs,failureReason:state.runner.source.state==='error'?state.runner.source.message:null,usage:state.runner.usage,sweep:state.sweep??null,feedKey:state.runner.feedKey===true}},{headers:{'Cache-Control':'no-store'}});
+export async function runnerRequest<T>(env:RunnerBindings,owner:string,epoch:string,path:string,method:'GET'|'POST'='GET',value?:unknown,fetcher:typeof fetch=fetch):Promise<T>{
+  return await boundedJson(await runnerFetch(env,owner,epoch,path,method,value,fetcher)) as T;
+}
+/**
+ * The runner's state, passed through as text. The session is large (hundreds of notes, the balance history), and
+ * parsing then re-serializing it on every 2.5-second poll could exceed the Workers free plan's 10 ms CPU limit per
+ * request (a plain 503). The runner sends its small status block in the `x-dugout-runner` header; the body is kept
+ * as received. Older runners without the header fall back to parsing.
+ */
+export async function runnerStateText(env:RunnerBindings,owner:string,epoch:string,path:string,method:'GET'|'POST'='GET',value?:unknown,fetcher:typeof fetch=fetch):Promise<{text:string;runner:RunnerState['runner']}>{
+  const response=await runnerFetch(env,owner,epoch,path,method,value,fetcher);
+  const header=response.ok?response.headers.get('x-dugout-runner'):null;
+  if(!header){const state=await boundedJson(response) as RunnerState;return {text:JSON.stringify(state),runner:state.runner};}
+  let runner:RunnerState['runner'];try{runner=JSON.parse(decodeURIComponent(header));}catch{throw new RunnerError(502,'Background runner returned an unreadable status.');}
+  const text=(await boundedText(response)).trim();
+  if(!text.startsWith('{')||!text.endsWith('}'))throw new RunnerError(502,'Background runner returned an unreadable response.');
+  return {text,runner};
+}
+function sessionResponse({text,runner}:{text:string;runner:RunnerState['runner']},env:RunnerBindings){
+  // The sweep summary stays in the body (top-level `sweep`); the dashboard reads it from there.
+  const runtime={mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:runner.lastEngineCheck,quoteAgeMs:runner.quoteAgeMs,gameReportAgeMs:runner.contextAgeMs,failureReason:runner.source.state==='error'?runner.source.message:null,usage:runner.usage,feedKey:runner.feedKey===true};
+  return new Response(`${text.slice(0,-1)},"runtime":${JSON.stringify(runtime)}}`,{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
 type ExportPage={schemaVersion:3;exportId:string;capturedAt:number;session:TennisSession;records:unknown[];observations:{id:string;value:unknown}[];nextCursor:number;complete:boolean;pageEvidenceComplete:boolean;missingObservationIds:string[];exactReplayStartsAt:'migration-checkpoint'};
 async function runnerExport(env:RunnerBindings,fence:OwnerFence):Promise<Response>{
@@ -104,7 +128,7 @@ export async function proxyRunnerSession(request:Request,database:RunnerDatabase
   if(new URL(request.url).searchParams.get('export')==='1')return runnerExport(env,fence);
   // Older open browser tabs may still post ticks. Read state without duplicating work.
   const state=action&&action.action!=='tick'
-    ?await runnerRequest<RunnerState>(env,owner,fence.epoch,'/v1/command','POST',{command:action})
-    :await runnerRequest<RunnerState>(env,owner,fence.epoch,'/v1/state');
+    ?await runnerStateText(env,owner,fence.epoch,'/v1/command','POST',{command:action})
+    :await runnerStateText(env,owner,fence.epoch,'/v1/state');
   return sessionResponse(state,env);
 }

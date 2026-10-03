@@ -18,8 +18,12 @@ const evidenceAge=(time:number|undefined|null,now:number)=>typeof time!=='number
 
 /** Describe saved bot authority only. Display-only feed polling cannot advance these clocks. */
 export function decisionView(session:TennisSession,market:TennisMarket|undefined,runtime:TennisRuntime|null,now:number){
-  const held=session.positions.find(position=>position.status==='open');
-  const focus=held?.slug??session.pending?.slug??session.config.focusSlug;
+  // While running, the card follows the bot's chosen game; shares still held on a previous game are listed under
+  // Open orders & shares. Otherwise (paused, stopping) it stays on what is held or pending.
+  const anyHeld=session.positions.find(position=>position.status==='open');
+  const switched=session.status==='running'&&!!session.config.focusSlug&&!!anyHeld&&anyHeld.slug!==session.config.focusSlug&&!session.pending;
+  const focus=switched?session.config.focusSlug:anyHeld?.slug??session.pending?.slug??session.config.focusSlug;
+  const held=session.positions.find(position=>position.status==='open'&&position.slug===focus);
   const savedMarket=focus?session.positions.findLast(position=>position.slug===focus)?.market:undefined;
   const identity=market?.slug===focus?market:held?.slug===focus?held.market:
     session.pending?.slug===focus?session.pending.market:savedMarket;

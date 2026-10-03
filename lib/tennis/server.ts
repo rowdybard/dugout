@@ -56,7 +56,8 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     // Chaos mode: the main game and every Chaos game get books each tick, even while one of them holds inventory.
     const wanted=new Set([session.config.focusSlug,...(session.config.entries==='steady'?session.config.chaosSlugs??[]:[])].filter((slug):slug is string=>!!slug));
     const chaosOn=wanted.size>1;
-    if(action.action==='tick'&&session.status==='running'&&(!chosen.size||chaosOn&&[...wanted].some(slug=>!chosen.has(slug)))){
+    // The bot's game (and Chaos games) get books even while shares are held on another game.
+    if(action.action==='tick'&&session.status==='running'&&(!chosen.size||[...wanted].some(slug=>!chosen.has(slug)))){
       const catalog=await withDeadline(getTennisCatalog({includeHistory:false,leagues:session.config.leagues,signal:controller.signal}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
       // Engine accounts also watch their focused game before it starts: pregame strategies act then.
       const pregameFocus=(m:TennisMarket)=>session.config.evidenceGate==='evidence-v1'&&wanted.has(m.slug)&&!m.live&&Date.parse(m.startTime)>Date.now();

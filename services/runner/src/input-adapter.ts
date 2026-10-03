@@ -159,14 +159,16 @@ export class PolymarketInputAdapter implements InputAdapter {
   }
   async gather(session:TennisSession){
     const gatheringGeneration=this.generation,failures:string[]=[],held=session.positions.filter(p=>p.status==='open');
-    let markets=held.map(p=>p.lastContext??p.market);
+    const markets=held.map(p=>p.lastContext??p.market);
     if(session.pending&&!markets.some(m=>m.slug===session.pending!.slug))markets.push(session.pending.market);
-    if(!markets.length&&session.status==='running'&&session.config.focusSlug){
-      const known=this.store.get<TennisMarket>('focused-market:'+session.config.focusSlug);
-      if(known)markets=[known];
+    // The bot's game is fetched even while shares are held on another game (switching games keeps those managed).
+    const focus=session.config.focusSlug;
+    if(session.status==='running'&&focus&&!markets.some(m=>m.slug===focus)){
+      const known=this.store.get<TennisMarket>('focused-market:'+focus);
+      if(known)markets.push(known);
       else{let catalog:TennisMarket[]=[];
         try{catalog=await this.catalog(session,AbortSignal.timeout(3500));}catch(error){failures.push(errorText(error));}
-        markets=catalog.filter(m=>m.slug===session.config.focusSlug).slice(0,1);
+        markets.push(...catalog.filter(m=>m.slug===focus).slice(0,1));
       }
     }
     // Chaos mode: the extra games' books are fetched every tick too (each resting-order game needs a fresh book).

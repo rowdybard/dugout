@@ -131,10 +131,11 @@ export function TennisDashboard() {
   const reset=async()=>{if(!resetValid)return;const ok=await bot.perform({action:'reset',bankroll:Math.round(resetBalance*100)/100,commandId:tennisCommandId(),...(tradesOpen?{abandon:true as const}:{})});if(ok)setResetOpen(false);};
   const openReset=()=>{setResetText(String(session?.config.startingCash??100));setResetOpen(true);};
 
-  // Choosing a game points the bot at it (and narrows the account to college football); with a trade open it only follows it.
+  // Choosing a game points the bot at it (and narrows the account to college football). Shares held on the old game
+  // stay managed there (sold or settled as before); new orders go to the new game.
   const chooseGame=async(slug:string)=>{
     setFollowed(slug);
-    if(!session||open.length||session.pending||session.config.focusSlug===slug)return;
+    if(!session||session.config.focusSlug===slug)return;
     await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),
       rules:{focusSlug:slug,...(onlyVisible?{}:{leagues:[...VISIBLE_LEAGUES]}),...(session.config.chaosSlugs?.includes(slug)?{chaosSlugs:session.config.chaosSlugs.filter(item=>item!==slug)}:{})}});
   };
@@ -209,7 +210,7 @@ export function TennisDashboard() {
 
       <section className="tennis-tracker" aria-label="Game tracker">
         {followedMarket?<TennisMatchChart key={followedMarket.slug} market={followedMarket} session={session} now={now} contextAssessment={bot.contextAssessments[followedMarket.slug]} contextCheck={bot.contextChecks[followedMarket.slug]}/>:<p className="tennis-order-help">Pick a game to follow it here.</p>}
-        {followedMarket&&botGame&&followedMarket.slug!==botGame.slug&&<p className="tennis-order-help">Following {followedMarket.yesName} vs. {followedMarket.noName}; the bot stays on its game until its trade closes.</p>}
+        {followedMarket&&botGame&&followedMarket.slug!==botGame.slug&&<p className="tennis-order-help">Following {followedMarket.yesName} vs. {followedMarket.noName}; the bot is on {botGame.yesName} vs. {botGame.noName}.</p>}
         {bot.watchedBookError&&(!followedMarket?.quoteObservedAt||Math.abs(now-followedMarket.quoteObservedAt)>5000)&&<p className="tennis-order-help" role="status">{bot.watchedBookError}</p>}
         {bot.watchedContextError&&<p className="tennis-order-help" role="status">Game report: {bot.watchedContextError}</p>}
       </section>
