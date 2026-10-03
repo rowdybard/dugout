@@ -27,7 +27,7 @@ The page shows only what's needed to run the bot:
 - **Search box:** live and upcoming college games.
 - **Bot card:**
   - **Steady / Bold / Auto**, balance, and **Reset balance** ($5–$10,000, any time; open paper trades are dropped).
-  - **Start / Pause / Resume / End run / New run**.
+  - **Start / Pause / Resume / End run / New run**. After a loss-limit stop, **Acknowledge loss and resume** keeps the same run, balance and history, with the original dollar loss allowance for the next period.
   - A plain-English **status box** with a **Both sides** line per team.
   - **Open orders & shares:** every resting offer and holding, across the main game and the Octopus's arms.
 - **Game tracker:** score, clock and field drawing from Polymarket game reports.

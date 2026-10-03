@@ -16,7 +16,7 @@ Dugout runs a bot that practises trading college football games on Polymarket wi
 2. **Bot card:**
    - the game name, and **Steady** / **Bold** / **Auto** (see below);
    - your **balance**, and **Reset balance**;
-   - the main button: **Start bot**, **Pause**, **Resume** or **New run**, and **End run** next to it while a run is going;
+   - the main button: **Start bot**, **Pause**, **Resume**, **Acknowledge loss and resume** or **New run**, and **End run** next to it while a run is going;
    - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
    - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now.
 3. **Game tracker:** score, clock and a drawing of the field from Polymarket's game reports. It's not live video and can lag.
@@ -36,7 +36,7 @@ The bot mostly trades by leaving **buy offers** on both teams, slightly below th
 
 Bold doesn't make the bot smarter. It puts more money on each trade, so the bad days get bigger too.
 
-In Bold (and Auto when it's in Bold), the bot also tries one **comeback re-entry**, on paper, to measure it: when a team trails by 3 to 24 points and drives inside the opponent's 30 (1st to 3rd down, **more than 5 minutes left**), it buys that team and sells when the drive ends. It never fires in the last 5 minutes, when a trailing team is usually a 1–2¢ longshot. The research so far leans against it (the move after such drives is smaller than the cost of buying and selling), so treat its results as a test, not a strategy that wins back losses.
+In Bold (and Auto when it's in Bold), the bot also tries one **comeback re-entry**, on paper, to measure it: when a team trails by 3 to 24 points and drives inside the opponent's 30 (1st to 3rd down, **at least 5 minutes left**), it buys that team and sells when the drive ends. It does not open that trade with fewer than 5 minutes left, when a trailing team is usually a 1–2¢ longshot. The research so far leans against it (the move after such drives is smaller than the cost of buying and selling), so treat its results as a test, not a strategy that wins back losses.
 
 **Auto** lets the bot pick Steady or Bold on every check:
 - **Bold** while the research allows a hold-to-final or comeback bet on your game;
@@ -49,6 +49,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 - **Start bot:** pick a game first, then press it.
 - **Pause:** no new trades. Anything already held stays managed. **Resume** carries on.
 - **End run:** sells what it holds and closes the run. **New run** then starts fresh.
+- **Acknowledge loss and resume:** appears after the bot hits its loss limit and finishes selling. Keeps the same run, balance and history. Each acknowledgement allows the original dollar amount again: with a $100 start and a 20% limit, a stop at $79.94 can resume with another $20 allowance, reaching the next limit at $59.94. It never resumes a loss stop automatically.
 - **Sell everything now:** the big button that appears while the bot holds shares. It's green when they're up and red when down, and shows the amount. It sells everything at the best price on the next price check (a few seconds) and pauses the bot. Press Resume to carry on.
 - **Reset balance:** starts over at any amount from $5 to $10,000, any time. Open paper trades are dropped, which is fine because it's fake money.
 - **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game.
@@ -66,6 +67,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 | **Watching** | It's checking, but the research doesn't allow a trade right now. |
 | **Bot is behind** | No check from the bot for 30–45 seconds. If it lasts more than a minute, reload the page. |
 | **Paused / Ready / Stopped** | Not trading. Press Resume, Start or New run. |
+| **Loss limit hit** | Trading stopped at the loss limit. After exits finish, acknowledge the loss to continue the same run. |
 | **Managing position** | It holds shares and is handling them (see Open orders & shares). |
 
 ## Why it isn't trading

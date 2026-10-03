@@ -188,8 +188,8 @@ export class RunnerStore {
     if(expectedRevision!==undefined&&before.revision!==expectedRevision)throw new RunnerError(409,'Session changed while fetching inputs.');
     const commandId=action.commandId,fingerprint=JSON.stringify(action);
     if(commandId){const previous=this.commandResult(commandId,fingerprint);if(previous)return previous;}
-    if(['start','resume'].includes(action.action)&&this.usage(now).estimatedRowsWritten>=this.usage(now).entryPauseAt)throw new RunnerError(409,'New entries are paused until the next UTC day because the runner write-budget estimate was reached.');
-    if((action.action==='resume'||action.action==='start')&&!(action.action==='start'?action.config?.focusSlug??before.config.focusSlug:before.config.focusSlug))throw new RunnerError(400,'Choose one focused game before starting the runner.');
+    if(['start','resume','acknowledge-loss'].includes(action.action)&&this.usage(now).estimatedRowsWritten>=this.usage(now).entryPauseAt)throw new RunnerError(409,'New entries are paused until the next UTC day because the runner write-budget estimate was reached.');
+    if(['resume','start','acknowledge-loss'].includes(action.action)&&!(action.action==='start'?action.config?.focusSlug??before.config.focusSlug:before.config.focusSlug))throw new RunnerError(400,'Choose one focused game before starting the runner.');
     if(commandId&&before.commandIds.includes(commandId))throw new RunnerError(409,'This command was already recorded before migration. Refresh the saved session.');
     const reduced=reduceRunnerAction(before,action,inputs,now,cause),next=reduced.session;
     if(next===before||next.id===before.id&&next.revision===before.revision)throw new RunnerError(409,'Session or clock changed. Refresh and retry.');

@@ -95,12 +95,12 @@ export function useTennis() {
         const rejected=action.action==='start'?result.status!=='running'
           :action.action==='reset'?result.config.startingCash!==action.bankroll||result.status!=='idle'
           :action.action==='update-rules'?(result.rulesRevision??0)!==action.expectedRulesRevision+1
-          :action.action==='resume'?result.status!=='running':false;
+          :action.action==='resume'||action.action==='acknowledge-loss'?result.status!=='running':false;
         if(rejected&&!response.error&&typeof request==='function'&&attempt===0&&action.action==='update-rules'&&/another tab/i.test(result.lastReason??'')){
           const next=build();if(next){action=next;continue;}
         }
         if(response.error||rejected){setError(response.error||result.lastReason);return false;}
-        setError(null);return true;
+        if(!background)setError(null);return true;
       }catch(cause){
         const message=cause instanceof Error?cause.message:'The paper account could not be updated.';
         if(mounted.current){if(!background)setError(message);else if(++pollFailures.current>=2)setConnectionIssue(message);}

@@ -31,3 +31,21 @@ export async function active(session=snapshot(),data:MigrationData={journal:[],o
   await store.beginImport(m.start,OWNER,EPOCH);await store.importChunk({migrationId:m.start.manifest.migrationId,index:0,data:m.data},OWNER,EPOCH);store.activate(m.start.manifest.migrationId,OWNER,EPOCH,NOW+1);
   return {...fixture,store,m};
 }
+/** Reconciled, closed synthetic loss only; no real account or market history. */
+export async function activeStoppedLoss(){
+  const session=snapshot(),market=input(NOW).market,positionId='synthetic-loss-position';
+  session.status='stopped';session.cash=79.94;
+  session.ledger=[
+    {id:'synthetic-loss-buy',time:NOW-2000,slug:market.slug,side:'YES',action:'BUY',source:'AUTOMATIC',positionId,reason:'Synthetic fixture entry',cashDelta:-25,realizedPnl:0},
+    {id:'synthetic-loss-sell',time:NOW-1000,slug:market.slug,side:'YES',action:'SELL',source:'AUTOMATIC',positionId,reason:'Synthetic fixture loss exit',cashDelta:4.94,realizedPnl:-20.06},
+  ];
+  session.positions=[{id:positionId,slug:market.slug,league:market.league,title:market.title,side:'YES',name:market.yesName,
+    quantity:0,initialQuantity:50,costBasis:0,entryCost:25,entryPrice:.5,entryFees:0,openedAt:NOW-2000,
+    status:'closed',closedAt:NOW-1000,exitPrice:.0988,realizedPnl:-20.06,exitFees:0,proceeds:4.94,
+    netLiquidationValue:0,liquidationQuantity:0,markedAt:NOW-1000,market}];
+  session.histories[market.slug+':YES']=[{time:NOW-1000,price:.0988}];
+  session.equity=[{time:NOW-2000,price:100},{time:NOW-1000,price:79.94}];
+  session.testRun={startedAt:NOW-3600000,endsAt:NOW-1,watchedMs:3600000,lastCheckAt:NOW-1,startingCash:100,startingLedgerCount:0,liveSlugs:[market.slug],complete:true};
+  const data:MigrationData={journal:session.ledger.map(entry=>({id:OWNER+':'+entry.id,kind:'execution',value:entry,time:entry.time})),observations:[]};
+  return active(session,data);
+}

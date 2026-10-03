@@ -25,6 +25,23 @@ test('paused, idle and stopped sessions do not claim to be watching a live displ
   }
 });
 
+test('a completed loss stop explains acknowledgement without asking to reset the run',()=>{
+  const value=session();value.status='stopped';value.cash=79.94;
+  const view=decisionView(value,market(),runtime(),now);
+  assert.equal(view.state,'Loss limit hit');
+  assert.match(view.reason,/Acknowledge.*another \$20\.00.*balance and history stay intact/);
+  assert.doesNotMatch(view.reason,/new run/);
+  value.cash=0;
+  assert.match(decisionView(value,market(),runtime(),now).reason,/no cash remains/);
+});
+
+test('a loss stop with unfinished exits does not invite acknowledgement',()=>{
+  const value=session();value.status='stopping';value.cash=70;value.positions=[position('focus')];
+  const view=decisionView(value,market(),runtime(),now);
+  assert.equal(view.state,'Exiting');
+  assert.doesNotMatch(view.reason,/Acknowledge/);
+});
+
 test('a recent runner pass stays distinct from its old accepted book and game report',()=>{
   const value=session();
   value.lastReason='Rejected backward provider book timestamp.';

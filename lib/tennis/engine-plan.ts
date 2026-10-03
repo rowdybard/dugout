@@ -7,6 +7,7 @@ import {QUARTER_SECONDS} from '../decision/sports/index.ts';
 import type {FeatureValue} from '../decision/context.ts';
 import type {TennisInput,TennisMarket,TennisSession} from './types';
 import type {NoTradeCode} from '../decision/why.ts';
+import {dayRiskPnl,lossAllowance,sessionPnl} from './loss-limit.ts';
 
 /**
  * Adapter between the paper bot's session/inputs and the decision engine (lib/decision).
@@ -41,7 +42,7 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
   const entry=packFor(session.config.evidencePack);
   if(!entry)return {error:`Evidence pack ${session.config.evidencePack} is not loaded on this host. New entries are blocked until it is.`};
   const cap=Math.min(100,session.config.startingCash*0.25);
-  const lossLimit=session.config.startingCash*session.config.maxSessionLossFraction;
+  const lossLimit=lossAllowance(session);
   return {engine:createEngine({pack:entry.pack,trust:entry.trust,
     sizing:{bankroll:session.config.startingCash,kellyFraction:0.25,maxStake:Math.min(session.config.entryBudget,cap),maxBankrollFraction:0.25,paperStake:session.config.entryBudget},
     risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:cap,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
@@ -158,8 +159,8 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
 export function sessionRisk(session:TennisSession,now:number):RiskState {
   const day=new Date(now).toISOString().slice(0,10),today=session.ledger.filter(entry=>new Date(entry.time).toISOString().slice(0,10)===day);
   const open=session.positions.filter(position=>position.status==='open');
-  return {dayPnl:today.reduce((sum,entry)=>sum+entry.realizedPnl,0),
-    sessionPnl:session.positions.reduce((sum,position)=>sum+position.realizedPnl,0),
+  return {dayPnl:dayRiskPnl(session,day),
+    sessionPnl:sessionPnl(session),
     openExposure:open.reduce((sum,position)=>sum+position.costBasis,0),
     // Resting-quote fills are many small trades by design; the trade-count limit is for taker entries.
     tradesToday:today.filter(entry=>entry.action==='BUY'&&!entry.positionId.includes(':maker:')).length,

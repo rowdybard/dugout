@@ -24,7 +24,9 @@ const response=(value:unknown)=>Response.json(value,{headers:{'Cache-Control':'n
 const stateResponse=(state:RunnerState)=>new Response(JSON.stringify(state),{headers:{'Content-Type':'application/json','Cache-Control':'no-store','x-dugout-runner':encodeURIComponent(JSON.stringify(state.runner))}});
 function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
-  if(!c||!['start','resume','pause','stop','reset','update-rules','exit-now'].includes(c.action)||typeof c.commandId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(c.commandId))throw new RunnerError(400,'A supported command and unique commandId are required.');
+  if(!c||!['start','resume','pause','stop','reset','update-rules','exit-now','acknowledge-loss'].includes(c.action)||typeof c.commandId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(c.commandId))throw new RunnerError(400,'A supported command and unique commandId are required.');
+  if(c.action==='acknowledge-loss'&&(typeof c.sessionId!=='string'||!/^[a-zA-Z0-9:_.-]{1,250}$/.test(c.sessionId)))throw new RunnerError(400,'The stopped paper session is required to acknowledge its loss.');
+  if(c.action==='acknowledge-loss'&&c.expectedLossAcknowledgement!==null&&(typeof c.expectedLossAcknowledgement!=='string'||!/^[a-zA-Z0-9:_.-]{1,128}$/.test(c.expectedLossAcknowledgement)))throw new RunnerError(400,'The current loss acknowledgement is required. Refresh the stopped paper session.');
   if(c.action==='update-rules'&&!tennisRulesPatchSchema.safeParse(c.rules).success)throw new RunnerError(400,'Invalid rule update.');
   if(c.action==='reset'&&'abandon' in c&&c.abandon!==undefined&&c.abandon!==true)throw new RunnerError(400,'Invalid reset.');
   if('runForMs' in c&&c.runForMs!==undefined&&(!Number.isFinite(c.runForMs)||c.runForMs<60000||c.runForMs>21600000))throw new RunnerError(400,'Invalid observation duration.');

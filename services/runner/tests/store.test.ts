@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {RunnerStore,RUNNER_ENTRY_WRITE_LIMIT} from '../src/store.ts';
 import {applyTennisAction,stepTennisSession} from '../../../lib/tennis/engine.ts';
 import {sha256} from '../../../lib/runner/protocol.ts';
-import {OWNER,EPOCH,NOW,sqlite,migration,active,input,snapshot} from './helpers.ts';
+import {OWNER,EPOCH,NOW,sqlite,migration,active,activeStoppedLoss,input,snapshot} from './helpers.ts';
 import type {ReplayFrame} from '../../../lib/runner/contracts';
 import type {TennisInput} from '../../../lib/tennis/types';
 import {replayFrame} from '../../../lib/runner/replay.ts';
@@ -137,4 +137,76 @@ test('indefinite service resume clears an expired browser window with an exactly
   const frames=page.records.filter(r=>r.kind==='replay').map(r=>r.value as unknown as ReplayFrame);assert.equal(frames[0].clearObservationWindow,true);
   for(const frame of frames)replay=await replayFrame(replay,frame,new Map());assert.deepEqual(replay,store.session());
   assert.deepEqual((page.records.find(r=>r.kind==='migration')?.value.sourceSnapshot as typeof source).testRun,source.testRun);
+});
+test('loss acknowledgement retains account history, records one control and replays its cleared observation window',async()=>{
+  const {store}=await activeStoppedLoss(),initial=store.session()!;
+  const command={action:'acknowledge-loss' as const,sessionId:initial.id,commandId:'loss-acknowledgement',expectedLossAcknowledgement:null};
+  const result=await store.advance(command,[],NOW+2),after=result.session;
+  assert.equal(after.status,'running');assert.equal(after.id,initial.id);assert.equal(after.cash,79.94);
+  assert.deepEqual(after.ledger,initial.ledger);assert.deepEqual(after.positions,initial.positions);
+  assert.deepEqual(after.histories,initial.histories);assert.deepEqual(after.equity,initial.equity);assert.equal(after.testRun,undefined);
+  const page=store.exportPage(null,0,500,NOW+3),frame=page.records.find(r=>r.kind==='replay')!.value as unknown as ReplayFrame;
+  assert.equal(frame.clearObservationWindow,true);assert.equal(frame.action.action,'acknowledge-loss');
+  assert.deepEqual(await replayFrame(initial,frame,new Map()),after);
+  assert.equal(page.records.filter(r=>r.kind==='execution').length,initial.ledger.length);
+  assert.equal(page.records.filter(r=>r.kind==='control').length,1);assert.equal(page.pageEvidenceComplete,true);
+  assert.deepEqual((await store.advance(command,[],NOW+4)).session,after);
+  assert.equal(store.exportPage(null,0,500,NOW+5).records.length,page.records.length);
+  await assert.rejects(()=>store.advance({...command,runForMs:60000},[],NOW+6),/reused/);
+});
+test('loss acknowledgement cannot bypass runner budget or required focused game and preserves its window on rejection',async()=>{
+  const {store}=await activeStoppedLoss(),initial=store.session()!,command={action:'acknowledge-loss' as const,sessionId:initial.id,commandId:'budget-loss-ack',expectedLossAcknowledgement:null};
+  store.set('usage',{day:new Date(NOW).toISOString().slice(0,10),estimatedRowsWritten:RUNNER_ENTRY_WRITE_LIMIT+1,alarmChecks:0,entryPauseAt:RUNNER_ENTRY_WRITE_LIMIT});
+  await assert.rejects(()=>store.advance(command,[],NOW+2),/write-budget/);assert.deepEqual(store.session(),initial);
+  store.set('usage',{day:new Date(NOW).toISOString().slice(0,10),estimatedRowsWritten:0,alarmChecks:0,entryPauseAt:RUNNER_ENTRY_WRITE_LIMIT});
+  const withoutFocus={...initial,config:{...initial.config,focusSlug:undefined}};store.set('session',withoutFocus);
+  await assert.rejects(()=>store.advance(command,[],NOW+3),/focused game/);assert.deepEqual(store.session(),JSON.parse(JSON.stringify(withoutFocus)));
+  store.set('session',initial);await assert.rejects(()=>store.advance({...command,sessionId:'wrong-session'},[],NOW+4),/changed/);
+  assert.deepEqual(store.session(),initial);
+});
+test('rejected and concurrent loss acknowledgements cannot clear a window or duplicate resumed state',async()=>{
+  const {store}=await activeStoppedLoss(),initial=store.session()!;
+  const paused={...initial,status:'paused' as const};store.set('session',paused);
+  const rejected=await store.advance({action:'acknowledge-loss',sessionId:initial.id,commandId:'paused-loss-ack',expectedLossAcknowledgement:null},[],NOW+2);
+  assert.equal(rejected.session.status,'paused');assert.deepEqual(rejected.session.testRun,initial.testRun);
+  const rejectedFrame=store.exportPage(null,0,500,NOW+3).records.find(r=>r.kind==='replay')!.value as unknown as ReplayFrame;
+  assert.equal(rejectedFrame.clearObservationWindow,undefined);
+  store.set('session',initial);
+  const outcomes=await Promise.allSettled([
+    store.advance({action:'acknowledge-loss',sessionId:initial.id,commandId:'concurrent-loss-ack-a',expectedLossAcknowledgement:null},[],NOW+4),
+    store.advance({action:'acknowledge-loss',sessionId:initial.id,commandId:'concurrent-loss-ack-b',expectedLossAcknowledgement:null},[],NOW+4),
+  ]);
+  assert.equal(outcomes.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(outcomes.filter(result=>result.status==='rejected').length,1);
+  const accepted=outcomes.find(result=>result.status==='fulfilled');assert.ok(accepted?.status==='fulfilled');
+  assert.deepEqual(store.session(),accepted.value.session);assert.ok(store.session()!.revision>initial.revision);assert.equal(store.session()!.status,'running');
+  const controls=store.exportPage(null,0,500,NOW+5).records.filter(record=>record.kind==='control'&&String((record.value.action as {commandId?:string}).commandId).startsWith('concurrent-loss-ack'));
+  assert.equal(controls.length,1);
+});
+test('explicit loss acknowledgement duration replaces the completed window and remains replayable',async()=>{
+  const {store}=await activeStoppedLoss(),initial=store.session()!,now=NOW+2;
+  const result=await store.advance({action:'acknowledge-loss',sessionId:initial.id,commandId:'timed-loss-ack',expectedLossAcknowledgement:null,runForMs:60000},[],now);
+  assert.equal(result.session.status,'running');assert.equal(result.session.testRun!.startedAt,now);assert.equal(result.session.testRun!.endsAt,now+60000);assert.equal(result.session.testRun!.complete,false);
+  const frame=store.exportPage(null,0,500,now+1).records.find(record=>record.kind==='replay')!.value as unknown as ReplayFrame;
+  assert.equal(frame.clearObservationWindow,undefined);assert.deepEqual(await replayFrame(initial,frame,new Map()),result.session);
+});
+
+test('an old distinct acknowledgement cannot reopen a later loss period in the same account',async()=>{
+  const {store}=await activeStoppedLoss(),initial=store.session()!,firstCommand='first-loss-period';
+  const first=await store.advance({action:'acknowledge-loss',sessionId:initial.id,commandId:firstCommand,expectedLossAcknowledgement:null},[],NOW+2);
+  const secondPosition={...initial.positions[0],id:'synthetic-second-loss-position',openedAt:NOW+3,closedAt:NOW+4,markedAt:NOW+4};
+  const stopped={...first.session,status:'stopped' as const,cash:59.88,
+    positions:[...first.session.positions,secondPosition],
+    ledger:[...first.session.ledger,...initial.ledger.map(entry=>({...entry,id:entry.id+'-second',positionId:secondPosition.id,time:entry.action==='BUY'?NOW+3:NOW+4}))],
+    testRun:{...initial.testRun!,startedAt:NOW+2,endsAt:NOW+4,lastCheckAt:NOW+4,startingCash:79.94,startingLedgerCount:2}};
+  store.set('session',stopped);
+  const page=store.exportPage(null,0,500,NOW+5),delayed={action:'acknowledge-loss' as const,sessionId:stopped.id,commandId:'delayed-distinct-first-period',expectedLossAcknowledgement:null};
+  await assert.rejects(()=>store.advance(delayed,[],NOW+6),/changed/);
+  assert.deepEqual(store.session(),stopped);assert.equal(store.commandResult(delayed.commandId,JSON.stringify(delayed)),null);
+  assert.equal(store.exportPage(page.exportId,0,500,NOW+7).records.length,page.records.length);
+  const current={...delayed,commandId:'current-second-period',expectedLossAcknowledgement:firstCommand};
+  const after=(await store.advance(current,[],NOW+8)).session;
+  assert.equal(after.status,'running');assert.equal(after.id,stopped.id);assert.equal(after.cash,59.88);
+  assert.deepEqual(after.ledger,stopped.ledger);assert.deepEqual(after.positions,stopped.positions);assert.equal(after.testRun,undefined);
+  assert.equal(after.lossCheckpoint?.commandId,current.commandId);assert.equal(after.lossCheckpoint?.cash,59.88);
 });

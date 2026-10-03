@@ -4,15 +4,21 @@ import type {RunnerCause} from './contracts';
 import {applyOctopusPicks} from '../tennis/octopus.ts';
 
 /** Service lifecycle adaptation only; signal and execution decisions stay in the
- * shared reducer. Explicit service resume without a duration replaces the old
+ * shared reducer. Explicit service resume or valid loss acknowledgement without a duration replaces the old
  * browser observation window, which remains preserved in earlier checkpoints. */
 export function reduceRunnerAction(previous:TennisSession,action:TennisAction,inputs:TennisInput[],now:number,cause?:RunnerCause){
   const canStart=action.action==='start'&&previous.status==='idle';
   const canResume=action.action==='resume'&&!['stopped','stopping'].includes(previous.status);
-  const clearObservationWindow=(canStart||canResume)&&!('runForMs' in action&&action.runForMs!==undefined)&&!!previous.testRun;
+  const indefinite=!('runForMs' in action&&action.runForMs!==undefined);
+  let clearObservationWindow=(canStart||canResume)&&indefinite&&!!previous.testRun;
   const base=clearObservationWindow?{...previous,testRun:undefined}:previous;
   // A check may carry Octopus auto picks chosen for it; they are applied first, so replaying the check reproduces them.
-  const session=action.action==='tick'?stepTennisSession(applyOctopusPicks(base,action.octopus,now),inputs,now):applyTennisAction(base,action,inputs,now);
+  let session=action.action==='tick'?stepTennisSession(applyOctopusPicks(base,action.octopus,now),inputs,now):applyTennisAction(base,action,inputs,now);
+  // A rejected acknowledgement keeps the completed observation window. Only
+  // the successful transition may replace it with an indefinite service run.
+  if(action.action==='acknowledge-loss'&&previous.status==='stopped'&&session.status==='running'&&session.id===previous.id&&session.revision>previous.revision&&indefinite&&previous.testRun){
+    clearObservationWindow=true;session={...session,testRun:undefined};
+  }
   // The service owns one revision stream across account resets. UI polling and
   // compare-and-swap must never mistake a new account for an older response.
   if(session.id!==previous.id)session.revision=previous.revision+1;

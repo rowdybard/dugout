@@ -35,6 +35,7 @@ import {describeTennisRules,MAX_BALANCE} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
 import {CHECK_STALE_MS} from '@/lib/tennis/decision-view';
 import {localMoveUpgradeRules,startPaperBot} from '@/lib/tennis/start-control';
+import {canAcknowledgeLoss,lossAllowance,lossFloor,lossLimitReached} from '@/lib/tennis/loss-limit';
 
 import {TennisPriceChart} from './price-chart';
 
@@ -104,11 +105,22 @@ export function TennisDashboard() {
   const startBot=()=>startPaperBot(session,bot.runtime,bot.perform,tennisCommandId);
 
   const isRunning=session?.status==='running',isPaused=session?.status==='paused',isIdle=session?.status==='idle',isStopped=session?.status==='stopped';
+  const acknowledgeReady=!!session&&canAcknowledgeLoss(session);
+  const lossStopped=!!session&&isStopped&&lossLimitReached(session,session.cash);
+  const acknowledgeLoss=()=>{
+    // Consent belongs to the loss period shown when clicked, even if a queued check loads a newer period.
+    const shownSessionId=session?.id,expectedLossAcknowledgement=session?.lossCheckpoint?.commandId??null;
+    return bot.perform(latest=>{
+      if(!latest||latest.id!==shownSessionId||!canAcknowledgeLoss(latest)||!latest.config.focusSlug||migrating)return null;
+      const runForMs=latest.config.leagues.some(league=>league==='NFL'||league==='CFB'||league==='MLB')?10_800_000:1_800_000;
+      return {action:'acknowledge-loss',sessionId:latest.id,commandId:tennisCommandId(),expectedLossAcknowledgement,...(background?{}:{runForMs})};
+    });
+  };
 
   const tickStale=!!session&&(session.status==='running'||session.status==='stopping'||open.length>0||!!session.pending)&&now-(bot.runtime?.lastSuccessfulCheck??session.lastTickAt)>(background?CHECK_STALE_MS.service:CHECK_STALE_MS.browser);
 
   const restSeconds=focusedEntryRest(session,now);
-  const status=!session?'Connecting':session.status==='stopping'?'Exiting position':isStopped?'Stopped':tickStale?'Bot is behind':isPaused?'Entries paused':session.pending?'Order pending':isRunning?(open.length?'Managing position':restSeconds!==null?'Resting before next entry':'Scanning'):'Ready';
+  const status=!session?'Connecting':session.status==='stopping'?'Exiting position':lossStopped?'Loss limit hit':isStopped?'Stopped':tickStale?'Bot is behind':isPaused?'Entries paused':session.pending?'Order pending':isRunning?(open.length?'Managing position':restSeconds!==null?'Resting before next entry':'Scanning'):'Ready';
 
   const reasonDecision=session?.decisions.findLast(d=>d.reason===session.lastReason);
   const reasonMarket=catalog?.markets.find(m=>m.slug===reasonDecision?.slug)??session?.positions.find(p=>p.slug===reasonDecision?.slug)?.market;
@@ -199,8 +211,9 @@ export function TennisDashboard() {
         </div>
 
         <div className="tennis-controls">
-          {/* Pause keeps the run (balance, trades, held positions); End run sells what is held and closes it; New run starts over. */}
-          {isStopped?<button className="tennis-primary tennis-big" disabled={bot.busy||migrating} onClick={openReset}><RotateCcw size={16}/>New run</button>
+          {/* Acknowledging a completed loss stop keeps the run; New run starts over. */}
+          {acknowledgeReady?<button className="tennis-primary tennis-big" disabled={bot.busy||migrating||!session?.config.focusSlug} onClick={()=>void acknowledgeLoss()}>{bot.busy?<LoaderCircle size={17}/>:<Play size={17}/>}<span>{bot.busy?'Resuming…':'Acknowledge loss and resume'}</span></button>
+            :isStopped?<button className="tennis-primary tennis-big" disabled={bot.busy||migrating} onClick={openReset}><RotateCcw size={16}/>New run</button>
             :session?.status==='stopping'?<button className="tennis-primary tennis-big is-stop" disabled><LoaderCircle size={17}/>Ending run…</button>
             :isRunning?<button className="tennis-primary tennis-big is-stop" disabled={bot.busy||migrating} onClick={()=>void bot.perform({action:'pause',commandId:tennisCommandId()})}>{bot.busy?<LoaderCircle size={17}/>:<Pause size={17}/>}Pause</button>
             :<button className="tennis-primary tennis-big" disabled={bot.busy||migrating||!session?.config.focusSlug||(isIdle&&(entryBudget<1||entryBudget>Math.min(100,(session?.config.startingCash??0)*.2)))} onClick={()=>void startBot()}>{bot.busy?<LoaderCircle size={17}/>:<Play size={17}/>}{bot.busy?'Starting…':isPaused?'Resume':'Start bot'}</button>}
@@ -208,6 +221,8 @@ export function TennisDashboard() {
           {!session&&<button className="tennis-secondary" onClick={()=>void bot.reloadAccount()}><RefreshCw size={14}/>Reconnect</button>}
           <span className="tennis-runtime"><Clock3 size={13}/>{background?'Keeps running with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still managed':''}</span>
         </div>
+        {acknowledgeReady&&session&&<p className="tennis-order-help" role="status">Keep this run, balance and history. Acknowledging allows another {money(lossAllowance(session))} of loss{session.cash>=lossAllowance(session)?`, with the next stop at ${money(session.cash-lossAllowance(session))}`:''}.{!session.config.focusSlug?' Choose a game before resuming.':''}</p>}
+        {session?.lossCheckpoint&&!isStopped&&<p className="tennis-order-help">Loss acknowledged at {time(session.lossCheckpoint.acknowledgedAt)} · {money(lossAllowance(session))} allowance{lossFloor(session)>=0?` · next balance threshold ${money(lossFloor(session))}`:''}. Profit/loss above still covers the whole run.</p>}
 
         {session&&<details className="tennis-chaos-details" open={arms>0||!!session.config.octopusAuto}><summary>Octopus <span className="tennis-tag tennis-experimental">Experimental</span> · {arms?`${arms} arm${arms>1?'s':''}`:session.config.octopusAuto?'looking for games':'off'}</summary>
           <OctopusPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setOctopus}/></details>}

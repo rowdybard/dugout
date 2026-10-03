@@ -176,6 +176,8 @@ export type TennisSession={
   /** All-games sweep sessions only (lib/tennis/sweep.ts): when each game was last seen in the games list. */
   sweepSeen?:Record<string,number>;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
+  /** Written only when the owner explicitly acknowledges a completed loss stop. */
+  lossCheckpoint?:{commandId:string;acknowledgedAt:number;cash:number;realizedPnl:number;utcDay:string;dayPnl:number};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
   positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};
   /** "Sell everything now" was pressed at this time: held shares are sold on the next fresh book; entries are paused. */
@@ -190,6 +192,7 @@ export type TennisAction=
    /** tick only: Octopus auto picks chosen for this check, when due (recorded so replays are exact). */
    octopus?:string[]}
  |{action:'exit-now';commandId:string}
+ |{action:'acknowledge-loss';sessionId:string;commandId:string;expectedLossAcknowledgement:string|null;runForMs?:number}
  |{action:'reset';bankroll:number;commandId:string;
   /** Paper only: drop open paper positions, pending orders and resting quotes instead of refusing (fake money). */
   abandon?:true}

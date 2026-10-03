@@ -67,6 +67,7 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | Pause | No new entries; held shares stay managed. |
 | Sell everything now | Big button while anything is held: green when the holdings are up, red when down (neutral until priced). Pauses entries, pulls offers, and sells every held share at the best bid on the next fresh book (`exit-now`). Resume continues the run. |
 | End run | Cancels offers, sells what is held, and ends the run. |
+| Acknowledge loss and resume | After a completed loss-limit stop, resumes the same account and run without resetting cash, trades, history or rules. Each acknowledgement grants the original run's dollar loss allowance again. Needs remaining cash and a chosen game; exits must finish first. |
 | New run | After a run ends: opens Reset balance. |
 | Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold/Auto, and drops open paper trades (fake money). |
 | Octopus | Either mode: the same offers on up to 6 extra games ("arms") at the mode's size and with its one-sided rules. **Auto-pick** fills free arms with open college games that are live or start within 6 h, with a listed spread of 2¢ or less. It picks the narrowest spread first, keeps current picks while they stay eligible, and re-checks every 5 minutes. **Pin** a game with the search. × removes a pinned game or skips an auto one. All resting offers together use at most 50% of the balance, and room for the main game's two offers is always kept. Removing an arm pulls its offers; shares stay managed. |
@@ -232,6 +233,10 @@ Explicit authoritative settlement data can settle residual quantity using a repo
 Equity is cash plus conservative net liquidation. Unpriced residual quantity is not valued at midpoint; it can contribute zero to the conservative estimate. The UI marks incomplete/stale valuation. Inspect liquidity and freshness before interpreting the graph as fully realizable value.
 
 Default session loss threshold is 20% of starting cash. A realized breach stops entries; a qualifying complete-valued equity breach while held moves toward stopping and attempts exit. This also is not a guaranteed loss ceiling.
+
+After a loss stop finishes exiting, **Acknowledge loss and resume** records an explicit acknowledgement and resumes the same run. It uses the original starting cash times the configured loss fraction for each acknowledged period, rather than shrinking the allowance with the remaining balance. With a $100 start and a 20% limit, acknowledging at $79.94 allows another $20 and puts the next balance threshold at $59.94. Cash, cumulative profit/loss, trades, chart and rules stay intact. Prior acknowledged losses no longer block the engine's session/day loss checks; other entry checks and the runner's storage budget still apply. Normal Resume cannot bypass a loss stop, and no acknowledgement happens automatically.
+
+An explicit change to the loss fraction in Rules still changes the allowance, calculated against the run's original starting balance. Each acknowledgement identifies the loss period it was shown for, so a delayed request from an older period cannot resume a later stop.
 
 Completed trades invoke the configured per-game rest for both outcomes/tracks, default 60 seconds. Auto failed/unfilled entry retry delay is capped at the lesser of the rest and ten seconds. Zero rest is supported; it removes no other gate. Subsequent movement can be missed during a saved cooldown because the account's rule explicitly requests it.
 

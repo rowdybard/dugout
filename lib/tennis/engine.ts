@@ -10,6 +10,7 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {choiceOf,modeRules,tradeBudget,tradeMode} from './modes.ts';
+import {canAcknowledgeLoss,dayPnl,lossAllowance,lossLimitReached,realizedPnl} from './loss-limit.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
 import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
 import {adaptiveTennisRules} from './auto.ts';
@@ -1218,9 +1219,8 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     const input = current.find(item => item.market.slug === position.slug);
     if(input)position.lastContext=currentTennisContext(position.lastContext??position.market,input.market,now,position.market.active);
     markPosition(session, position, input, now);
-    const realised = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
     const completeMark = position.netLiquidationValue !== null && position.liquidationQuantity >= position.quantity - EPSILON;
-    const breached = realised <= -session.config.startingCash * session.config.maxSessionLossFraction || (completeMark && tennisEquity(session) <= session.config.startingCash * (1 - session.config.maxSessionLossFraction));
+    const breached = lossLimitReached(session,completeMark?tennisEquity(session):null);
     if (breached) { session.status = 'stopping'; if (session.pending?.action === 'BUY') session.pending = null; }
     if (!session.pending && input && !dataIssue(session, input, now) && input.receivedAt > (session.consumedBooks[position.slug] ?? -1)) {
       const availableReturn = position.netLiquidationValue !== null && position.liquidationQuantity > 0
@@ -1272,11 +1272,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       }
     }
   } else {
-    const realised = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
     const inventory = makerPositions(session);
     const inventoryMarked = inventory.length > 0 && inventory.every(item => item.netLiquidationValue !== null && item.liquidationQuantity >= item.quantity - EPSILON);
-    const lossLimit = session.config.startingCash * session.config.maxSessionLossFraction;
-    if (realised <= -lossLimit || (inventoryMarked && tennisEquity(session) <= session.config.startingCash - lossLimit)) session.status = inventory.length ? 'stopping' : 'stopped';
+    if (lossLimitReached(session,inventoryMarked?tennisEquity(session):null)) session.status = inventory.length ? 'stopping' : 'stopped';
     if (session.status === 'stopping' && !inventory.length) session.status = 'stopped';
   }
   const evaluated = session.config.evidenceGate === 'evidence-v1' && session.status === 'running' && !processed ? evaluateEngine(session, current, now) : [];
@@ -1356,7 +1354,9 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
 export function applyTennisAction(previous: TennisSession, action: TennisAction, inputs: TennisInput[], now: number): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
   if ('sessionId' in action && action.sessionId && action.sessionId !== previous.id) return previous;
+  if (action.action==='acknowledge-loss'&&(action.sessionId!==previous.id||!action.commandId)) return previous;
   if (action.commandId && previous.commandIds.includes(action.commandId)) return previous;
+  if (action.action==='acknowledge-loss'&&action.expectedLossAcknowledgement!==(previous.lossCheckpoint?.commandId??null)) return previous;
   if (action.action === 'tick') return stepTennisSession(applyOctopusPicks(previous, action.octopus, now), inputs, now);
   let session = normalizePositionExitRules(structuredClone(previous));
   session.config = normalizeTennisConfig(session.config);
@@ -1424,11 +1424,22 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     return session;
   }
   if (action.action === 'resume') {
-    const realized = session.positions.reduce((sum, item) => sum + item.realizedPnl, 0);
-    if (session.status === 'stopped' || session.status === 'stopping' || realized <= -session.config.startingCash * session.config.maxSessionLossFraction) return reject('This session is stopped. Close remaining positions and reset to start another experiment.');
+    if (session.status === 'stopped' || session.status === 'stopping' || lossLimitReached(session)) return reject(canAcknowledgeLoss(session)
+      ?'This run reached its loss limit. Acknowledge the loss to continue with the remaining paper balance.'
+      :'This session is stopped. Close remaining positions and reset to start another experiment.');
     session.status = 'running'; session.lastReason = 'Paper bot resumed with your saved rules.';
     beginObservation(session, action.runForMs, now);
     return stepTennisSession(session, inputs, now);
+  }
+  if (action.action === 'acknowledge-loss') {
+    if (!canAcknowledgeLoss(session)) return reject('Acknowledge loss is available after a loss stop, once all positions and exit orders finish and paper cash remains.');
+    const utcDay=new Date(now).toISOString().slice(0,10);
+    session.lossCheckpoint={commandId:action.commandId,acknowledgedAt:now,cash:session.cash,realizedPnl:exact(realizedPnl(session)),utcDay,dayPnl:exact(dayPnl(session,utcDay))};
+    session.status='running';
+    record(session,now,'','YES','WAIT','LOSS_ACKNOWLEDGED',`Loss acknowledged. Continuing this run with $${session.cash.toFixed(2)} and another $${lossAllowance(session).toFixed(2)} loss allowance; balance and trading history preserved.`);
+    if(action.runForMs===undefined)delete session.testRun;
+    beginObservation(session,action.runForMs,now);
+    return stepTennisSession(session,inputs,now);
   }
   if (action.action === 'stop') {
     if (session.pending?.action === 'BUY') session.pending = null;

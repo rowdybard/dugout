@@ -1,4 +1,5 @@
 import type {TennisMarket,TennisRuntime,TennisSession} from './types';
+import {canAcknowledgeLoss,lossAllowance,lossLimitReached} from './loss-limit.ts';
 
 /**
  * How old the bot's last check may be before the card says it is behind. A normal background-runner cycle can take
@@ -41,13 +42,14 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
   const forming=quoteAge!==null&&quoteAge<=session.config.maxBookAgeMs&&signal.some(value=>value&&
     value.lastObservedAt===quote?.time&&['DIP','RECOVERING','RISING'].includes(value.phase));
   const pausedFlat=session.status==='paused'&&!held&&!session.pending;
+  const lossStopped=session.status==='stopped'&&lossLimitReached(session,session.cash);
   const usage=runtime?.mode==='service'?runtime.usage:undefined;
   const budgetReached=!!usage&&usage.day===new Date(now).toISOString().slice(0,10)&&usage.estimatedRowsWritten>=usage.entryPauseAt;
   const quoting=!!session.maker&&(!!session.maker.quotes.YES||!!session.maker.quotes.NO);
   const holdLabel=held?.exitPolicy==='hold-to-settlement'?'Holding to final':held?.exitPolicy==='maker'?'Market making':held?.exitPolicy==='drive'?'Riding the drive':'Holding';
   const state=runtime?.mode==='migrating'?'Setup paused':session.pending?.action==='SELL'||session.exitRequested||session.status==='stopping'?'Exiting':
     held?(session.status==='paused'?`${holdLabel} · entries paused`:holdLabel):session.pending?.action==='BUY'?'Buying':
-    pausedFlat?'Paused':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
+    pausedFlat?'Paused':lossStopped?'Loss limit hit':session.status==='stopped'?'Stopped':session.status==='idle'?'Ready':!focus?'Choose a game':
     checkStale?'Bot is behind':quoting?'Buy offers posted':forming?'Setup forming':'Watching';
   // Plain-English summary of the resting orders: which team, what price, and what makes them trade.
   const offers=quoting&&session.maker?(['YES','NO'] as const).flatMap(side=>{const quote=session.maker!.quotes[side];if(!quote)return [];
@@ -56,6 +58,8 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
     pausedFlat?(budgetReached?`Daily storage budget reached (${usage!.estimatedRowsWritten.toLocaleString()} / ${usage!.entryPauseAt.toLocaleString()} estimated rows). Entries remain paused; the daily allowance renews at 00:00 UTC. Resetting the paper balance will not clear it.`:
       /paused/i.test(session.lastReason)?`${session.lastReason} Press Start when ready.`:`${session.lastReason} Entries are paused; press Start when ready.`):
     session.status==='idle'?(focus?'The paper bot has not started. Press Start to check the saved bot focus.':'Choose a bot focus, then press Start to begin paper checks.'):
+    lossStopped?(canAcknowledgeLoss(session)?`The loss limit was reached. Acknowledge the loss to resume this run with another $${lossAllowance(session).toFixed(2)} loss allowance. Your balance and history stay intact.`:
+      session.cash<=0?'The loss limit was reached and no cash remains. Start a new run when ready.':'The loss limit was reached. Existing exits must finish before the loss can be acknowledged.'):
     session.status==='stopped'?'This paper run is stopped. Its chart can still update; create a new run when ready.':
     checkStale?`The bot's last check was ${checkAge===null?'not recorded':`${Math.round(checkAge/1000)} seconds ago`}. It normally checks every few seconds; if this lasts more than a minute, reload the page.`:
     runtime?.failureReason||(offers.length?`Offering to buy ${offers.join(' or ')}. It fills only if someone sells at that price.`:session.lastReason);

@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {signRunnerRequest} from '../../../lib/runner/protocol.ts';
-import {active,OWNER,EPOCH,NOW,SECRET,input} from './helpers.ts';
+import {active,activeStoppedLoss,OWNER,EPOCH,NOW,SECRET,input} from './helpers.ts';
 import type {InputAdapter} from '../src/input-adapter';
 import type {RunnerStore} from '../src/store';
 
@@ -18,7 +18,7 @@ new Function('require','module','exports',ts.transpileModule(readFileSync(filena
   (id:string)=>id==='cloudflare:workers'?{DurableObject:MockDO}:requireFromWorker(id),moduleObject,moduleObject.exports);
 type TestDO={fetch(request:Request):Promise<Response>;alarm():Promise<void>;store:RunnerStore;adapter:InputAdapter};
 const worker=moduleObject.exports as {OwnerPaperRunner:new(ctx:unknown,env:unknown)=>TestDO;default:{fetch(request:Request,env:unknown):Promise<Response>}};
-async function setup(){const fixture=await active();let alarm:number|null=null;let writes=0;const storage={...fixture.storage,getAlarm:async()=>alarm,setAlarm:async(value:number)=>{alarm=value;writes++;},deleteAlarm:async()=>{alarm=null;writes++;}};
+async function setup(stoppedLoss=false){const fixture=stoppedLoss?await activeStoppedLoss():await active();let alarm:number|null=null;let writes=0;const storage={...fixture.storage,getAlarm:async()=>alarm,setAlarm:async(value:number)=>{alarm=value;writes++;},deleteAlarm:async()=>{alarm=null;writes++;}};
   const env={RUNNER_OWNER_ID:OWNER,RUNNER_HMAC_SECRET:SECRET,RUNNER_ENGINE_VERSION:'synthetic-build'},instance=new worker.OwnerPaperRunner({storage,waitUntil:()=>{}},env);
   return {...fixture,instance,env,alarm:()=>alarm,writes:()=>writes};}
 async function request(instance:TestDO,path:string,value?:unknown){const body=value===undefined?'':JSON.stringify(value),url='https://runner.invalid'+path,method=value===undefined?'GET':'POST';return instance.fetch(new Request(url,{method,headers:await signRunnerRequest(SECRET,url,method,body,OWNER,EPOCH),...(body?{body}:{})}));}
@@ -64,4 +64,28 @@ test('focused end pauses new entries and credentials never appear in SQL plainte
   const credentials={keyId:'synthetic-provider-key',secretKey:btoa('x'.repeat(32))};const result=await request(f.instance,'/v1/feed-credentials',credentials);assert.equal(result.status,200);assert.deepEqual(await result.json(),{configured:true,transport:'native-stream'});
   const databaseText=JSON.stringify(f.db.prepare('SELECT * FROM runner_meta').all());assert.ok(!databaseText.includes(credentials.keyId));assert.ok(!databaseText.includes(credentials.secretKey));
   assert.ok(!JSON.stringify(f.instance.store.exportPage(null,0,500,now)).includes('ciphertext'));
+});
+test('signed loss acknowledgement retains the stopped account and restores its recovery alarm once',async(t)=>{
+  const f=await setup(true),now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const before=f.instance.store.session()!,command={action:'acknowledge-loss',sessionId:before.id,commandId:'11111111-1111-4111-8111-111111111111',expectedLossAcknowledgement:null};
+  assert.equal(f.alarm(),null);
+  const accepted=await request(f.instance,'/v1/command',{command});assert.equal(accepted.status,200);
+  const after=f.instance.store.session()!;
+  assert.equal(after.status,'running');assert.equal(after.id,before.id);assert.equal(after.cash,before.cash);
+  assert.deepEqual(after.ledger,before.ledger);assert.deepEqual(after.positions,before.positions);
+  assert.equal(after.testRun,undefined);assert.equal(f.alarm(),now+10_000);
+  const records=f.instance.store.exportPage(null,0,500,now).records.length,revision=after.revision;
+  assert.equal((await request(f.instance,'/v1/command',{command})).status,200);
+  assert.equal(f.instance.store.session()!.revision,revision);
+  assert.equal(f.instance.store.exportPage(null,0,500,now).records.length,records);
+});
+test('signed loss acknowledgement requires explicit session and command identities and rejects stale sessions',async(t)=>{
+  const f=await setup(true),now=NOW+2000;t.mock.method(Date,'now',()=>now);const before=f.instance.store.session()!;
+  const valid={action:'acknowledge-loss',sessionId:before.id,commandId:'22222222-2222-4222-8222-222222222222',expectedLossAcknowledgement:null};
+  for(const command of [{...valid,sessionId:undefined},{...valid,sessionId:''},{...valid,commandId:undefined},...[undefined,42,'','wrong acknowledgement','../other','x'.repeat(129)].map(expectedLossAcknowledgement=>({...valid,expectedLossAcknowledgement}))]){
+    assert.equal((await request(f.instance,'/v1/command',{command})).status,400);
+  }
+  assert.equal((await request(f.instance,'/v1/command',{command:{...valid,sessionId:'different-session'}})).status,409);
+  assert.equal((await request(f.instance,'/v1/command',{command:{...valid,expectedLossAcknowledgement:'11111111-1111-4111-8111-111111111111'}})).status,409);
+  assert.deepEqual(f.instance.store.session(),before);assert.equal(f.alarm(),null);
 });
