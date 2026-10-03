@@ -48,6 +48,8 @@ export const OCTOPUS_RESERVE_FRACTION=SPEND_LIMIT_FRACTION;
 export const restingCost=(state:{quotes:Partial<Record<'YES'|'NO',{price:number;quantity:number}>>}|undefined)=>
   state?(['YES','NO'] as const).reduce((total,side)=>total+(state.quotes[side]?state.quotes[side]!.quantity*state.quotes[side]!.price:0),0):0;
 export const OCTOPUS_ARMS=6;
+/** How paper fills are simulated, stated wherever results are shown or exported (no real orders are placed). */
+export const PAPER_FILLS='Paper fills: a resting offer fills in full once the best ask reaches its price, after a short placement delay; queue position and other buyers at that price are not modelled, so real fills would be fewer; the maker rebate is an estimate. Dip buys, sales and planned bets take the shown book at its prices with the taker fee.';
 export const isHalftimePeriod=(period:string|null|undefined)=>!!period&&/^(HT|HALF|HALFTIME)$/i.test(period.trim());
 
 export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};

@@ -43,3 +43,17 @@ test('the engine card only shows the focused game: after switching games the old
   const same=focusedEngine({...session,config:{...session.config,focusSlug:'old-game'}});
   assert.equal(same.plan?.slug,'old-game');assert.equal(same.why?.detail,'old');
 });
+
+test('reports: resting-order trades are scored by mode, game and rules, and a verdict needs enough games',async()=>{
+  const {sessionTradeRecords}=await import('../lib/tennis/research-tracking.ts');
+  const {scoreRows}=await import('../lib/decision/scorecard.ts');
+  const terms={rulesRevision:3,mode:'bold' as const,auto:true,orderSize:12,game:'octopus' as const};
+  const closed=position({status:'closed',realizedPnl:.5,entryCost:5,openedUnder:terms});
+  const records=sessionTradeRecords(account(closed,position({id:'q',status:'closed',realizedPnl:-.2,entryCost:5})));
+  assert.deepEqual(records.map(r=>r.variant).sort(),['Bold (Auto) · Octopus · rules r3','before tracking']);
+  assert.equal(records[0].strategy,'maker-quote');
+  // 40 winning trades, all from one game: not enough games for a verdict.
+  const one=Array.from({length:40},(_,i)=>({strategy:'s',version:'1',sample:'forward-paper' as const,game:'g',time:i,ret:.1}));
+  const [row]=scoreRows(one,{minTrades:()=>30,minGames:()=>20});
+  assert.equal(row.verdict,'insufficient');assert.match(row.reason,/40 of 30 trades, 1 of 20 games/);
+});

@@ -17,6 +17,8 @@ async function readJson<T>(url:string,init?:RequestInit):Promise<T> {
   return data;
 }
 
+/** Background-runner accounts that are stopped (or not started) with nothing held or pending are checked this often. */
+const IDLE_POLL_MS=30_000;
 export function useTennis() {
   const [catalog,setCatalog]=useState<TennisCatalog|null>(null);
   const [session,setSession]=useState<TennisSession|null>(null);
@@ -38,7 +40,7 @@ export function useTennis() {
   const leagueKey=session?.config.leagues.join(',');
   const focusSlug=session?.config.focusSlug;
   const contextSlugs=[...new Set([session?.pending?.market,...(session?.positions.filter(p=>p.status==='open').map(p=>p.lastContext??p.market)??[]),catalog?.markets.find(m=>m.slug===watchedSlug)].filter(m=>m&&(m.league==='CFB'||m.league==='NFL')).map(m=>m!.slug))].join(',');
-  const inflight=useRef(false),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
+  const inflight=useRef(false),lastPoll=useRef(0),mounted=useRef(true),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runningRequest=useRef<Promise<boolean>|null>(null),commandQueued=useRef(false);
   // One failed background check is usually a passing blip (a 503 from the host); say so only after two in a row.
   const pollFailures=useRef(0),catalogFailures=useRef(0);
@@ -204,7 +206,10 @@ export function useTennis() {
       const current=sessionRef.current;
       if(!current||inflight.current)return;
       if(runtime?.mode==='service'||runtime?.mode==='migrating'){
-        if(!commandQueued.current){inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current&&++pollFailures.current>=2)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
+        // A stopped or not-started run with nothing held or pending changes only when you act: check every 30 s.
+        const quiet=['idle','stopped'].includes(current.status)&&!current.pending&&!current.positions.some(position=>position.status==='open');
+        if(quiet&&Date.now()-lastPoll.current<IDLE_POLL_MS)return;
+        if(!commandQueued.current){lastPoll.current=Date.now();inflight.current=true;readJson<TennisSessionResponse>('/api/tennis/session').then(accept).catch(cause=>{if(mounted.current&&++pollFailures.current>=2)setConnectionIssue(cause instanceof Error?cause.message:'Background runner unavailable.');}).finally(()=>{inflight.current=false;});}
         return;
       }
       // Pausing entries does not pause exit checks; existing positions still need monitoring.

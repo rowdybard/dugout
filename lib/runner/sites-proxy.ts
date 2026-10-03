@@ -2,6 +2,7 @@ import {MAX_REQUEST_BYTES,RunnerError,signRunnerRequest} from './protocol.ts';
 import type {RunnerState} from './contracts';
 import type {TennisAction,TennisSession} from '../tennis/types';
 import {polymarketSecrets} from '../trading/credentials.ts';
+import {PAPER_FILLS} from '../tennis/maker.ts';
 
 export type RunnerBindings={DUGOUT_OWNER_ID?:string;DUGOUT_RUNNER_USERS?:string;DUGOUT_RUNNER_URL?:string;DUGOUT_RUNNER_SECRET?:string;POLYMARKET_KEY_ID?:string;POLYNARKET_KEY_ID?:string;POLYMARKET_SECRET_KEY?:string};
 export type OwnerFence={owner_id:string;mode:'frozen'|'active';epoch:string;migration_id:string;snapshot:string;revision:number};
@@ -87,7 +88,8 @@ function sessionResponse({text,runner}:{text:string;runner:RunnerState['runner']
   const runtime={mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:!!polymarketSecrets(env as Record<string,unknown>),description:'The private paper runner continues when this page is closed.',lastSuccessfulCheck:runner.lastEngineCheck,quoteAgeMs:runner.quoteAgeMs,gameReportAgeMs:runner.contextAgeMs,failureReason:runner.source.state==='error'?runner.source.message:null,usage:runner.usage,feedKey:runner.feedKey===true};
   return new Response(`${text.slice(0,-1)},"runtime":${JSON.stringify(runtime)}}`,{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
-type ExportPage={schemaVersion:3;exportId:string;capturedAt:number;session:TennisSession;records:unknown[];observations:{id:string;value:unknown}[];nextCursor:number;complete:boolean;pageEvidenceComplete:boolean;missingObservationIds:string[];exactReplayStartsAt:'migration-checkpoint'};
+/** `session` is on the first page only. */
+type ExportPage={schemaVersion:3;exportId:string;capturedAt:number;session?:TennisSession;records:unknown[];observations:{id:string;value:unknown}[];nextCursor:number;complete:boolean;pageEvidenceComplete:boolean;missingObservationIds:string[];exactReplayStartsAt:'migration-checkpoint'};
 async function runnerExport(env:RunnerBindings,fence:OwnerFence):Promise<Response>{
   const first=await runnerRequest<ExportPage>(env,fence.owner_id,fence.epoch,'/v1/export?after=0&limit=250');
   const next=async(after:number)=>{
@@ -96,7 +98,7 @@ async function runnerExport(env:RunnerBindings,fence:OwnerFence):Promise<Respons
     return result;
   };
   async function* chunks(){
-    yield `{"schemaVersion":3,"capturedAt":${first.capturedAt},"exactReplayStartsAt":${JSON.stringify(first.exactReplayStartsAt??null)},"session":${JSON.stringify(first.session)},"records":[`;
+    yield `{"schemaVersion":3,"capturedAt":${first.capturedAt},"paperFills":${JSON.stringify(PAPER_FILLS)},"exactReplayStartsAt":${JSON.stringify(first.exactReplayStartsAt??null)},"session":${JSON.stringify(first.session)},"records":[`;
     let page=first,count=0,observations=0;
     let evidenceComplete=true;const missing=new Set<string>();
     const inspectEvidence=(value:ExportPage)=>{

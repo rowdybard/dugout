@@ -5,6 +5,7 @@ import {scoreRows} from '@/lib/decision/scorecard';
 import {specOf} from '@/lib/decision/catalog';
 import {sessionTradeRecords} from '@/lib/tennis/research-tracking';
 import {focusedEngine} from '@/lib/tennis/decision-view';
+import {PAPER_FILLS} from '@/lib/tennis/maker';
 
 const cents=(value:number)=>`${(value*100).toFixed(value*100%1<.01?0:1)}¢`;
 const money=(value:number)=>`$${value.toFixed(2)}`;
@@ -39,7 +40,7 @@ function EngineDetails({session,market,sweep,now}:{session:TennisSession;market?
   // With the runner's all-games sweep, its shadow records replace the bot's own (which cover only the focused game).
   const rows=useMemo(()=>{
     const own=sessionTradeRecords(session),records=sweep?[...own.filter(record=>record.sample!=='forward-shadow'),...sweep.records]:own;
-    return scoreRows(records,{draws:400,minTrades:(id,version)=>specOf(id,version)?.minSample.trades??30});
+    return scoreRows(records,{draws:400,minTrades:(id,version)=>specOf(id,version)?.minSample.trades??30,minGames:(id,version)=>specOf(id,version)?.minSample.games??1});
   },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session.id,session.revision,sweep?.updatedAt]);
@@ -55,8 +56,8 @@ function EngineDetails({session,market,sweep,now}:{session:TennisSession;market?
       {(plan.notes??[]).map((note,index)=><li key={`note-${index}`}><span className="tennis-muted">{NO_TRADE[note.code]}</span> <b>{label(note.strategy)}</b><small>{note.detail}</small></li>)}</ul>
       <small>Evidence {plan.pack} · paper only · real money is not connected.</small></details>}
     {rows.length>0&&<details><summary>Scorecard</summary><table className="tennis-scorecard"><thead><tr><th>Strategy</th><th>Sample</th><th>Trades</th><th>Mean</th><th>95% range</th><th>Verdict</th></tr></thead>
-      <tbody>{rows.map(row=><tr key={row.key}><td>{label(row.strategy)} v{row.version}</td><td>{SAMPLE[row.sample]}</td><td>{row.n} · {row.games} games</td><td>{pct(row.mean)}</td>
+      <tbody>{rows.map(row=><tr key={row.key}><td>{label(row.strategy)} v{row.version}{row.variant&&<small>{row.variant}</small>}</td><td>{SAMPLE[row.sample]}</td><td>{row.n} · {row.games} games</td><td>{pct(row.mean)}</td>
         <td>{pct(row.lo)} to {pct(row.hi)}</td><td className={row.verdict==='edge'?'tennis-positive':row.verdict==='no-edge'?'tennis-negative':''}>{VERDICT[row.verdict]}</td></tr>)}</tbody></table>
-      <small>Returns after fees and the spread. Shadow trades use the books the bot saw; they were never placed.</small></details>}
+      <small>Returns after fees and the spread. A verdict needs enough trades and enough different games. Shadow trades use the books the bot saw; they were never placed. {PAPER_FILLS}</small></details>}
   </section>;
 }

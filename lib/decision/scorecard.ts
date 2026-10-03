@@ -14,10 +14,12 @@ export type TradeRecord={
   ret:number;
   pnl?:number|null;entryPrice?:number|null;entrySpread?:number|null;slippage?:number|null;holdMs?:number|null;
   mae?:number|null;mfe?:number|null;priceBucket?:string|null;liquidity?:string|null;state?:string|null;won?:boolean|null;
+  /** A separately scored variant of the same strategy, e.g. resting orders by mode, game and rules revision. */
+  variant?:string|null;
 };
 export type Verdict='edge'|'no-edge'|'inconclusive'|'insufficient';
 export type ScoreRow={
-  key:string;strategy:string;version:string;sample:Sample;
+  key:string;strategy:string;version:string;sample:Sample;variant:string|null;
   n:number;games:number;mean:number;median:number;lo:number;hi:number;totalPnl:number|null;maxDrawdown:number;winRate:number|null;
   avgSpread:number|null;avgSlippage:number|null;avgHoldMs:number|null;avgMae:number|null;avgMfe:number|null;
   byPrice:Record<string,{n:number;mean:number;winRate:number|null}>;byLiquidity:Record<string,{n:number;mean:number}>;byState:Record<string,{n:number;mean:number}>;
@@ -59,20 +61,25 @@ function drawdown(records:TradeRecord[]){
   return worst;
 }
 
-export function scoreRows(records:readonly TradeRecord[],options:{minTrades?:(strategy:string,version:string)=>number;draws?:number}={}):ScoreRow[] {
-  const keys=[...new Set(records.map(r=>`${r.strategy}@${r.version}|${r.sample}`))].sort();
+/**
+ * A verdict needs enough trades AND enough different games (`minGames`, the spec's minSample.games): many trades
+ * from one or two games are one or two observations of luck, not evidence.
+ */
+export function scoreRows(records:readonly TradeRecord[],options:{minTrades?:(strategy:string,version:string)=>number;minGames?:(strategy:string,version:string)=>number;draws?:number}={}):ScoreRow[] {
+  const keyOf=(r:TradeRecord)=>`${r.strategy}@${r.version}|${r.sample}${r.variant?`|${r.variant}`:''}`;
+  const keys=[...new Set(records.map(keyOf))].sort();
   return keys.map(key=>{
-    const rs=records.filter(r=>`${r.strategy}@${r.version}|${r.sample}`===key&&Number.isFinite(r.ret));
-    const [id,sample]=key.split('|') as [string,Sample];const [strategy,version]=id.split('@');
+    const rs=records.filter(r=>keyOf(r)===key&&Number.isFinite(r.ret));
+    const [id,sample,variant]=key.split('|') as [string,Sample,string|undefined];const [strategy,version]=id.split('@');
     const rets=rs.map(r=>r.ret),n=rs.length,games=new Set(rs.map(r=>r.game)).size;
-    const m=n?mean(rets):0,{lo,hi}=clusteredInterval(rs,key,options.draws),need=options.minTrades?.(strategy,version)??30;
+    const m=n?mean(rets):0,{lo,hi}=clusteredInterval(rs,key,options.draws),need=options.minTrades?.(strategy,version)??30,needGames=options.minGames?.(strategy,version)??1;
     const wins=rs.filter(r=>typeof r.won==='boolean');
-    const verdict:Verdict=n<need?'insufficient':lo>0?'edge':hi<0?'no-edge':'inconclusive';
+    const verdict:Verdict=n<need||games<needGames?'insufficient':lo>0?'edge':hi<0?'no-edge':'inconclusive';
     const pct=(x:number)=>`${x>=0?'+':''}${(x*100).toFixed(1)}%`;
-    const reason=verdict==='insufficient'?`${n} of ${need} trades needed.`:verdict==='edge'?`Mean ${pct(m)} after costs; the whole 95% interval [${pct(lo)}, ${pct(hi)}] is above zero.`:
+    const reason=verdict==='insufficient'?`${n} of ${need} trades, ${games} of ${needGames} games needed.`:verdict==='edge'?`Mean ${pct(m)} after costs; the whole 95% interval [${pct(lo)}, ${pct(hi)}] is above zero.`:
       verdict==='no-edge'?`Mean ${pct(m)} after costs; the whole 95% interval [${pct(lo)}, ${pct(hi)}] is below zero.`:`Mean ${pct(m)} after costs; the 95% interval [${pct(lo)}, ${pct(hi)}] includes zero.`;
     const pnls=rs.map(r=>r.pnl).filter((x):x is number=>typeof x==='number');
-    return {key,strategy,version,sample,n,games,mean:m,median:n?median(rets):0,lo,hi,totalPnl:pnls.length?pnls.reduce((a,b)=>a+b,0):null,maxDrawdown:drawdown(rs),
+    return {key,strategy,version,sample,variant:variant??null,n,games,mean:m,median:n?median(rets):0,lo,hi,totalPnl:pnls.length?pnls.reduce((a,b)=>a+b,0):null,maxDrawdown:drawdown(rs),
       winRate:wins.length?wins.filter(r=>r.won).length/wins.length:null,avgSpread:avg(rs.map(r=>r.entrySpread)),avgSlippage:avg(rs.map(r=>r.slippage)),
       avgHoldMs:avg(rs.map(r=>r.holdMs)),avgMae:avg(rs.map(r=>r.mae)),avgMfe:avg(rs.map(r=>r.mfe)),
       byPrice:group(rs,'priceBucket',g=>{const w=g.filter(r=>typeof r.won==='boolean');return {n:g.length,mean:mean(g.map(r=>r.ret)),winRate:w.length?w.filter(r=>r.won).length/w.length:null};}),

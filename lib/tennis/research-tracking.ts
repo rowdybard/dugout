@@ -170,6 +170,17 @@ export function sessionTradeRecords(session:TennisSession):TradeRecord[] {
       holdMs:position.closedAt?position.closedAt-position.openedAt:null,mae:position.mae??null,mfe:position.mfe??null,
       priceBucket:shadow?.context.priceBucket??null,liquidity:shadow?.context.liquidity??null,state:shadow?.context.state??null,won:position.realizedPnl>0});
   }
+  // Resting-order trades: each closed holding from filled offers (one team's shares, held to a pair and the final,
+  // or sold), scored separately by mode, main game or Octopus arm, and rules revision (PurchaseTerms).
+  const maker=session.config.maker==='quiet-window-v1'?'quiet-window-maker':'maker-quote';
+  for(const position of session.positions){
+    if(position.status==='open'||position.exitPolicy!=='maker'||position.entryCost<=0)continue;
+    const terms=position.openedUnder;
+    const variant=terms?`${terms.mode==='bold'?'Bold':'Steady'}${terms.auto?' (Auto)':''} · ${terms.game==='octopus'?'Octopus':'main game'} · rules r${terms.rulesRevision}`:'before tracking';
+    records.push({strategy:maker,version:'1',sample:'forward-paper',game:position.slug,time:position.closedAt??position.openedAt,variant,
+      ret:position.realizedPnl/position.entryCost,pnl:position.realizedPnl,entryPrice:position.entryPrice,entrySpread:position.entrySpread??null,
+      holdMs:position.closedAt?position.closedAt-position.openedAt:null,mae:position.mae??null,mfe:position.mfe??null,won:position.realizedPnl>0});
+  }
   for(const shadow of session.shadowResults??[]){
     if(shadow.kind!=='candidate')continue;
     const result=shadow.primary;

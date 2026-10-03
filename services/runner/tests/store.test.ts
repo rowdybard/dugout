@@ -31,6 +31,9 @@ test('migration is inert, resumable by identical chunk, and preserves full sourc
   assert.deepEqual(resumed.importStatus(chunk.migrationId).receivedChunks,[0]);
   const state=resumed.activate(chunk.migrationId,OWNER,EPOCH,NOW+1);assert.equal(state.session.status,'paused');assert.equal(state.session.cash,100);assert.deepEqual(state.session.ledger,session.ledger);
   assert.equal(resumed.activate(chunk.migrationId,OWNER,EPOCH,NOW+2).session.revision,state.session.revision);
+  // Pages are limited by bytes too, and only the first carries the session snapshot.
+  const small=resumed.exportPage(null,0,100,NOW+2,1);assert.equal(small.records.length,1);assert.ok(small.session);assert.equal(small.complete,false);
+  const rest=resumed.exportPage(small.exportId,small.nextCursor,100,NOW+2,1);assert.equal(rest.records.length,1);assert.equal(rest.session,undefined);assert.equal(rest.complete,true);
   const page=resumed.exportPage(null,0,100,NOW+2);assert.equal(page.records.length,2);assert.equal(page.observations.length,1);assert.deepEqual(page.records.find(r=>r.kind==='migration')?.value.sourceSnapshot,session);
   assert.throws(()=>resumed.assertIdentity(OWNER,EPOCH+'x'),/does not match/);
 });
@@ -88,7 +91,7 @@ test('export pages remain pinned while later ticks append, and counters persist 
   // The counter is saved at most once a minute, but rows written in between already count toward the budget.
   assert.equal(store.usage(NOW+4000).alarmChecks,1);
   await store.advance({action:'tick'},[],NOW+65000);
-  let cursor=first.nextCursor;const records=[...first.records];while(true){const p=store.exportPage(first.exportId,cursor,1,NOW+5000);assert.deepEqual(p.session,first.session);records.push(...p.records);cursor=p.nextCursor;if(p.complete)break;}
+  let cursor=first.nextCursor;const records=[...first.records];while(true){const p=store.exportPage(first.exportId,cursor,1,NOW+5000);assert.equal(p.session,undefined,"the pinned snapshot travels on the first page only");records.push(...p.records);cursor=p.nextCursor;if(p.complete)break;}
   assert.ok(!records.some(r=>r.kind==='replay'&&(r.value as unknown as ReplayFrame).now===NOW+4000));
   const reopened=new RunnerStore(storage);assert.equal(reopened.usage(NOW).alarmChecks,2);assert.ok(reopened.usage(NOW).estimatedRowsWritten>0);assert.equal(reopened.usage(NOW+86400000).estimatedRowsWritten,0);
 });

@@ -17,6 +17,8 @@ const equivalent=(a:unknown,b:unknown)=>JSON.stringify(ordered(a))===JSON.string
 // Leave 10,000 rows of the Free plan's 100,000/day allowance for exits and overhead.
 // This is a per-runner estimate, not an account-wide Cloudflare quota meter.
 export const RUNNER_ENTRY_WRITE_LIMIT=90000;
+/** An export page stops adding journal rows past about this many bytes (always at least one row), so full-history downloads stay within response limits. */
+export const EXPORT_PAGE_BYTES=4_000_000;
 type AuditBundle={version:1;records:RunnerJournalRow[];observations:RunnerObservation[]};
 function assertCutover(session:TennisSession){
   if(!['idle','paused','stopped'].includes(session.status)||session.pending||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Migration requires inactive entries, no open position and no pending order.');
@@ -219,7 +221,7 @@ export class RunnerStore {
       return response;
     });
   }
-  exportPage(exportId:string|null,after:number,limit:number,now:number){
+  exportPage(exportId:string|null,after:number,limit:number,now:number,maxBytes=EXPORT_PAGE_BYTES){
     if(!Number.isInteger(after)||after<0||!Number.isInteger(limit)||limit<1||limit>500)throw new RunnerError(400,'Invalid export page.');
     let snapshot:{snapshot:string;boundary:number;captured:number};
     if(exportId){const saved=this.rows<typeof snapshot>('SELECT snapshot,boundary,captured FROM runner_exports WHERE id=?',exportId)[0];if(!saved)throw new RunnerError(404,'Export snapshot was not found.');snapshot=saved;}
@@ -227,7 +229,10 @@ export class RunnerStore {
       this.storage.sql.exec('INSERT INTO runner_exports(id,snapshot,boundary,captured) VALUES(?,?,?,?)',exportId,snapshot.snapshot,snapshot.boundary,now);
       this.storage.sql.exec('DELETE FROM runner_exports WHERE captured<?',now-86400000);
     }
-    const rows=this.rows<{seq:number,id:string,kind:string,value:string,time:number}>('SELECT seq,id,kind,value,time FROM runner_journal WHERE seq>? AND seq<=? ORDER BY seq LIMIT ?',after,snapshot.boundary,limit);
+    const firstPage=!exportId||after===0;
+    const fetched=this.rows<{seq:number,id:string,kind:string,value:string,time:number}>('SELECT seq,id,kind,value,time FROM runner_journal WHERE seq>? AND seq<=? ORDER BY seq LIMIT ?',after,snapshot.boundary,limit);
+    // Pages are limited by bytes as well as rows: a bundle row can carry many records and their price evidence.
+    let bytes=0;const rows=fetched.filter((r,index)=>{bytes+=r.value.length;return index===0||bytes<=maxBytes;});
     const inline=new Map<string,TennisInput>();
     // Expand new physical bundles into the same logical export format. Legacy rows
     // stay untouched. A page never splits a bundle, so its input evidence travels with it.
@@ -244,6 +249,7 @@ export class RunnerStore {
     const missingObservationIds:string[]=[];
     const observations=[...ids].flatMap(id=>{const bundled=inline.get(id);if(bundled)return [{id,value:bundled}];const found=this.rows<{value:string}>('SELECT value FROM runner_inputs WHERE id=?',id)[0];if(!found)missingObservationIds.push(id);return found?[{id,value:parse<TennisInput>(found.value)}]:[];});
     const nextCursor=rows.at(-1)?.seq??after;
-    return {schemaVersion:3,exportId,capturedAt:snapshot.captured,session:parse<TennisSession>(snapshot.snapshot),records,observations,missingObservationIds,pageEvidenceComplete:missingObservationIds.length===0,exactReplayStartsAt:'migration-checkpoint',nextCursor,complete:nextCursor>=snapshot.boundary};
+    // The session snapshot travels on the first page only (the downloader reads it from there).
+    return {schemaVersion:3,exportId,capturedAt:snapshot.captured,...(firstPage?{session:parse<TennisSession>(snapshot.snapshot)}:{}),records,observations,missingObservationIds,pageEvidenceComplete:missingObservationIds.length===0,exactReplayStartsAt:'migration-checkpoint',nextCursor,complete:nextCursor>=snapshot.boundary};
   }
 }

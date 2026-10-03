@@ -1,5 +1,6 @@
 import {normalizeTennisConfig} from './rules.ts';
 import type {TennisSession} from './types';
+import {PAPER_FILLS} from './maker.ts';
 
 type JournalRow={rowid:number;id:string;kind:string;value:string;created_at:number};
 type SnapshotRow={value:string;revision:number;journalThrough:number};
@@ -15,7 +16,7 @@ export async function exportTennisJournal(database:Pick<D1Database,'prepare'>,ow
   const session={...saved,revision:snapshot.revision,config:normalizeTennisConfig(saved.config)};
   const capturedAt=Date.now(),encoder=new TextEncoder();
   async function* chunks(){
-    yield `{"schemaVersion":2,"capturedAt":${capturedAt},"session":${JSON.stringify(session)},"records":[`;
+    yield `{"schemaVersion":2,"capturedAt":${capturedAt},"paperFills":${JSON.stringify(PAPER_FILLS)},"session":${JSON.stringify(session)},"records":[`;
     let cursor=0,count=0;
     const observationIds=new Set<string>();
     while(cursor<snapshot!.journalThrough){
