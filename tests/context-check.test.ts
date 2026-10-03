@@ -33,7 +33,7 @@ test('provider errors and transport failures retain the last successful check',(
   for(const response of [{successfulCheckAt:now-5000,error:'Provider timed out.'},{error:'Connection interrupted.'}]){
     const next=recordContextCheck(previous,response),view=contextCheckView(next,now,live);
     assert.equal(next.successfulCheckAt,now-5000);assert.equal(view.checkedLabel,'5s ago');
-    assert.equal(view.failed,true);assert.equal(view.message,'Latest check failed. Showing the last available game report.');
+    assert.equal(view.failed,true);assert.equal(view.message,`Latest check failed (${response.error.replace(/\.$/,'')}). Showing the last available game report.`,'the reason is shown');
   }
 });
 

@@ -9,7 +9,8 @@ const eventRaw=(slug='synthetic-tennis')=>({id:'fixture',slug:'fixture',title:'S
 const bookRaw=(time:number)=>({marketData:{marketSlug:'synthetic-tennis',bids:[{px:{value:'0.49',currency:'USD'},qty:'1000'}],offers:[{px:{value:'0.50',currency:'USD'},qty:'1000'}],state:'MARKET_STATE_OPEN',transactTime:new Date(time).toISOString()}});
 const fresh=(time:number)=>Response.json(bookRaw(time),{headers:{'CF-Cache-Status':'DYNAMIC'}});
 
-for(const longest of ['metadata','event','book'] as const){
+// Prices and the game list share one provider pause; game reports have their own lane, so neither silences the other.
+for(const longest of ['metadata','book'] as const){
   test(`concurrent 429 responses cannot shorten ${longest}'s longer provider pause`,async(t)=>{
     const {store}=await active(),time=NOW+2000;t.mock.method(Date,'now',()=>time);
     const market=input(time).market;store.set('exchange-rules:'+market.slug,{at:time,execution:market.execution});
@@ -17,21 +18,35 @@ for(const longest of ['metadata','event','book'] as const){
     t.mock.method(globalThis,'fetch',async(url:string)=>{calls++;const source=url.includes('/v1/events?')?'event':url.includes('/book?')?'book':'metadata';return new Promise<Response>(resolve=>{responses.set(source,resolve);});});
     const adapter=new PolymarketInputAdapter(store,async()=>null) as unknown as {
       publicGet(path:string,signal:AbortSignal):Promise<unknown>;
-      footballEvent(eventId:string,signal:AbortSignal):Promise<unknown>;
       load(market:TennisMarket,signal:AbortSignal):Promise<TennisInput>;
     };
     const signal=new AbortController().signal;
-    const pending={metadata:adapter.publicGet('/v1/market/slug/'+market.slug,signal).catch(()=>{}),event:adapter.footballEvent('112943',signal).catch(()=>{}),book:adapter.load(market,signal).catch(()=>{})};
-    assert.equal(responses.size,3);
+    const pending={metadata:adapter.publicGet('/v1/market/slug/'+market.slug,signal).catch(()=>{}),book:adapter.load(market,signal).catch(()=>{})};
+    assert.equal(responses.size,2);
     responses.get(longest)!(new Response(null,{status:429,headers:{'Retry-After':'180'}}));await pending[longest];
     assert.equal(store.get('provider-backoff'),time+180_000);
-    for(const source of ['metadata','event','book'] as const){if(source===longest)continue;
-      responses.get(source)!(new Response(null,{status:429,headers:{'Retry-After':'10'}}));await pending[source];
-      assert.equal(store.get('provider-backoff'),time+180_000);
-    }
-    await assert.rejects(adapter.footballEvent('112943',signal),/backoff/);assert.equal(calls,3);
+    const other=longest==='metadata'?'book':'metadata';
+    responses.get(other)!(new Response(null,{status:429,headers:{'Retry-After':'10'}}));await pending[other];
+    assert.equal(store.get('provider-backoff'),time+180_000);
+    await assert.rejects(adapter.publicGet('/v1/market/slug/'+market.slug,signal),/backoff/);assert.equal(calls,2);
   });
 }
+
+test('game reports have their own pause: a price or game-list rate limit never silences them, and vice versa',async(t)=>{
+  const {store}=await active(),time=NOW+2000;t.mock.method(Date,'now',()=>time);
+  let status=429,retry='180',calls=0;
+  t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response(null,{status,headers:{'Retry-After':retry}});});
+  const adapter=new PolymarketInputAdapter(store,async()=>null) as unknown as {publicGet(path:string,signal:AbortSignal):Promise<unknown>;footballEvent(eventId:string,signal:AbortSignal):Promise<unknown>};
+  const signal=new AbortController().signal;
+  await assert.rejects(adapter.publicGet('/v1/market/slug/x',signal));
+  assert.equal(store.get('provider-backoff'),time+180_000);assert.equal(store.get('provider-backoff:reports'),null);
+  // The report is still requested (it reaches the provider) despite the general pause.
+  retry='';await assert.rejects(adapter.footballEvent('112943',signal));assert.equal(calls,2);
+  assert.equal(store.get('provider-backoff:reports'),time+15_000,'a report 429 without Retry-After pauses reports for 15 s');
+  assert.equal(store.get('provider-backoff'),time+180_000,'and does not touch the general pause');
+  await assert.rejects(adapter.footballEvent('112943',signal),/Game reports paused/);assert.equal(calls,2);
+  status=200;
+});
 class FakeSocket extends EventTarget {binaryType='arraybuffer';messages:string[]=[];closed=false;accept(){}send(value:string){this.messages.push(value);}close(){this.closed=true;this.dispatchEvent(new Event('close'));}message(value:unknown){this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(value)}));}}
 
 test('native REST preserves actual receipt and provider clocks; cached books and backoff block reuse',async(t)=>{

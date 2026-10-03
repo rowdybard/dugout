@@ -52,10 +52,11 @@ export class PolymarketInputAdapter implements InputAdapter {
     try{return await readJson(await fetch('https://gateway.polymarket.us'+path,{signal,cache:'no-store'}),signal,providerResponseLimit(path));}
     catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000)));throw error;}
   }
+  /** Game reports have their own back-off: a rate limit on prices or the game list never silences them (and vice versa). */
   private async footballEvent(eventId:string,signal:AbortSignal){
-    const blocked=this.store.get<number>('provider-backoff')??0;if(blocked>now())throw new Error('Market source backoff until '+new Date(blocked).toISOString()+'.');
+    const blocked=this.store.get<number>('provider-backoff:reports')??0;if(blocked>now())throw new Error('Game reports paused by the provider until '+new Date(blocked).toISOString()+'.');
     try{return (await fetchFreshFootballEvent(eventId,signal)).data;}
-    catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff',Math.max(this.store.get<number>('provider-backoff')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||60_000)));throw error;}
+    catch(error){if(Number((error as {status?:number}).status)===429)this.store.set('provider-backoff:reports',Math.max(this.store.get<number>('provider-backoff:reports')??0,now()+Math.max(10_000,Number((error as {retryAfterMs?:number}).retryAfterMs)||15_000)));throw error;}
   }
   private async catalog(session:TennisSession,signal:AbortSignal,leagues:readonly TennisLeague[]=session.config.leagues){
     const markets:TennisMarket[]=[];

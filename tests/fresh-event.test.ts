@@ -29,8 +29,9 @@ test('invalid event IDs are rejected before any request',async()=>{
   }
 });
 
-test('MISS, BYPASS and DYNAMIC with absent or zero Age are accepted without rewriting provider time',async()=>{
-  for(const cache of ['MISS','BYPASS','DYNAMIC'])for(const age of [undefined,'0']){
+test('MISS, BYPASS, DYNAMIC, EXPIRED and REVALIDATED with absent or zero Age are accepted without rewriting provider time',async()=>{
+  // EXPIRED and REVALIDATED were checked with the origin on this request.
+  for(const cache of ['MISS','BYPASS','DYNAMIC','EXPIRED','REVALIDATED'])for(const age of [undefined,'0']){
     let time=now;
     const result=await fetchFreshFootballEvent('112943',undefined,{now:()=>time,fetcher:async()=>{time+=125;return response({'CF-Cache-Status':cache,...(age===undefined?{}:{Age:age})});}});
     assert.deepEqual(result.data,payload);assert.equal(result.receipt.requestedAt,now);assert.equal(result.receipt.receivedAt,now+125);
@@ -39,7 +40,7 @@ test('MISS, BYPASS and DYNAMIC with absent or zero Age are accepted without rewr
 });
 
 test('cached and unverifiable responses are rejected and their bodies cancelled',async()=>{
-  const cases:Record<string,string>[]=[{'CF-Cache-Status':'HIT'},{'CF-Cache-Status':'EXPIRED'},{},{'CF-Cache-Status':'MISS',Age:'1'},{'CF-Cache-Status':'DYNAMIC',Age:'bad'},{'CF-Cache-Status':'BYPASS',Age:'-1'}];
+  const cases:Record<string,string>[]=[{'CF-Cache-Status':'HIT'},{'CF-Cache-Status':'STALE'},{'CF-Cache-Status':'UPDATING'},{},{'CF-Cache-Status':'MISS',Age:'1'},{'CF-Cache-Status':'DYNAMIC',Age:'bad'},{'CF-Cache-Status':'BYPASS',Age:'-1'}];
   for(const headers of cases){
     const fixture=streamResponse(headers);
     await assert.rejects(fetchFreshFootballEvent('112943',undefined,{fetcher:async()=>fixture.response}),/cached or unverifiable/);

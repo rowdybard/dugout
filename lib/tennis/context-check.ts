@@ -19,7 +19,7 @@ export function contextCheckView(check:ContextCheckState|undefined,now:number,re
   const ageMs=typeof timestamp==='number'&&Number.isFinite(timestamp)&&timestamp>=0&&Number.isFinite(now)&&timestamp<=now+30_000?Math.max(0,now-timestamp):null;
   const checkedLabel=ageMs===null?'Not verified yet':`${ageText(ageMs)} ago`;
   const failed=Boolean(check?.error);
-  const message=failed?'Latest check failed. Showing the last available game report.'
+  const message=failed?`Latest check failed (${check!.error!.replace(/\.$/,'')}). Showing the last available game report.`
     :report.ended?'Game ended; showing the final available report.'
     :!report.live?'Waiting for the game to be in play.'
     :report.freshness==='conflicting'?'Waiting for the game reports to agree.'

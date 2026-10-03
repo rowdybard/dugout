@@ -12,8 +12,9 @@ function pause(ms:number,signal?:AbortSignal):Promise<void>{
 /** Worker requests may share pacing timestamps, never promises tied to another
  * request's fetch, timer or D1 operation. The DO's serialized budget is separate.
  */
-export function createServerPublicSourceBudget(options:{spacingMs?:number;now?:()=>number;delay?:(ms:number,signal?:AbortSignal)=>Promise<void>}={}){
+export function createServerPublicSourceBudget(options:{spacingMs?:number;now?:()=>number;delay?:(ms:number,signal?:AbortSignal)=>Promise<void>;minBackoffMs?:number;defaultBackoffMs?:number}={}){
   const now=options.now??(()=>Date.now()),delay=options.delay??pause,spacing=options.spacingMs??750;
+  const minBackoff=options.minBackoffMs??60000,defaultBackoff=options.defaultBackoffMs??120000;
   let nextAt=0,blockedUntil=0;
   async function run<T>(request:()=>Promise<T>,signal?:AbortSignal,lifecycle:{onBackoff?:(until:number)=>Promise<void>;retain?:(task:Promise<unknown>)=>void}={}):Promise<T>{
     // Claim one start slot without awaiting between the time check and update.
@@ -33,7 +34,7 @@ export function createServerPublicSourceBudget(options:{spacingMs?:number;now?:(
     const task=(async()=>{try{return await request();}catch(error){
       const value=error as {status?:number;message?:string;retryAfterMs?:number};
       if(value.status===429||/1015|rate.?limit/i.test(value.message??'')){
-        const retry=Number.isFinite(value.retryAfterMs)?Math.max(60000,value.retryAfterMs!):120000;
+        const retry=Number.isFinite(value.retryAfterMs)?Math.max(minBackoff,value.retryAfterMs!):defaultBackoff;
         blockedUntil=Math.max(blockedUntil,now()+retry);
         await lifecycle.onBackoff?.(blockedUntil);
         throw new Error(`Polymarket US rate limit. Requests paused until ${new Date(blockedUntil).toISOString()}.`);

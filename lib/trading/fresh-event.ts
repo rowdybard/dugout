@@ -8,7 +8,7 @@ const MAX_BYTES=1_000_000;
 export async function fetchFreshFootballEvent(eventId:string,signal?:AbortSignal,dependencies:Dependencies={}){
   if(!/^[1-9]\d{0,19}$/.test(eventId))throw new Error('Choose a verified numeric football event ID.');
   const fetcher=dependencies.fetcher??fetch,now=dependencies.now??Date.now;
-  const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(2000)]):AbortSignal.timeout(2000);
+  const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(3000)]):AbortSignal.timeout(3000);
   requestSignal.throwIfAborted();
   const nonce=(dependencies.nonce??(()=>crypto.randomUUID()))();
   const url=`https://gateway.polymarket.us/v1/events?id=${encodeURIComponent(eventId)}&sportsMarketTypes=football_team_full_game_winner&dugout_read=${encodeURIComponent(nonce)}`;
@@ -21,7 +21,8 @@ export async function fetchFreshFootballEvent(eventId:string,signal?:AbortSignal
   if(requestSignal.aborted){await response.body?.cancel().catch(()=>{});requestSignal.throwIfAborted();}
   const cacheStatus=response.headers.get('CF-Cache-Status')?.trim().toUpperCase()??'';
   const age=response.headers.get('Age');
-  if(!['MISS','BYPASS','DYNAMIC'].includes(cacheStatus)||age!==null&&(!/^0+$/.test(age.trim()))){
+  // EXPIRED and REVALIDATED were checked with the origin on this request, so they are current too.
+  if(!['MISS','BYPASS','DYNAMIC','EXPIRED','REVALIDATED'].includes(cacheStatus)||age!==null&&(!/^0+$/.test(age.trim()))){
     await response.body?.cancel().catch(()=>{});
     throw new Error('The game-report provider returned a cached or unverifiable report. Waiting for a fresh source check.');
   }

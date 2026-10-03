@@ -3,7 +3,7 @@ import {assessFootballContext,isFootballMarket} from './football-context.ts';
 import type {FootballAssessment,FootballReportState,TennisMarket} from './types';
 
 export const PRIORITY_CONTEXT_TTL_MS=3000;
-export const PRIORITY_CONTEXT_TIMEOUT_MS=2000;
+export const PRIORITY_CONTEXT_TIMEOUT_MS=3000;
 export type PriorityContextRecord={fetchedAt:number;successfulCheckAt?:number|null;market:TennisMarket;reportMarket:TennisMarket;state:FootballReportState;error:string|null};
 export type PriorityContextResult=PriorityContextRecord&{successfulCheckAt:number|null;assessment:FootballAssessment;cacheHit:boolean};
 export type PriorityContextDependencies={

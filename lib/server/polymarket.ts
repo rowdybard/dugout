@@ -9,15 +9,22 @@ import {fetchFreshMarketBook} from '../trading/fresh-book';
 import {fetchFreshFootballEvent} from '../trading/fresh-event';
 export const sdk = new PolymarketUS({ timeout: 12000 });
 const requestBudget=createServerPublicSourceBudget();
+/**
+ * Game reports have their own lane: they are small, time-critical (live resting orders wait on them), and must not
+ * queue behind game-list pages or stop for two minutes because another request was rate-limited. A 429 on a report
+ * pauses only reports, for 15 s unless the provider asks for longer.
+ */
+const reportBudget=createServerPublicSourceBudget({spacingMs:250,minBackoffMs:10_000,defaultBackoffMs:15_000});
 /** A provider-requested pause survives Worker restarts and other UI requests. */
-async function publicRead<T>(request:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
+async function publicRead<T>(request:()=>Promise<T>,signal?:AbortSignal,lane:'general'|'reports'='general'):Promise<T>{
   signal?.throwIfAborted();
-  const saved=await db().prepare('SELECT value FROM cache WHERE key=?').bind('polymarket:backoff').first<{value:string}>();
+  const key=lane==='reports'?'polymarket:backoff:reports':'polymarket:backoff';
+  const saved=await db().prepare('SELECT value FROM cache WHERE key=?').bind(key).first<{value:string}>();
   const until=saved?Number(saved.value):0;
   if(Number.isFinite(until)&&until>Date.now())throw new Error(`Polymarket US requests are paused until ${new Date(until).toISOString()}.`);
-  return requestBudget.run(request,signal,{
+  return (lane==='reports'?reportBudget:requestBudget).run(request,signal,{
     retain:task=>waitUntil(task),
-    onBackoff:async retryAt=>{await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind('polymarket:backoff',String(retryAt),Date.now()).run();},
+    onBackoff:async retryAt=>{await db().prepare('INSERT INTO cache(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(CAST(cache.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT),updated=excluded.updated').bind(key,String(retryAt),Date.now()).run();},
   });
 }
 export const BASE = "https://gateway.polymarket.us";
@@ -29,7 +36,7 @@ export function numeric(x: unknown): number | null {
 }
 export const amount = (x: any) => numeric(x?.value);
 export const publicMarketBook=(slug:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshMarketBook(slug,signal),signal);
-export const publicFootballEvent=(eventId:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshFootballEvent(eventId,signal),signal);
+export const publicFootballEvent=(eventId:string,signal?:AbortSignal)=>publicRead(()=>fetchFreshFootballEvent(eventId,signal),signal,'reports');
 export async function publicGet(path: string, signal?:AbortSignal): Promise<Raw> {
   signal?.throwIfAborted();
   const replay = await replayData();
