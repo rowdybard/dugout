@@ -83,7 +83,7 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 
 **When offers come down:**
 - for 30 s after each live play;
-- whenever the live game report is older than 45 s;
+- whenever the live game report is older than 45 s (except at **halftime**: offers may stay up while the report says halftime, for up to 20 minutes after that report);
 - when the book is wider than 5¢;
 - on stale data, pause, End run, or a rule change.
 

@@ -63,7 +63,7 @@ Bold doesn't make the bot smarter. It puts more money on each trade, so the bad 
 
 These are all normal. It's the bot being careful, not broken:
 - **After every play:** it pulls its offers for 30 seconds, because prices jump right after plays.
-- **Old game report:** during a live game it only posts offers while Polymarket's game report is less than 45 seconds old. If the game tracker says the report is stale, it waits, and the tracker shows the reason the last check failed.
+- **Old game report:** during a live game it only posts offers while Polymarket's game report is less than 45 seconds old. Polymarket goes quiet during halftime, reviews and TV timeouts. At **halftime** the bot keeps its offers up anyway (prices are calm and no plays happen), for up to 20 minutes. If the game tracker says the report is stale, it waits, and the tracker shows the reason the last check failed.
 - **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
 - **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.
 

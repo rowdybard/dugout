@@ -24,7 +24,7 @@ import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
-import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -582,7 +582,11 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   if (now < state.pulledUntil) return cancel(`Pulled for ${Math.ceil((state.pulledUntil - now) / 1000)}s after a play; prices move most right after events.`);
   // Window-only makers quote precisely while the ball is dead: a fresh between-plays report is their context.
   const windowOnly = exit?.kind === 'maker' && !!exit.windowOnly, context = session.footballReports?.[slug]?.assessment.status;
-  if (phase === 'live' && isFootballMarket(input.market) && session.config.decisionPolicy === 'football-context-v1' && context !== 'fresh' && !(windowOnly && context === 'transition'))
+  // Halftime: no plays, so an old or unrecognised report is expected; offers may rest for up to HALFTIME_QUOTE_MS.
+  const reportedAt = input.market.contextUpdatedAt;
+  const halftime = phase === 'live' && isFootballMarket(input.market) && isHalftimePeriod(input.market.period)
+    && typeof reportedAt === 'number' && Number.isFinite(reportedAt) && reportedAt <= now + 15_000 && now - reportedAt <= HALFTIME_QUOTE_MS;
+  if (phase === 'live' && isFootballMarket(input.market) && session.config.decisionPolicy === 'football-context-v1' && context !== 'fresh' && !(windowOnly && context === 'transition') && !halftime)
     return cancel('Waiting for fresh game context before quoting live.');
   if (!actions.length) return cancel(plan.notes.find(note => note.strategy === selectedMaker(session))?.detail
     ?? plan.considered.find(trade => trade.proposal.style === 'maker' && trade.proposal.strategy === selectedMaker(session))?.reason ?? 'The engine does not permit resting orders here.');

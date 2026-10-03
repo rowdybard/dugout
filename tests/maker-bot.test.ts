@@ -214,3 +214,15 @@ test('Bold with a single buy has no loss limit yet (it may still buy the dip fir
   assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
   assertReconciles(session);
 });
+
+test('halftime: resting offers stay up while the report says halftime, for at most 20 minutes',()=>{
+  const ht=(time:number,reportAt:number,book:Book)=>{const value=input(time,book,{live:true});
+    value.market={...value.market,period:'HT',clock:null,football:null,contextUpdatedAt:reportAt};return value;};
+  let session=started('CFB','steady');
+  const reportAt=START+90*60_000;
+  session=stepTennisSession(session,[ht(reportAt+60_000,reportAt,{bid:.60,ask:.61})],reportAt+60_000);
+  session=stepTennisSession(session,[ht(reportAt+120_000,reportAt,{bid:.60,ask:.61})],reportAt+120_000);
+  assert.ok(session.maker?.quotes.YES||session.maker?.quotes.NO,`offers rest at halftime: ${session.lastReason}`);
+  session=stepTennisSession(session,[ht(reportAt+21*60_000,reportAt,{bid:.60,ask:.61})],reportAt+21*60_000);
+  assert.ok(!session.maker?.quotes.YES&&!session.maker?.quotes.NO,'pulled once the halftime report is over 20 minutes old');
+});
