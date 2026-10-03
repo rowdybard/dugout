@@ -13,6 +13,7 @@ const runForMs=z.number().int().min(60_000).max(21_600_000).optional();
 const schema=z.union([
   z.object({action:z.literal('start'),config:tennisRulesPatchSchema.optional(),runForMs,commandId:z.string().uuid()}).strict(),
   z.object({action:z.enum(['tick','pause','resume','stop']),runForMs,commandId:z.string().uuid().optional(),sessionId:internalId.optional()}).strict(),
+  z.object({action:z.literal('exit-now'),commandId:z.string().uuid()}).strict(),
   z.object({action:z.literal('reset'),bankroll:z.number().finite().min(5).max(MAX_BALANCE),commandId:z.string().uuid(),abandon:z.literal(true).optional()}).strict(),
   z.object({action:z.literal('update-rules'),rules:tennisRulesPatchSchema,expectedRulesRevision:z.number().int().min(0),sessionId:internalId,commandId:z.string().uuid()}).strict(),
 ]);

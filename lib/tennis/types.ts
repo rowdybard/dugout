@@ -164,7 +164,9 @@ export type TennisSession={
   sweepSeen?:Record<string,number>;
   testRun?:{startedAt:number;endsAt:number;watchedMs:number;lastCheckAt:number;startingCash:number;startingLedgerCount:number;liveSlugs:string[];complete:boolean};
   config:TennisConfig;cash:number;startedAt:number;lastTickAt:number;lastReason:string;
-  positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};histories:Record<string,TennisObservation[]>;
+  positions:TennisPosition[];pending:TennisIntent|null;exitRequested?:{positionId:string;reason:string;source:'MANUAL'|'AUTOMATIC'};
+  /** "Sell everything now" was pressed at this time: held shares are sold on the next fresh book; entries are paused. */
+  exitAll?:number;histories:Record<string,TennisObservation[]>;
   signals:Record<string,TennisSignal>;consumedBooks:Record<string,number>;
   decisions:TennisDecision[];ledger:TennisLedgerEntry[];equity:{time:number;price:number}[];
   rejectionCounts:Record<string,number>;evaluated:number;commandIds:string[];
@@ -172,6 +174,7 @@ export type TennisSession={
 export type TennisAction=
  |{action:'start';config?:Partial<TennisConfig>;runForMs?:number;commandId:string}
  |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string}
+ |{action:'exit-now';commandId:string}
  |{action:'reset';bankroll:number;commandId:string;
   /** Paper only: drop open paper positions, pending orders and resting quotes instead of refusing (fake money). */
   abandon?:true}

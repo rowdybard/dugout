@@ -1,5 +1,5 @@
-import {TennisDashboard} from '@/components/tennis/tennis-dashboard';
+import {DashboardShell} from '@/components/tennis/dashboard-shell';
 
 export default function TennisPage() {
-  return <TennisDashboard/>;
+  return <DashboardShell/>;
 }

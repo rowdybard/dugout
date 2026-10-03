@@ -8,6 +8,21 @@ const signed=(value:number)=>`${value>=0?'+':'−'}${money(Math.abs(value))}`;
 const cents=(price:number)=>`${+(price*100).toFixed(1)}¢`;
 const qty=(value:number)=>value.toLocaleString('en-US',{maximumFractionDigits:2});
 
+/**
+ * "Sell everything now": a big button while anything is held, green when the holdings are up and red when down
+ * (neutral until every holding has a current price). It pauses entries and sells on the next fresh price check.
+ */
+export function SellEverything({session,markets,now,busy,onSell}:{session:TennisSession;markets:TennisMarket[];now:number;busy:boolean;onSell:()=>void}) {
+  const {holdings}=openBook(session,markets,now);
+  if(!holdings.length)return null;
+  const priced=holdings.every(h=>h.result!==null),result=holdings.reduce((sum,h)=>sum+(h.result??0),0);
+  const tone=!priced?'':result>=0?'is-up':'is-down',selling=!!session.exitAll;
+  return <button className={`tennis-sell-all ${tone}`} disabled={busy||selling} onClick={onSell}>
+    <strong>{selling?'Selling everything…':'Sell everything now'}</strong>
+    <span>{selling?'At the best price on the next fresh price check':priced?`${signed(result)} if sold now`:'Waiting for a current price'}</span>
+  </button>;
+}
+
 /** One always-visible list of the bot's working orders and the shares it holds, across the main and Chaos games. */
 export function OpenBook({session,markets,now}:{session:TennisSession;markets:TennisMarket[];now:number}) {
   const {orders,holdings,reserved,held}=openBook(session,markets,now);

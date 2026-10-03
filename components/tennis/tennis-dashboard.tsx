@@ -26,7 +26,7 @@ import {RunnerSetup} from './runner-setup';
 import {FeedKey} from './feed-key';
 import {DecisionCard} from './decision-card';
 import {EngineCard} from './engine-card';
-import {OpenBook} from './open-book';
+import {OpenBook,SellEverything} from './open-book';
 import {ChaosPanel,downloadChaosLog} from './chaos-panel';
 import {modeOf,modeRules,type TradeMode} from '@/lib/tennis/modes';
 
@@ -205,6 +205,7 @@ export function TennisDashboard() {
         {session&&steady&&<details className="tennis-chaos-details" open={!!session.config.chaosSlugs?.length}><summary>Chaos mode · {session.config.chaosSlugs?.length?`${session.config.chaosSlugs.length} extra game${session.config.chaosSlugs.length>1?'s':''}`:'off'}</summary>
           <ChaosPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setChaos}/></details>}
         {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}
+        {session&&<SellEverything session={session} markets={availableMarkets} now={now} busy={bot.busy||migrating} onSell={()=>void bot.perform({action:'exit-now',commandId:tennisCommandId()})}/>}
         {session&&<OpenBook session={session} markets={availableMarkets} now={now}/>}
       </section>
 

@@ -41,6 +41,7 @@ Bold doesn't make the bot smarter. It puts more money on each trade, so the bad 
 - **Start bot:** pick a game first, then press it.
 - **Pause:** no new trades. Anything already held stays managed. **Resume** carries on.
 - **End run:** sells what it holds and closes the run. **New run** then starts fresh.
+- **Sell everything now:** the big button that appears while the bot holds shares. It's green when they're up and red when down, and shows the amount. It sells everything at the best price on the next price check (a few seconds) and pauses the bot. Press Resume to carry on.
 - **Reset balance:** starts over at any amount from $5 to $10,000, any time. Open paper trades are dropped, which is fine because it's fake money.
 - **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game.
 

@@ -65,6 +65,7 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | Steady / Bold | Switches the trading mode and resizes the order. The button lights up at once; the change is saved from the latest rules. Bold turns Chaos off. |
 | Start bot / Resume | Starts an idle account or resumes a paused one. Needs a chosen game. |
 | Pause | No new entries; held shares stay managed. |
+| Sell everything now | Big button while anything is held: green when the holdings are up, red when down (neutral until priced). Pauses entries, pulls offers, and sells every held share at the best bid on the next fresh book (`exit-now`). Resume continues the run. |
 | End run | Cancels offers, sells what is held, and ends the run. |
 | New run | After a run ends: opens Reset balance. |
 | Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold, and drops open paper trades (fake money). |

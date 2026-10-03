@@ -275,3 +275,11 @@ body:has(.tennis-app){background:#17191e}
 .tennis-open-book td small{display:block;font-size:var(--fs-xs);color:var(--dg-muted)}
 .tennis-open-book tr:last-child td{border-bottom:0}
 @media(max-width:520px){.tennis-open-book{padding:10px}.tennis-open-book th,.tennis-open-book td{padding:6px 3px;font-size:var(--fs-xs)}}
+
+/* Sell everything now: big, coloured by whether the holdings are up or down */
+.tennis-app button.tennis-sell-all{width:100%;margin-top:14px;display:grid;gap:2px;justify-items:center;padding:14px 16px;border-radius:12px;border:1px solid var(--dg-line-2);background:var(--dg-surface-3);color:var(--dg-text);font-size:var(--fs-md);min-height:58px}
+.tennis-app button.tennis-sell-all strong{font-weight:750;font-size:var(--fs-lg)}
+.tennis-app button.tennis-sell-all span{font-size:var(--fs-sm);opacity:.9}
+.tennis-app button.tennis-sell-all.is-up{background:#2f6b45;border-color:#3f8a5a;color:#eaf7ee}
+.tennis-app button.tennis-sell-all.is-down{background:#7a2e33;border-color:#9a3c43;color:#fbecee}
+.tennis-app button.tennis-sell-all:disabled{opacity:.7}

@@ -1,2 +1,2 @@
-import {TennisDashboard} from '@/components/tennis/tennis-dashboard';
-export default function Home(){return <TennisDashboard/>;}
+import {DashboardShell} from '@/components/tennis/dashboard-shell';
+export default function Home(){return <DashboardShell/>;}

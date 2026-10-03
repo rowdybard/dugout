@@ -526,6 +526,15 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
     if (input) position.lastContext = currentTennisContext(position.lastContext ?? position.market, input.market, now, position.market.active);
     markPosition(session, position, input, now);
   }
+  if (session.exitAll) {
+    for (const input of current) {
+      const held = makerPositions(session).filter(p => p.slug === input.market.slug);
+      if (!held.length || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) continue;
+      session.consumedBooks[input.market.slug] = input.receivedAt;
+      for (const position of held) sellMakerShares(session, input, now, position, position.quantity, 'Sell everything now (pressed on the dashboard).');
+    }
+    if (!session.positions.some(p => p.status === 'open')) { session.exitAll = undefined; session.lastReason = 'Sold everything. Entries are paused; press Resume to continue.'; }
+  }
   if (session.status === 'stopping' || session.status === 'stopped') {
     cancelMakerQuotes(session, 'The bot is stopping; inventory is being closed.', now);
     for (const input of current) flattenMaker(session, input, now);
@@ -1332,6 +1341,19 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     session.equity = [{ time: now, price: config.startingCash }];
     session.status = 'running'; session.lastReason = 'Paper bot started. Gathering fresh live-match quotes.';
     beginObservation(session, action.runForMs, now);
+    return stepTennisSession(session, inputs, now);
+  }
+  if (action.action === 'exit-now') {
+    // "Sell everything now": pause entries, pull offers, and sell every held share on the next fresh book.
+    const held = session.positions.filter(position => position.status === 'open');
+    if (!held.length) return reject('Nothing is held, so there is nothing to sell.');
+    if (session.status === 'running') session.status = 'paused';
+    if (session.pending?.action === 'BUY') session.pending = null;
+    cancelMakerQuotes(session, 'Selling everything now; entries are paused.', now);
+    session.exitAll = now;
+    const taker = holding(session);
+    if (taker && session.pending?.action !== 'SELL') session.exitRequested = { positionId: taker.id, reason: 'Sell everything now (pressed on the dashboard).', source: 'MANUAL' };
+    session.lastReason = 'Selling everything at the best price on the next fresh price check. Entries are paused; press Resume to continue.';
     return stepTennisSession(session, inputs, now);
   }
   if (action.action === 'pause') {

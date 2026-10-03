@@ -226,3 +226,21 @@ test('halftime: resting offers stay up while the report says halftime, for at mo
   session=stepTennisSession(session,[ht(reportAt+21*60_000,reportAt,{bid:.60,ask:.61})],reportAt+21*60_000);
   assert.ok(!session.maker?.quotes.YES&&!session.maker?.quotes.NO,'pulled once the halftime report is over 20 minutes old');
 });
+
+test('"Sell everything now": pauses entries, pulls offers, and sells held shares on the next fresh book',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  assert.equal(session.positions.filter(p=>p.status==='open').length,1);
+  session=applyTennisAction(session,{action:'exit-now',commandId:'sell-all'},[],T0+6000);
+  assert.equal(session.status,'paused');assert.ok(session.exitAll);
+  assert.ok(!session.maker?.quotes.YES&&!session.maker?.quotes.NO,'offers pulled');
+  session=step(session,T0+8000,{bid:.62,ask:.63});
+  const sale=session.ledger.find(e=>e.action==='SELL')!;
+  assert.ok(sale,'sold on the next book');assert.match(sale.reason,/Sell everything now/);assert.ok(sale.realizedPnl>0);
+  assert.equal(session.positions.filter(p=>p.status==='open').length,0);
+  assert.equal(session.exitAll,undefined);assert.equal(session.status,'paused');
+  // Nothing held: refused, nothing changes.
+  const again=applyTennisAction(session,{action:'exit-now',commandId:'sell-all-2'},[],T0+9000);
+  assert.match(again.lastReason,/nothing to sell/i);
+  assertReconciles(session);
+});
