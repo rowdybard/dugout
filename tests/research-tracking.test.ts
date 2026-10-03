@@ -85,7 +85,8 @@ test('a surprising score opens a surprise-fade shadow after the wait, with the p
   const fade=session.shadows!.find(s=>s.strategy==='surprise-fade')!;
   assert.ok(fade,JSON.stringify(session.enginePlan?.notes));
   assert.equal(fade.legs[0].side,'yes');assert.equal(fade.legs[0].entry!.price,0.61);assert.equal(fade.setupKey,event.id);
-  assert.equal(fade.preEventSideMid,0.755);assert.equal(session.positions.length,0);
+  // A shadow is never traded (resting-offer fills, which now stay up through ordinary plays, are separate).
+  assert.equal(fade.preEventSideMid,0.755);assert.equal(session.positions.filter(p=>p.exitPolicy!=='maker').length,0);
 });
 
 test('quiet-window-v1 rests quotes only in a dead-ball window; paper-v1 accounts measure it in shadow',()=>{

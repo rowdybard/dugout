@@ -25,13 +25,13 @@ import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,footballSourceChanged,footballSourceTimingIssue,isFootballMarket,normalizePositionExitRules,FOOTBALL_CONTEXT_MAX_AGE_MS} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
-import {committed,compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,tennisSignalContext,type PlanEntry} from './engine-plan.ts';
+import {committed,compactPlan,decisionContext,marketPhase,pregameStatusMaxAge,sessionEngine,sessionRisk,tennisSignalContext,type PlanEntry} from './engine-plan.ts';
 import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,recordPregame,recordWhyNot} from './research-tracking.ts';
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
 import {applyOctopusPicks,octopusSlugs} from './octopus.ts';
-import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,restingCost,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,restingCost,eventKey,ballYard,BIG_PLAY_YARDS,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -103,7 +103,9 @@ const MARKET_STATUS_FILL_MS = 45_000;
 function unfillable(input: TennisInput, now: number): string | null {
   const market = input.market;
   if (!market.active || market.ended || !market.execution?.active || input.book.state !== 'MARKET_STATE_OPEN') return 'The market is closed, suspended or inactive.';
-  if (!Number.isFinite(market.observedAt) || market.observedAt > now + 1000 || now - market.observedAt > MARKET_STATUS_FILL_MS) return 'The market status is out of date.';
+  // Before kickoff (and well ahead of it) an older status still counts, as for quoting (pregameStatusMaxAge).
+  const start = Date.parse(market.startTime), maxAge = !market.live && Number.isFinite(start) && now < start ? pregameStatusMaxAge(start - now) : MARKET_STATUS_FILL_MS;
+  if (!Number.isFinite(market.observedAt) || market.observedAt > now + 1000 || now - market.observedAt > maxAge) return 'The market status is out of date.';
   return null;
 }
 
@@ -752,9 +754,10 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   const actions = plan.actions.filter(action => action.proposal.style === 'maker');
   const exit = actions[0]?.proposal.exit;
   const pullMs = exit?.kind === 'maker' ? exit.pullAfterEventMs : null;
-  const key = eventKey(input.market, session.footballReports?.[slug]);
-  if (phase === 'live' && state.eventKey !== null && key !== state.eventKey && pullMs) state.pulledUntil = now + pullMs;
-  state.eventKey = key;
+  const key = eventKey(input.market, session.footballReports?.[slug]), yard = ballYard(session.footballReports?.[slug]);
+  const bigPlay = yard !== null && typeof state.eventYard === 'number' && Math.abs(yard - state.eventYard) >= BIG_PLAY_YARDS;
+  if (phase === 'live' && state.eventKey !== null && (key !== state.eventKey || bigPlay) && pullMs) state.pulledUntil = now + pullMs;
+  state.eventKey = key; state.eventYard = yard;
   if (now < state.pulledUntil) return cancel(`Pulled for ${Math.ceil((state.pulledUntil - now) / 1000)}s after a play; prices move most right after events.`);
   // Window-only makers quote precisely while the ball is dead: a fresh between-plays report is their context.
   const windowOnly = exit?.kind === 'maker' && !!exit.windowOnly, context = session.footballReports?.[slug]?.assessment.status;

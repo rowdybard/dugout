@@ -75,11 +75,20 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
  */
 export function marketPhase(input:TennisInput,now:number):Phase|null {
   const market=input.market;
-  if(market.ended||!market.active||!Number.isFinite(market.observedAt)||market.observedAt>now||now-market.observedAt>MARKET_STATUS_MAX_AGE_MS)return null;
-  if(market.live)return 'live';
+  if(market.ended||!market.active||!Number.isFinite(market.observedAt)||market.observedAt>now)return null;
+  const age=now-market.observedAt;
+  if(market.live)return age<=MARKET_STATUS_MAX_AGE_MS?'live':null;
   const start=Date.parse(market.startTime);
-  return Number.isFinite(start)&&now<start?'pregame':null;
+  return Number.isFinite(start)&&now<start&&age<=pregameStatusMaxAge(start-now)?'pregame':null;
 }
+
+/**
+ * Before kickoff the game's status changes rarely, so a status up to PREGAME_STATUS_MAX_AGE_MS old still counts,
+ * as long as kickoff is further away than that (the game cannot have started since); close to kickoff it needs the
+ * usual 45 s. Reports for several games (the Octopus) can lag a little without pulling every pregame offer.
+ */
+export const PREGAME_STATUS_MAX_AGE_MS=5*60_000;
+export const pregameStatusMaxAge=(untilStartMs:number)=>untilStartMs>PREGAME_STATUS_MAX_AGE_MS?PREGAME_STATUS_MAX_AGE_MS:MARKET_STATUS_MAX_AGE_MS;
 
 function periodNumber(period:string|null):number|null {
   const match=/^(?:Q|Set\s*)(\d)$/i.exec(period?.trim()??'');

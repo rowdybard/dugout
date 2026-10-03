@@ -69,8 +69,8 @@ test('resting offers never fill on a suspended market or on an out-of-date marke
   assert.ok(session.maker?.quotes.YES);
   let after=step(session,T0+5000,.59,.60,{state:'MARKET_STATE_SUSPENDED'});
   assert.equal(buys(after).length,0,'suspended: no fill');
-  after=step(session,T0+5000,.59,.60,{observedAt:T0-120_000});
-  assert.equal(buys(after).length,0,'status two minutes old: no fill');
+  after=step(session,T0+5000,.59,.60,{observedAt:T0-6*60_000});
+  assert.equal(buys(after).length,0,'status six minutes old: no fill');
   after=step(session,T0+5000,.59,.60,{active:false});
   assert.equal(buys(after).length,0,'inactive: no fill');
   after=step(session,T0+5000,.59,.60);
@@ -81,7 +81,7 @@ test('exits still run when the market status is out of date (Bold take-profit)',
   let session=step(started(),T0,.60,.61);
   session=step(session,T0+5000,.59,.60);
   assert.equal(yes(session).status,'open');
-  session=step(session,T0+6000,.66,.67,{observedAt:T0-120_000});
+  session=step(session,T0+6000,.66,.67,{observedAt:T0-6*60_000});
   const sale=session.ledger.find(e=>e.action==='SELL');
   assert.ok(sale,'sold at the take-profit');assert.match(sale.reason,/take-profit/i);
 });
@@ -140,4 +140,14 @@ test('each purchase saves the rules it was made under (resting fill and Bold dip
   session=step(session,T0+120_000,.54,.55);
   const dip=session.ledger.find(e=>e.id.includes(':dip:'))!;
   assert.equal(dip.terms?.mode,'bold');
+});
+
+test('before kickoff a status up to 5 minutes old keeps offers up and fillable; near kickoff it needs 45 s',()=>{
+  let session=step(started(),T0,.60,.61,{observedAt:T0-3*60_000});   // kickoff an hour away
+  assert.ok(session.maker?.quotes.YES,session.maker?.reason??session.lastReason);
+  session=step(session,T0+5000,.59,.60,{observedAt:T0-3*60_000});
+  assert.equal(buys(session).length,1,'fills on a 3-minute-old pregame status');
+  const near=START-2*60_000;                                          // two minutes before kickoff
+  const close=step(started(),near,.60,.61,{observedAt:near-60_000});
+  assert.ok(!close.maker?.quotes.YES,'a 1-minute-old status is too old this close to kickoff');
 });

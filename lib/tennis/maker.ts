@@ -58,6 +58,8 @@ export type MakerState={
   /** Resting buys by contract side: YES at the YES bid, NO at the NO bid. */
   quotes:{YES?:RestingQuote;NO?:RestingQuote};
   pulledUntil:number;eventKey:string|null;lastBookTime:number;reason:string;
+  /** Ball position (yards from the YES team's goal line) at the last report, to spot a big play. */
+  eventYard?:number|null;
   fills:number;rebates:number;
 };
 
@@ -81,9 +83,22 @@ export function restingFilled(quote:RestingQuote,sideAsk:number|undefined,bookRe
  * A play/point boundary: quotes are pulled for a while after it, because the reaction studies show informed
  * flow moves the price in the seconds after each event. Pregame has no events.
  */
+/**
+ * The events that pull resting offers (football; October 3, 2026): a score, a new quarter, a change of possession,
+ * or a big play (the ball moving BIG_PLAY_YARDS or more between reports). Ordinary downs don't: plays come every
+ * 25-45 s, so pulling for 30 s after each one left offers up only a few seconds per play and they almost never filled.
+ * Baseball (no football report) keys on the score and the half-inning.
+ */
+export const BIG_PLAY_YARDS=15;
 export function eventKey(market:TennisMarket,report:FootballReportState|undefined):string {
   const r=report?.report;
-  return JSON.stringify(r?[r.score,r.period,r.possessionTeamId,r.down,r.yardsToGo,r.fieldPosition.teamId,r.fieldPosition.yard]:[market.score,market.period]);
+  return JSON.stringify(r?[r.score,r.period,r.possessionTeamId]:[market.score,market.period]);
+}
+/** Ball position in yards from the YES team's goal line, or null without a verified report. */
+export function ballYard(report:FootballReportState|undefined):number|null {
+  const r=report?.report;
+  if(!r||!Number.isFinite(r.fieldPosition.yard))return null;
+  return r.fieldPosition.teamId===r.yesTeamId?r.fieldPosition.yard:100-r.fieldPosition.yard;
 }
 
 export function sameQuote(a:RestingQuote|undefined,price:number,quantity:number):boolean {

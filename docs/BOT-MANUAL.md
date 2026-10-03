@@ -119,7 +119,8 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 - **Sizes:** offers are Steady-sized in Steady and Bold-sized in Bold. Each switch is a decision row ("AUTO_MODE").
 
 **When offers come down:**
-- for 30 s after each live play;
+- for 30 s after a live score, change of possession, new quarter, or a play that moves the ball 15+ yards (`eventKey`, `BIG_PLAY_YARDS` in `lib/tennis/maker.ts`); ordinary downs keep them up. Until October 3, 2026 every down pulled them, which left them up only a few seconds per play;
+- before kickoff, when the game status is older than 5 minutes (older than 45 s within 5 minutes of kickoff; `pregameStatusMaxAge` in `lib/tennis/engine-plan.ts`);
 - whenever the required game report expires: 45 s for Polymarket, or 90 s for a verified ESPN drive with a fresh matching Polymarket scoreboard. The separate halftime policy does not make missing drive evidence fresh;
 - when the book is wider than 5¢;
 - on stale data, pause, End run, or a rule change.

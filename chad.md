@@ -86,7 +86,8 @@ The line under the buttons says which one it's in and why. Switching never chang
 ## Why it isn't trading
 
 These are all normal. It's the bot being careful, not broken:
-- **After every play:** it pulls its offers for 30 seconds, because prices jump right after plays.
+- **After a big moment:** it pulls its offers for 30 seconds after a score, a change of possession, a new quarter, or a play that moves the ball 15+ yards, because prices jump then. Ordinary downs keep the offers up. (Until October 3 it pulled after every play, so offers were rarely up long enough to fill.)
+- **Before kickoff:** the game's status can be up to 5 minutes old while kickoff is more than 5 minutes away; closer to kickoff it must be under 45 seconds.
 - **Old game report:** prices can keep moving while a drive report is delayed. Polymarket's report must stay within 45 seconds, and an ESPN drive report within 90 seconds, with matching score and quarter. A newer clock does not freshen an older drive. During gaps the tracker keeps the last known details and explains what is missing. Existing exits continue.
 - **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
 - **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.

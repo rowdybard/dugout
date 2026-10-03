@@ -124,15 +124,17 @@ test('no quotes where the evidence says stay out, or where no study exists',()=>
   assert.ok(!wide.maker?.quotes.YES&&!wide.maker?.quotes.NO);
 });
 
-test('live CFB: quotes pull for 30 s after each play, then return',()=>{
+test('live CFB: an ordinary play keeps quotes up; a big play pulls them for 30 s, then they return',()=>{
   const live=START+20*60_000;
   let session=step(started(),live,{bid:.60,ask:.61},{live:true,drive:{down:1,yard:25}});
   assert.ok(session.maker!.quotes.YES,session.maker!.reason);
   session=step(session,live+5000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
-  assert.ok(!session.maker!.quotes.YES&&!session.maker!.quotes.NO);assert.match(session.maker!.reason,/^Pulled for 30s after a play/);
-  session=step(session,live+20_000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
+  assert.ok(session.maker!.quotes.YES,'a 5-yard gain does not pull the offers');
+  session=step(session,live+10_000,{bid:.60,ask:.61},{live:true,drive:{down:1,yard:50}});
+  assert.ok(!session.maker!.quotes.YES&&!session.maker!.quotes.NO,'a 20-yard play pulls them');assert.match(session.maker!.reason,/^Pulled for 30s after a play/);
+  session=step(session,live+25_000,{bid:.60,ask:.61},{live:true,drive:{down:1,yard:50}});
   assert.ok(!session.maker!.quotes.YES);
-  session=step(session,live+36_000,{bid:.60,ask:.61},{live:true,drive:{down:2,yard:30}});
+  session=step(session,live+41_000,{bid:.60,ask:.61},{live:true,drive:{down:1,yard:50}});
   assert.ok(session.maker!.quotes.YES,'quotes return once the pull window passes');
 });
 

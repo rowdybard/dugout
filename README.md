@@ -41,7 +41,7 @@ The page shows only what's needed to run the bot:
 - **Auto:** the bot picks Bold while the research allows a bet on the game and the run is down less than 10%, and Steady otherwise.
 - **Comeback test (Bold and Auto):** `comeback-drive@1` is paper-traded to measure it: a team trailing by 3–24 driving inside the 30 with more than 5 minutes left.
 - **The Octopus** (experimental, any mode): the same offers on up to 6 extra games. Games can be pinned, or picked automatically every 5 minutes (calm, liquid college games). All resting offers together stay within 50% of the balance, with the main game first. Each event is logged as one short JSON line, written to tiny log files.
-- **When offers come down:** for 30 s after each live play, and whenever the game report is older than 45 s. The engine refuses losing or untested bets.
+- **When offers come down:** for 30 s after a score, a change of possession, a new quarter or a 15+ yard play, and whenever the live game report is older than 45 s (before kickoff, 5 minutes while kickoff is further away than that). The engine refuses losing or untested bets.
 - **Not AI:** these are deterministic calculations, not AI calls or a profit forecast. Real money is not connected (`lib/live/README.md`).
 
 ## Local development
