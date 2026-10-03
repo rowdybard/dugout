@@ -31,7 +31,7 @@ The bot mostly trades by leaving **buy offers** on both teams, slightly below th
 |---|---|---|
 | Offer size (on $100) | $5 | $12 (12% of the balance, at most $50) |
 | Hold-to-final bets the research allows | No | Yes |
-| Only one team's offer filled | Tries to complete the pair; **sells after 10 minutes** if it can't | Tries to complete the pair; **buys once more** if the price drops 5¢; **sells if it then drops another 10¢** below its average |
+| Only one team's offer filled | Tries to complete the pair; **sells after 10 minutes** if it can't | **Take-profit:** sells (or completes the pair) once it's **5¢ up** on its average. **Buys once more** if the price drops 5¢, and **sells if it then drops another 10¢** below its average |
 | Feel | Many small wins and losses | Bigger wins and bigger losses |
 
 Bold doesn't make the bot smarter. It puts more money on each trade, so the bad days get bigger too.

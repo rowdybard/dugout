@@ -1,5 +1,5 @@
 import type {TennisMarket,TennisSession} from './types';
-import {BOLD_STOP,PAIR_WINDOW_MS} from './maker.ts';
+import {BOLD_STOP,BOLD_TAKE_PROFIT,PAIR_WINDOW_MS} from './maker.ts';
 import {modeOf} from './modes.ts';
 
 /**
@@ -14,7 +14,9 @@ export type Holding={key:string;slug:string;game:string;team:string;side:'YES'|'
   /** Bold keeps unpaired shares: it still tries to pair, may buy once more on a dip, else holds to the final. */
   boldHold:boolean;
   /** Bold after a dip buy: the bid at which the unpaired shares are sold (loss limit). */
-  stopAt:number|null};
+  stopAt:number|null;
+  /** Bold: the bid at which the unpaired shares are sold for a profit. */
+  takeAt:number|null};
 
 const exact=(x:number)=>Math.round(x*1e6)/1e6;
 
@@ -40,7 +42,8 @@ export function openBook(session:TennisSession,markets:TennisMarket[],now:number
       value:marked?p.netLiquidationValue:null,result:marked?exact(p.netLiquidationValue!-p.costBasis):null,
       policy:p.exitPolicy==='maker'?'offer fill':p.exitPolicy==='hold-to-settlement'?'hold to final':p.exitPolicy==='drive'?'drive':'managed',
       partial:marked&&p.liquidationQuantity+1e-7<p.quantity,sellBy:unpairedSide&&modeOf(session.config)==='steady'?p.openedAt+PAIR_WINDOW_MS:null,paired,boldHold:unpairedSide&&modeOf(session.config)==='bold',
-      stopAt:unpairedSide&&modeOf(session.config)==='bold'&&(p.dipBuys??0)>=1?Math.round((p.entryPrice-BOLD_STOP)*1e6)/1e6:null};
+      stopAt:unpairedSide&&modeOf(session.config)==='bold'&&(p.dipBuys??0)>=1?Math.round((p.entryPrice-BOLD_STOP)*1e6)/1e6:null,
+      takeAt:unpairedSide&&modeOf(session.config)==='bold'?Math.round((p.entryPrice+BOLD_TAKE_PROFIT)*1e6)/1e6:null};
   });
   return {orders,holdings,reserved:exact(orders.reduce((sum,o)=>sum+(o.reserved??0),0)),held:exact(holdings.reduce((sum,h)=>sum+h.cost,0))};
 }

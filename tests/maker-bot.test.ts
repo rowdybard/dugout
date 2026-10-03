@@ -45,7 +45,7 @@ function assertReconciles(session:TennisSession){
 }
 
 test('pregame CFB: two-sided quotes rest at the best bids and fill only when sellers reach them',()=>{
-  let session=step(started(),T0,{bid:.60,ask:.61});
+  let session=step(started('CFB','steady'),T0,{bid:.60,ask:.61});
   const quotes=session.maker!.quotes;
   assert.deepEqual({yes:quotes.YES?.price,yesQty:quotes.YES?.quantity,no:quotes.NO?.price,noQty:quotes.NO?.quantity},{yes:.6,yesQty:8,no:.39,noQty:12});
   assert.equal(session.pending,null);assert.equal(session.ledger.length,0);
@@ -146,8 +146,8 @@ test('market making replays exactly',()=>{
   assert.equal(JSON.stringify(run()),JSON.stringify(run()));
 });
 
-test('one-sided fill: the pair completes when the other side fills, and both are kept to the final',()=>{
-  let session=step(started(),T0,{bid:.60,ask:.61});
+test('Steady, one-sided fill: the pair completes when the other side fills, and both are kept to the final',()=>{
+  let session=step(started('CFB','steady'),T0,{bid:.60,ask:.61});
   session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
   session=step(session,T0+7000,{bid:.60,ask:.61});            // NO pairing offer at 39.5¢ goes live
   session=step(session,T0+9000,{bid:.605,ask:.615});          // YES buyers reach 60.5¢ = 1 − 39.5¢: NO fills
@@ -242,5 +242,33 @@ test('"Sell everything now": pauses entries, pulls offers, and sells held shares
   // Nothing held: refused, nothing changes.
   const again=applyTennisAction(session,{action:'exit-now',commandId:'sell-all-2'},[],T0+9000);
   assert.match(again.lastReason,/nothing to sell/i);
+  assertReconciles(session);
+});
+
+test('Bold take-profit: no small pair; profit locked once the price is 5 cents above the average (pair offer or sale)',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  const yes=()=>session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!;
+  session=step(session,T0+60_000,{bid:.63,ask:.64});          // +3¢: held
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
+  const no=()=>session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='NO');
+  assert.ok(!no(),'Bold does not pair for a small profit');
+  assert.ok((session.maker?.quotes.NO?.price??1)<=.35+1e-9,'its pairing offer waits for a 5-cent profit');
+  session=step(session,T0+120_000,{bid:.65,ask:.66});         // +5¢: the profit is locked in
+  const sale=session.ledger.find(e=>e.action==='SELL');
+  const pairedNo=no();
+  assert.ok(sale||pairedNo&&pairedNo.quantity>=yes().quantity-1e-9,'locked by a take-profit sale or a pair at the take-profit price');
+  if(sale){assert.match(sale.reason,/Bold take-profit/);assert.ok(sale.realizedPnl>0);}
+  else assert.ok(yes().costBasis+pairedNo!.costBasis<=yes().quantity*.955+1e-6,'the pair locks at least about 5 cents a share');
+  assertReconciles(session);
+});
+
+test('Bold take-profit sale: a price jump past the target sells the unpaired shares directly',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢; NO pairing offer at 35¢, live after 1 s
+  // The price jumps before that offer is live, so it can't fill; the take-profit sells directly.
+  session=step(session,T0+5500,{bid:.66,ask:.67});
+  const sale=session.ledger.find(e=>e.action==='SELL')!;
+  assert.ok(sale,'sold');assert.match(sale.reason,/Bold take-profit/);assert.ok(sale.realizedPnl>0);
   assertReconciles(session);
 });

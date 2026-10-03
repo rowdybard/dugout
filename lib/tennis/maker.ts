@@ -28,6 +28,8 @@ export const DIP_STEP=0.05;
 export const DIP_CAP_MULTIPLE=2;
 /** Bold, after a dip buy: sell the unpaired shares if the best bid falls this far below their average price. */
 export const BOLD_STOP=0.10;
+/** Bold take-profit: sell the unpaired shares once the best bid is this far above their average price. */
+export const BOLD_TAKE_PROFIT=0.05;
 /**
  * Halftime: no plays happen, so the provider's report stops updating and context reads as old or unknown. Resting
  * offers may stay up while the report says halftime, for at most this long after that report (in case the provider

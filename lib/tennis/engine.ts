@@ -25,7 +25,7 @@ import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
 import {applyOctopusPicks,octopusSlugs} from './octopus.ts';
-import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,OCTOPUS_RESERVE_FRACTION,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type MakerState,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,OCTOPUS_RESERVE_FRACTION,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type MakerState,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -474,15 +474,25 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
 }
 
 /**
- * Bold loss limit: once it has bought twice (a dip buy), the unpaired shares are sold if the best bid falls BOLD_STOP
- * below their average price. Acts immediately, including right after a play: this is the exit, not an entry.
+ * Bold exits for unpaired shares, acting immediately (including right after a play: these are exits, not entries):
+ *   take-profit: sold once the best bid is BOLD_TAKE_PROFIT above their average price;
+ *   loss limit: once it has bought twice (a dip buy), sold if the best bid falls BOLD_STOP below their average.
  */
 function boldStop(session: TennisSession, input: TennisInput, now: number) {
   const open = unpaired(session, input.market.slug);
-  if (!open || modeOf(session.config) !== 'bold' || (open.position.dipBuys ?? 0) < 1) return;
+  if (!open || modeOf(session.config) !== 'bold') return;
   if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  // Take-profit: the unpaired shares are up BOLD_TAKE_PROFIT on their average price, so sell them now.
+  const best = quotes(input, open.side).bid, takeAt = exact(open.position.entryPrice + BOLD_TAKE_PROFIT);
+  if (best !== undefined && best >= takeAt - EPSILON) {
+    session.consumedBooks[input.market.slug] = input.receivedAt;
+    sellMakerShares(session, input, now, open.position, open.quantity,
+      `Bold take-profit: the price rose to ${(best * 100).toFixed(1)}¢, ${BOLD_TAKE_PROFIT * 100}¢ above the ${(open.position.entryPrice * 100).toFixed(1)}¢ average; selling the unpaired shares.`);
+    return;
+  }
   const bid = quotes(input, open.side).bid, stopAt = exact(open.position.entryPrice - BOLD_STOP);
   if (bid === undefined || bid > stopAt + EPSILON) return;
+  if ((open.position.dipBuys ?? 0) < 1) return;
   session.consumedBooks[input.market.slug] = input.receivedAt;
   sellMakerShares(session, input, now, open.position, open.quantity,
     `Bold loss limit: after buying twice, the price fell to ${(bid * 100).toFixed(1)}¢, ${BOLD_STOP * 100}¢ below the ${(open.position.entryPrice * 100).toFixed(1)}¢ average; selling the unpaired shares.`);
@@ -617,7 +627,10 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   if (open) {
     delete targets[open.side];
     const other: TradeSide = open.side === 'YES' ? 'NO' : 'YES', book = quotes(input, other), tick = execution.priceIncrement;
-    const cap = exact(Math.floor((1 - open.position.entryPrice - PAIR_MIN_EDGE + EPSILON) / tick) * tick);
+    // Steady completes the pair for any small profit; Bold only at its take-profit (the same 5¢ a sale would lock in,
+    // but as a resting offer that earns the maker rebate instead of paying the taker fee).
+    const edge = modeOf(session.config) === 'bold' ? BOLD_TAKE_PROFIT : PAIR_MIN_EDGE;
+    const cap = exact(Math.floor((1 - open.position.entryPrice - edge + EPSILON) / tick) * tick);
     const price = book.ask === undefined ? cap : Math.min(cap, exact(book.ask - tick));
     const quantity = exact(Math.floor(open.quantity / execution.quantityIncrement + EPSILON) * execution.quantityIncrement);
     if (price > 0 && price < 1 && quantity + EPSILON >= execution.minimumTradeQty) targets[other] = { price, quantity, stake: exact(price * quantity) };

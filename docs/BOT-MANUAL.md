@@ -80,7 +80,7 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 | --- | --- | --- |
 | Offer size | about 5% of the balance (max $5) | 12% of the balance (max $50), so both offers fit the 25% exposure cap |
 | Hold-to-final bets the evidence allows | no | yes |
-| One side fills alone | Stops buying that side and raises its offer on the other side to complete the pair (pair cost ≤ 99.5¢). Sells the unpaired shares at the best bid after **10 minutes** if no pair forms. | Same pairing offer, but keeps the shares. **Dip buy:** once, if the price falls 5¢ below what it paid, it buys as many again at the ask (that side's cost capped at 2× the order size). **Loss limit:** after a dip buy, it sells the unpaired shares if the best bid falls 10¢ below their average. Otherwise it holds to the final. |
+| One side fills alone | Stops buying that side and raises its offer on the other side to complete the pair (pair cost ≤ 99.5¢). Sells the unpaired shares at the best bid after **10 minutes** if no pair forms. | Keeps the shares. **Take-profit:** its pairing offer only completes the pair at a 5¢ profit on the average (a resting offer, so it earns the rebate), and if the best bid jumps 5¢ above the average before that offer can fill, it sells the unpaired shares directly. **Dip buy:** once, if the price falls 5¢ below what it paid, it buys as many again at the ask (that side's cost capped at 2× the order size). **Loss limit:** after a dip buy, it sells the unpaired shares if the best bid falls 10¢ below their average. Otherwise it holds to the final. |
 
 **When offers come down:**
 - for 30 s after each live play;
@@ -562,7 +562,7 @@ For a maintainer-oriented handoff, see [MAINTAINER-HANDOFF.md](MAINTAINER-HANDOF
 | "Bot is behind" | No bot check for 45 s (background) or 30 s (browser). Reload if it lasts more than a minute. |
 | Game report stale | The tracker shows why the last check failed (timeout, provider pause, cached reply). Offers stay down until a fresh report arrives. |
 | "Server returned an unreadable response (503)" | Usually the Free plan's 10 ms CPU limit on a request; it passes. Persistent 503s: consider the Workers Paid plan. |
-| Shares held on one team only | Steady pairs or sells within 10 minutes. Bold pairs, may buy once on a dip, and has a loss limit after that. Open orders & shares shows the plan. |
+| Shares held on one team only | Steady pairs or sells within 10 minutes. Bold takes its profit at 5¢ up, may buy once on a dip, and has a loss limit after that. Open orders & shares shows the plan. |
 | Writes counter high | See Cost/source controls. Entries pause at 90,000 rows a day; held positions continue. |
 | Can't set up background bot | Finish or end open trades first; the account must be on the runner allow-lists. |
 | Switching games | Allowed any time; holdings stay managed on their own game. |

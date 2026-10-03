@@ -37,7 +37,7 @@ The page shows only what's needed to run the bot:
 
 **How the bot trades:** it runs on the **evidence-gated decision engine** ([docs/DECISION-ENGINE.md](docs/DECISION-ENGINE.md)). Its main activity is paper market making: resting buy offers on both teams, with conservative fills and maker rebates. A completed pair pays $1 at settlement.
 - **Steady:** resting offers only, about 5% of the balance each. After a one-sided fill it tries to complete the pair, and sells the unpaired shares after 10 minutes.
-- **Bold:** offers at 12% of the balance (at most $50), plus the hold-to-final bets the evidence allows. After a one-sided fill it keeps trying to pair. It buys once more on a 5¢ dip, capped at 2× the order size, and sells if the price then falls 10¢ below its average.
+- **Bold:** offers at 12% of the balance (at most $50), plus the hold-to-final bets the evidence allows. After a one-sided fill it takes its profit at 5¢ up (completing the pair at that price, or selling). It buys once more on a 5¢ dip, capped at 2× the order size, and sells if the price then falls 10¢ below its average.
 - **The Octopus** (experimental, either mode): the same offers on up to 6 extra games. Games can be pinned, or picked automatically every 5 minutes (calm, liquid college games). All resting offers together stay within 50% of the balance, with the main game first. Each event is logged as one short JSON line, written to tiny log files.
 - **When offers come down:** for 30 s after each live play, and whenever the game report is older than 45 s. The engine refuses losing or untested bets.
 - **Not AI:** these are deterministic calculations, not AI calls or a profit forecast. Real money is not connected (`lib/live/README.md`).
