@@ -19,13 +19,13 @@ import {bookOrderIssue} from './book-order.ts';
 import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
-import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
+import {committed,compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
 import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,recordPregame,recordWhyNot} from './research-tracking.ts';
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
 import {applyOctopusPicks,octopusSlugs} from './octopus.ts';
-import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,OCTOPUS_RESERVE_FRACTION,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type MakerState,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,BOLD_TAKE_PROFIT,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,SPEND_LIMIT_FRACTION,restingCost,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -86,6 +86,18 @@ function dataIssue(session: TennisSession, input: TennisInput, now: number): str
   if (!Array.isArray(input.book.bids) || !Array.isArray(input.book.asks)) return 'Market order book is unavailable.';
   if ([...input.book.bids, ...input.book.asks].some(level => !Number.isFinite(level.price) || level.price <= 0 || level.price >= 1 || !Number.isFinite(level.quantity) || level.quantity < 0)) return 'Market order book has invalid levels.';
   return executionDataIssue(policy(session, input, now));
+}
+
+/**
+ * Why a resting offer or a Bold dip buy may not fill on this book: the market is ended, suspended or inactive, or its
+ * status is older than 45 s. Exits, pairing sales and settlement don't use this; they only need a valid book.
+ */
+const MARKET_STATUS_FILL_MS = 45_000;
+function unfillable(input: TennisInput, now: number): string | null {
+  const market = input.market;
+  if (!market.active || market.ended || !market.execution?.active || input.book.state !== 'MARKET_STATE_OPEN') return 'The market is closed, suspended or inactive.';
+  if (!Number.isFinite(market.observedAt) || market.observedAt > now + 1000 || now - market.observedAt > MARKET_STATUS_FILL_MS) return 'The market status is out of date.';
+  return null;
 }
 
 /** The taker position slot. Market-making inventory (exitPolicy 'maker') is managed separately. */
@@ -282,7 +294,7 @@ function evaluateEngine(session: TennisSession, current: TennisInput[], now: num
       recordWhyNot(session, input.market.slug, { strategy: 'engine', code: 'INSUFFICIENT_EVIDENCE', detail: resolved.error }, now); continue;
     }
     const phase = marketPhase(input, now);
-    const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now), explore: session.config.explore });
+    const plan = resolved.engine.plan(decisionContext(session, input, now, phase), { mode: session.mode, risk: sessionRisk(session, now, input.market.slug), explore: session.config.explore });
     if (!chaosGame(session, input.market.slug)) session.enginePlan = compactPlan(plan);
     // Shadow: proposals evidence withheld, plus actions of a shadow-stage maker strategy this account does not run.
     const maker = selectedMaker(session);
@@ -480,16 +492,31 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   const slug = input.market.slug, open = unpaired(session, slug);
   if (!open || tradeMode(session) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
   if (session.maker?.slug === slug && now < session.maker.pulledUntil) return;
-  if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
+  if (dataIssue(session, input, now) || unfillable(input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
   const position = open.position, ask = quotes(input, position.side).ask;
   if (ask === undefined || ask > position.entryPrice - DIP_STEP + EPSILON) return;
-  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * tradeBudget(session) - position.costBasis, session.cash));
-  if (budget < ask * input.market.execution.minimumTradeQty) return;
+  // A failed attempt waits a minute before the next one (it is not a completed dip buy: the loss limit stays off).
+  if (position.dipTriedAt !== undefined && now - position.dipTriedAt < 60_000) return;
+  // The account loss limit: the extra shares may at most lose what is left of the run's loss allowance.
+  const lossLimit = session.config.startingCash * session.config.maxSessionLossFraction;
+  const worth = session.cash + session.positions.filter(p => p.status === 'open').reduce((sum, p) => sum + (p.netLiquidationValue ?? p.costBasis), 0);
+  const allowance = exact(Math.max(0, lossLimit - (session.config.startingCash - worth)));
+  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * tradeBudget(session) - position.costBasis, session.cash, allowance));
+  if (budget < ask * input.market.execution.minimumTradeQty) {
+    if (allowance < ask * input.market.execution.minimumTradeQty && position.dipTriedAt === undefined) {
+      position.dipTriedAt = now;
+      record(session, now, slug, position.side, 'SKIP', 'DIP_BUY_LOSS_LIMIT', 'Bold dip buy skipped: the run is at its loss limit.', input);
+    }
+    return;
+  }
   session.consumedBooks[slug] = input.receivedAt;
   const command = { ...freshCommand(session, input, position.side, 'BUY', now, ask), commandId: `${position.id}:dip:${now}`, budget };
   const result = simulate(session, input, command, now, undefined);
+  if (!result.apply || result.filledQty <= 0) {
+    position.dipTriedAt = now;
+    record(session, now, slug, position.side, 'SKIP', 'DIP_BUY_UNFILLED', `Bold dip buy did not fill; it may try again in a minute. ${result.reason}`, input); return;
+  }
   position.dipBuys = (position.dipBuys ?? 0) + 1;
-  if (!result.apply || result.filledQty <= 0) { record(session, now, slug, position.side, 'SKIP', 'DIP_BUY_UNFILLED', `Bold dip buy did not fill. ${result.reason}`, input); return; }
   session.cash = exact(session.cash + result.cashDelta);
   position.quantity = exact(position.quantity + result.filledQty);
   position.initialQuantity = exact(position.initialQuantity + result.filledQty);
@@ -502,6 +529,7 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
     cashDelta: result.cashDelta, realizedPnl: 0, quotedPrice: ask, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt,
     executionBookTime: input.receivedAt, rulesRevision: session.rulesRevision ?? 0 });
   record(session, now, slug, position.side, 'BUY', 'DIP_BUY', reason, input);
+  markPosition(session, position, input, now);
 }
 
 /**
@@ -556,7 +584,7 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
   const state = session.maker;
   if (state && (state.quotes.YES || state.quotes.NO)) {
     const input = current.find(item => item.market.slug === state.slug);
-    if (input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
+    if (input && !dataIssue(session, input, now) && !unfillable(input, now) && input.receivedAt > state.lastBookTime) {
       for (const side of ['YES', 'NO'] as const) {
         const quote = state.quotes[side];
         if (!quote || !restingFilled(quote, quotes(input, side).ask, input.receivedAt)) continue;
@@ -601,7 +629,7 @@ function advanceChaos(session: TennisSession, current: TennisInput[], now: numbe
   for (const slug of Object.keys(session.chaos ?? {})) withChaosMaker(session, slug, () => {
     const state = session.maker!;
     const input = current.find(item => item.market.slug === slug);
-    if ((state.quotes.YES || state.quotes.NO) && input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
+    if ((state.quotes.YES || state.quotes.NO) && input && !dataIssue(session, input, now) && !unfillable(input, now) && input.receivedAt > state.lastBookTime) {
       for (const side of ['YES', 'NO'] as const) {
         const quote = state.quotes[side];
         if (!quote || !restingFilled(quote, quotes(input, side).ask, input.receivedAt)) continue;
@@ -670,14 +698,15 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
     else delete targets[other];
   }
   // Both resting buys must be payable at once, alongside every other game's resting offers (Octopus arms share the
-  // account's cash): all resting offers together may tie up at most OCTOPUS_RESERVE_FRACTION of the balance.
-  // The main game comes first: while an arm is quoted, room for the main game's two full offers is kept back.
-  const resting = (other: MakerState | undefined) => other ? (['YES', 'NO'] as const).reduce((total, side) => total + (other.quotes[side] ? other.quotes[side]!.quantity * other.quotes[side]!.price : 0), 0) : 0;
+  // account's cash), and within the spending limit: held shares, a pending buy and all resting offers together stay
+  // within SPEND_LIMIT_FRACTION of the balance. The main game comes first: while an arm is quoted, room for the main
+  // game's two full offers is kept back. An offer that completes a pair reduces risk, so it only needs the cash.
   const isArm = swappedMain.has(session), main = isArm ? swappedMain.get(session) : undefined;
-  const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + resting(other), 0);
-  const restingElsewhere = isArm ? arms + Math.max(resting(main), 2 * tradeBudget(session)) : arms;
-  const octopus = octopusSlugs(session).length > 0;
-  const available = Math.max(0, (octopus ? Math.min(session.cash, OCTOPUS_RESERVE_FRACTION * tennisEquity(session)) : session.cash) - restingElsewhere);
+  const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + restingCost(other), 0);
+  const restingElsewhere = isArm ? arms + Math.max(restingCost(main), 2 * tradeBudget(session)) : arms;
+  const cashLeft = Math.max(0, session.cash - restingElsewhere);
+  const limitLeft = Math.max(0, SPEND_LIMIT_FRACTION * tennisEquity(session) - committed({ ...session, maker: undefined, chaos: undefined }) - restingElsewhere);
+  const available = open ? cashLeft : Math.min(cashLeft, limitLeft);
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);
   if (reserve > available + EPSILON) for (const side of ['YES', 'NO'] as const) {
     const target = targets[side];

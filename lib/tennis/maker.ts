@@ -37,7 +37,16 @@ export const BOLD_TAKE_PROFIT=0.05;
  */
 export const HALFTIME_QUOTE_MS=20*60_000;
 /** Across the main game and every Octopus arm, resting offers may tie up at most this share of the balance. */
-export const OCTOPUS_RESERVE_FRACTION=0.5;
+/**
+ * The account's spending limit: held shares (at cost), a pending buy and every resting offer (main game and Octopus
+ * arms) together stay within this fraction of the balance. Each single bet keeps its own 25%/$100 cap.
+ */
+export const SPEND_LIMIT_FRACTION=0.5;
+/** @deprecated Older name of SPEND_LIMIT_FRACTION (it used to cover Octopus offers only). */
+export const OCTOPUS_RESERVE_FRACTION=SPEND_LIMIT_FRACTION;
+/** Cash a game's resting offers would spend if they all filled. */
+export const restingCost=(state:{quotes:Partial<Record<'YES'|'NO',{price:number;quantity:number}>>}|undefined)=>
+  state?(['YES','NO'] as const).reduce((total,side)=>total+(state.quotes[side]?state.quotes[side]!.quantity*state.quotes[side]!.price:0),0):0;
 export const OCTOPUS_ARMS=6;
 export const isHalftimePeriod=(period:string|null|undefined)=>!!period&&/^(HT|HALF|HALFTIME)$/i.test(period.trim());
 

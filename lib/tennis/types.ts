@@ -120,8 +120,10 @@ export type TennisPosition={
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
   lastContext?:TennisMarket;
-  /** Bold: extra buys made on a dip while one-sided (at most one). */
+  /** Bold: extra buys that filled on a dip while one-sided (at most one). Only a filled one arms the loss limit. */
   dipBuys?:number;
+  /** Bold: when a dip buy last failed to fill or was refused by the loss limit (the next try waits a minute). */
+  dipTriedAt?:number;
   exitRules?:PositionExitRules;entryContext?:FootballReport;
   entryAnalysis?:OpportunityAnalysis;exitPlan?:AdaptiveExitPlan;exitState?:AdaptiveExitState;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];

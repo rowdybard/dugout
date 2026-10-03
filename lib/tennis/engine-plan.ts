@@ -7,6 +7,18 @@ import {QUARTER_SECONDS} from '../decision/sports/index.ts';
 import type {FeatureValue} from '../decision/context.ts';
 import type {TennisInput,TennisMarket,TennisSession} from './types';
 import type {NoTradeCode} from '../decision/why.ts';
+import {restingCost,SPEND_LIMIT_FRACTION} from './maker.ts';
+
+/**
+ * Money the account has committed outside `exceptSlug`'s resting offers: held shares at cost, a pending buy's budget,
+ * and resting offers on every other game. Checked against SPEND_LIMIT_FRACTION of the balance.
+ */
+export function committed(session:Pick<TennisSession,'positions'|'pending'|'maker'|'chaos'>,exceptSlug?:string):number {
+  const held=session.positions.filter(p=>p.status==='open').reduce((sum,p)=>sum+p.costBasis,0);
+  const pending=session.pending?.action==='BUY'?session.pending.budget??0:0;
+  const offers=[session.maker,...Object.values(session.chaos??{})].filter(state=>state&&state.slug!==exceptSlug).reduce((sum,state)=>sum+restingCost(state),0);
+  return Math.round((held+pending+offers)*1e6)/1e6;
+}
 
 /**
  * Adapter between the paper bot's session/inputs and the decision engine (lib/decision).
@@ -44,7 +56,8 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
   const lossLimit=session.config.startingCash*session.config.maxSessionLossFraction;
   return {engine:createEngine({pack:entry.pack,trust:entry.trust,
     sizing:{bankroll:session.config.startingCash,kellyFraction:0.25,maxStake:Math.min(session.config.entryBudget,cap),maxBankrollFraction:0.25,paperStake:session.config.entryBudget},
-    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:cap,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
+    // Each bet is capped at `cap` (maxStake); everything committed together at the account's spending limit.
+    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:session.config.startingCash*SPEND_LIMIT_FRACTION,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
 }
 
 /**
@@ -155,12 +168,13 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
 }
 
 /** Risk state from the paper account, using the same realised-loss measure as the bot's own stop. */
-export function sessionRisk(session:TennisSession,now:number):RiskState {
+/** `slug`: the game being planned. Its own resting offers are about to be replaced, so they are not counted. */
+export function sessionRisk(session:TennisSession,now:number,slug?:string):RiskState {
   const day=new Date(now).toISOString().slice(0,10),today=session.ledger.filter(entry=>new Date(entry.time).toISOString().slice(0,10)===day);
   const open=session.positions.filter(position=>position.status==='open');
   return {dayPnl:today.reduce((sum,entry)=>sum+entry.realizedPnl,0),
     sessionPnl:session.positions.reduce((sum,position)=>sum+position.realizedPnl,0),
-    openExposure:open.reduce((sum,position)=>sum+position.costBasis,0),
+    openExposure:slug===undefined?open.reduce((sum,position)=>sum+position.costBasis,0):committed(session,slug),
     // Resting-quote fills are many small trades by design; the trade-count limit is for taker entries.
     tradesToday:today.filter(entry=>entry.action==='BUY'&&!entry.positionId.includes(':maker:')).length,
     halted:session.status==='running'?null:`bot is ${session.status}`};
