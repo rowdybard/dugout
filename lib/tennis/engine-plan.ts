@@ -63,7 +63,8 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
   return {engine:createEngine({pack:entry.pack,trust:entry.trust,
     sizing:{bankroll:session.config.startingCash,kellyFraction:0.25,maxStake:Math.min(session.config.entryBudget,cap),maxBankrollFraction:0.25,paperStake:session.config.entryBudget},
     // Each bet is capped at `cap` (maxStake); everything committed together at the account's spending limit.
-    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:exposureCap,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
+    // No daily trade-count cap (removed October 3, 2026 at the owner's request): the loss limits and the spending limit govern risk.
+    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:exposureCap,maxTradesPerDay:Number.POSITIVE_INFINITY,maxDataAgeMs:session.config.maxBookAgeMs}})};
 }
 
 /**

@@ -46,3 +46,11 @@ test('a queued tennis buy waits out a break point (recorded), and buys once it i
   const normal=stepTennisSession(queued(),[input(NOW,.39,.40,board({yes:'15',no:'15'},'YES'))],NOW);
   assert.equal(normal.ledger.filter(e=>e.action==='BUY').length,1,normal.lastReason);
 });
+
+test('no daily trade-count cap: 25 bets already today does not stop the next one',()=>{
+  const session=queued();
+  for(let i=0;i<25;i++)session.ledger.push({id:`earlier-${i}`,time:NOW-3_600_000+i*1000,slug:'earlier-match',side:'YES',action:'BUY',source:'AUTOMATIC',positionId:`earlier-${i}`,reason:'Synthetic earlier bet',cashDelta:0,realizedPnl:0});
+  const next=stepTennisSession(session,[input(NOW,.39,.40,board({yes:'15',no:'15'},'YES'))],NOW);
+  assert.equal(next.ledger.filter(e=>e.action==='BUY'&&e.slug===SLUG).length,1,next.lastReason);
+  assert.ok(!next.decisions.some(d=>/trades today/.test(d.reason)));
+});
