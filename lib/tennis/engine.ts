@@ -24,7 +24,7 @@ import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
-import {DIP_CAP_MULTIPLE,DIP_STEP,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -469,6 +469,21 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   record(session, now, slug, position.side, 'BUY', 'DIP_BUY', reason, input);
 }
 
+/**
+ * Bold loss limit: once it has bought twice (a dip buy), the unpaired shares are sold if the best bid falls BOLD_STOP
+ * below their average price. Acts immediately, including right after a play: this is the exit, not an entry.
+ */
+function boldStop(session: TennisSession, input: TennisInput, now: number) {
+  const open = unpaired(session, input.market.slug);
+  if (!open || modeOf(session.config) !== 'bold' || (open.position.dipBuys ?? 0) < 1) return;
+  if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  const bid = quotes(input, open.side).bid, stopAt = exact(open.position.entryPrice - BOLD_STOP);
+  if (bid === undefined || bid > stopAt + EPSILON) return;
+  session.consumedBooks[input.market.slug] = input.receivedAt;
+  sellMakerShares(session, input, now, open.position, open.quantity,
+    `Bold loss limit: after buying twice, the price fell to ${(bid * 100).toFixed(1)}¢, ${BOLD_STOP * 100}¢ below the ${(open.position.entryPrice * 100).toFixed(1)}¢ average; selling the unpaired shares.`);
+}
+
 /** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
 function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
   const held = makerPositions(session).filter(p => p.slug === input.market.slug);
@@ -516,7 +531,7 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
     for (const input of current) flattenMaker(session, input, now);
     return;
   }
-  for (const input of current) { exitUnpaired(session, input, now); dipBuy(session, input, now); }
+  for (const input of current) { exitUnpaired(session, input, now); boldStop(session, input, now); dipBuy(session, input, now); }
   if (!state) return;
   if (session.status !== 'running') cancelMakerQuotes(session, 'Entries are paused; existing inventory is held to settlement.', now);
   else if (holding(session) || session.pending) cancelMakerQuotes(session, 'A planned position or order has the account slot.', now);

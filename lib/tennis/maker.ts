@@ -26,6 +26,8 @@ export const PAIR_MIN_EDGE=0.005;
 export const DIP_STEP=0.05;
 /** Bold, one-sided: total cost in one game's unpaired side is capped at this multiple of the order size. */
 export const DIP_CAP_MULTIPLE=2;
+/** Bold, after a dip buy: sell the unpaired shares if the best bid falls this far below their average price. */
+export const BOLD_STOP=0.10;
 
 export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};
 export type MakerState={

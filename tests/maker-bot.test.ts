@@ -184,9 +184,33 @@ test('Bold, one-sided fill: keeps the shares, buys once more on a 5-cent dip (ca
   assert.ok(dip,'dip buy recorded');assert.equal(dip.action,'BUY');assert.match(dip.reason,/Bold dip buy/);
   assert.ok(yes().quantity>8&&yes().entryPrice<.6,'more shares at a lower average');
   assert.ok(yes().costBasis<=2*session.config.entryBudget+1e-6,'capped at twice the order size');
-  session=step(session,T0+180_000,{bid:.44,ask:.45});         // another dip: no second buy
+  session=step(session,T0+180_000,{bid:.50,ask:.51});         // lower again (within the loss limit): no second buy
   assert.equal(session.ledger.filter(e=>e.id.includes(':dip:')).length,1);
-  session=step(session,T0+5000+15*60_000,{bid:.44,ask:.45});  // past 10 minutes: still held
+  session=step(session,T0+5000+15*60_000,{bid:.50,ask:.51});  // past 10 minutes: still held
   assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);assert.equal(yes().status,'open');
+  assertReconciles(session);
+});
+
+test('Bold loss limit: after a dip buy, the unpaired shares are sold once the bid is 10 cents under their average',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  session=step(session,T0+120_000,{bid:.54,ask:.55});         // dip buy at 55¢
+  const yes=()=>session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!;
+  const average=yes().entryPrice;assert.ok(average<.6&&average>.55);
+  session=step(session,T0+180_000,{bid:Math.round((average-.08)*200)/200,ask:Math.round((average-.07)*200)/200});
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0,'8 cents down: still held');
+  session=step(session,T0+240_000,{bid:Math.floor((average-.10)*200)/200,ask:Math.floor((average-.09)*200)/200});
+  const sale=session.ledger.find(e=>e.action==='SELL')!;
+  assert.ok(sale,'sold at the loss limit');assert.match(sale.reason,/Bold loss limit/);assert.equal(yes().status,'closed');
+  assert.ok(sale.realizedPnl<0);
+  assertReconciles(session);
+});
+
+test('Bold with a single buy has no loss limit yet (it may still buy the dip first)',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});
+  session=step(session,T0+120_000,{bid:.62,ask:.63});         // rises: no dip buy
+  session=step(session,T0+180_000,{bid:.62,ask:.63});
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
   assertReconciles(session);
 });
