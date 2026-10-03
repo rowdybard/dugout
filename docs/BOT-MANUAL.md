@@ -50,6 +50,14 @@ Football has Steady, Bold and Auto. Tennis has Recovery, Momentum and Auto: Reco
 
 **Adaptive Tennis Auto:** after at least 30 seconds and ten quotes of warm-up, it can act on a two-cent move when the spread and recent price noise allow it. It still needs two independent confirmations and a later execution check. There is no fixed entry price, sell price, or two-minute exit. A complete executable profit after fees can establish a protected profit floor, allowing the move to continue until two fresh quotes confirm a reversal. A stopped or thin feed cannot establish a new profit peak. The original dollar stop and explicit user exits remain active.
 
+**Tennis pressure points** (`lib/tennis/tennis-pressure.ts`, October 3, 2026):
+- **What waits:** new tennis buys, both entries and Auto's add-on buy.
+- **When:** a tiebreak (period `TB<n>`, or 6-6 in the set), or a break point (the receiver at 40 against 0/15/30, or with advantage).
+- **Where it applies:** evidence-engine accounts. It is checked in `entryIssue` and `planEntryIssue`, so a buy queued before a break point is also cancelled when it comes up. Exits and held shares are unaffected.
+- **Score source:** the verified scoreboard (`market.tennis`), which the runner re-reads at most every 15 s. Without a verified scoreboard nothing is blocked.
+- **Logging:** each skip is a `TENNIS_PRESSURE` decision ("Setup forming" in the why-not counts).
+- **Status:** a safety rule chosen by the owner, not a measured edge. Compare skipped setups with later prices before keeping or widening it.
+
 The first actual purchase fixes the position's loss allowance: 25% by default, about $2.50 for a $10 purchase including fees. Auto may add once after a confirmed rebound at a lower price. That extra purchase must fit the same original dollar loss allowance, available cash, the shared 50% spending limit, and a total position purchase cap of 20% of starting cash. The extra buy does not double the loss allowance or require holding to the end. Average purchase price is total purchase value before fees divided by total bought shares; the holdings list also shows the cost per remaining share including purchase fees. Sale fees are still additional.
 
 Recovery, Momentum and saved original Auto positions retain their registered first-version rules, including the original 8% loss and two-minute holding defaults. A source-code release or viewing the tab does not rewrite these positions. Adaptive Auto is a separately registered paper experiment, not evidence of profitable behavior.

@@ -17,6 +17,8 @@ Tennis's new default bet is **$10 on a $100 starting balance**. Use the Small / 
 
 New **Tennis Auto** can follow smaller confirmed moves and let gains continue. It looks at the result after fees and can sell when buyers confirm a reversal. It has no fixed 65¢ target or two-minute sell timer. The first purchase fixes its loss allowance: about $2.50 on a $10 purchase by default. One extra buy after a confirmed lower-price rebound can reduce average cost, but cannot increase that original dollar allowance. It can still sell the combined holding early. Average purchase price updates using the actual shares and prices of both buys; purchase fees are shown separately.
 
+**Break points and tiebreaks:** the Tennis bot doesn't start a new bet or make its extra buy during a break point or a tiebreak, when a single point can move the price a long way. It waits until the game or tiebreak is over. Shares already held are managed as usual. The score it uses can be up to about 15 seconds old. This is a safety rule, not yet proven to help; each wait is logged ("TENNIS_PRESSURE") so it can be checked later.
+
 If your saved run says it uses the original quick-trade Auto, tap **Auto** to apply the new rules to future trades. Shares already bought keep their original exit rules.
 
 You can scroll through **Trades & balance** and **Bot activity** without the rows moving underneath you. The list pauses when you start reading; the bot keeps running. **Show newest** catches up. Open **Why** on a trade to see what triggered it, and check its after-fee result rather than just the change in price.

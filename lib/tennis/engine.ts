@@ -10,6 +10,7 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {choiceOf,modeRules,tradeBudget,tradeMode} from './modes.ts';
+import {tennisPressure} from './tennis-pressure.ts';
 import {canAcknowledgeLoss,dayPnl,lossAllowance,lossLimitReached,realizedPnl,remainingLossAllowance} from './loss-limit.ts';
 import {bindWalletProjection,copyWalletProjection,walletProjection,walletEquity,walletCommitments,walletMainMaker,type WalletProjection} from './wallet-risk.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
@@ -172,6 +173,8 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
     if(context?.status!=='fresh')return {code:`CONTEXT_${(context?.status??'unknown').toUpperCase()}`,reason:context?.reason??'Waiting for verified football context.'};
   }
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This tour is not selected for the experiment.' };
+  const pressure = session.config.evidenceGate === 'evidence-v1' ? tennisPressure(input.market) : null;
+  if (pressure) return { code: 'TENNIS_PRESSURE', reason: pressure };
   if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return {code:'FOCUS',reason:'New entries are restricted to the focused game.'};
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
   const quote = quotes(input, side);
@@ -217,6 +220,8 @@ function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeS
   const fallback=fallbackFootballIssue(session,input,now);
   if(fallback)return {code:'CONTEXT_UNKNOWN',reason:fallback};
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This league is not selected for the bot.' };
+  const pressure = tennisPressure(input.market);
+  if (pressure) return { code: 'TENNIS_PRESSURE', reason: pressure };
   if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return { code: 'FOCUS', reason: 'New entries are restricted to the focused game.' };
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
   if (phase === 'live' && (session.config.decisionPolicy === 'football-context-v1' || exit === 'drive') && isFootballMarket(input.market)) {
