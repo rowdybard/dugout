@@ -82,11 +82,22 @@ export function sideLines(session:TennisSession,focus:string|null|undefined,name
     const offer=session.maker?.slug===focus?session.maker.quotes[side]:undefined;
     const plan=session.enginePlan?.slug===focus?session.enginePlan:undefined;
     const considered=plan?.considered.find(trade=>trade.side===side);
+    const pending=session.pending?.slug===focus&&session.pending.side===side?session.pending:undefined;
     const parts:string[]=[];
     if(held)parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average.`);
     if(offer)parts.push(`Offer to buy ${+offer.quantity.toFixed(2)} at ${cents(offer.price)} is posted.`);
-    else if(considered)parts.push(considered.result==='ACTION'?`Planned: ${considered.style==='maker'?'post an offer':'buy'} at ${cents(considered.price)}.`:`Not trading: ${considered.reason}`);
-    if(!parts.length){const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);parts.push(latest?.reason??plan?.why?.detail??'Checked with the game; nothing to do on this side.');}
+    else if(pending)parts.push(pending.action==='BUY'?`Buy queued, up to ${cents(pending.limitPrice)}. Rechecking the price and entry conditions before buying.`:'Sale queued. Waiting for a fresh executable price.');
+    if(!parts.length){
+      const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);
+      const signal=session.signals[`${focus}:${side}`];
+      // A retained plan is historical evidence, not a live order. Later cancellations
+      // and fresh watching reasons must win, including after an entry has filled.
+      if(signal?.reason&&(signal.lastObservedAt??-Infinity)>=Math.max(plan?.time??-Infinity,latest?.time??-Infinity))parts.push(signal.reason);
+      else if(latest&&latest.code!=='ENTRY_PENDING'&&(!plan||latest.time>=plan.time))parts.push(latest.reason);
+      else if(considered&&considered.result!=='ACTION')parts.push(`Not trading: ${considered.reason}`);
+      else if(considered?.result==='ACTION'||latest?.code==='ENTRY_PENDING')parts.push('No buy queued. Waiting for a new confirmed entry.');
+      else parts.push(latest?.reason??plan?.why?.detail??'Checked with the game; nothing to do on this side.');
+    }
     return {side,name,text:parts.join(' ')};
   });
 }

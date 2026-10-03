@@ -40,6 +40,8 @@ export function useTennis(botId:BotId='football') {
   const sessionId=session?.id;
   const leagueKey=session?.config.leagues.join(',');
   const focusSlug=session?.config.focusSlug;
+  const watchedMarket=catalog?.markets.find(m=>m.slug===watchedSlug);
+  const watchedTennisSlug=watchedMarket&&(watchedMarket.league==='ATP'||watchedMarket.league==='WTA')?watchedMarket.slug:null;
   const contextSlugs=[...new Set([session?.pending?.market,...(session?.positions.filter(p=>p.status==='open').map(p=>p.lastContext??p.market)??[]),catalog?.markets.find(m=>m.slug===watchedSlug)].filter(m=>m&&(m.league==='CFB'||m.league==='NFL')).map(m=>m!.slug))].join(',');
   const inflight=useRef(false),mounted=useRef(true),accountRef=useRef<TennisSession|null>(null),sessionRef=useRef<TennisSession|null>(null),catalogBusy=useRef(false),catalogRerun=useRef(false);
   const runtimeRef=useRef<TennisRuntime|null>(null);
@@ -174,6 +176,26 @@ export function useTennis(botId:BotId='football') {
     queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedContextError(null);void load();}});
     return()=>{controller.abort();clearTimeout(timer);};
   },[visible,contextSlugs,watchedSlug,botId]);
+  useEffect(()=>{
+    if(!visible||!watchedTennisSlug)return;
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async()=>{
+      try{
+        const data=await readJson<{market:TennisMarket;error:string|null;successfulCheckAt:number|null}>(botQuery(`/api/tennis/scoreboard?slug=${encodeURIComponent(watchedTennisSlug)}`,botId),{signal:controller.signal});
+        if(controller.signal.aborted)return;
+        setNow(Date.now());
+        setContextChecks(current=>({...current,[watchedTennisSlug]:recordContextCheck(current[watchedTennisSlug],data)}));
+        setCatalog(current=>current?{...current,markets:current.markets.map(m=>m.slug===watchedTennisSlug?marketWithWatchedContext(m,data.market,Date.now()):m)}:current);
+        setWatchedContextError(data.error);
+      }catch(cause){if(!controller.signal.aborted){
+        const message=cause instanceof Error?cause.message:'The scoreboard is unavailable. Checking again shortly.';
+        setContextChecks(current=>({...current,[watchedTennisSlug]:recordContextCheck(current[watchedTennisSlug],{error:message})}));
+        setWatchedContextError(message);
+      }}finally{if(!controller.signal.aborted)timer=setTimeout(()=>void load(),5000);}
+    };
+    queueMicrotask(()=>{if(!controller.signal.aborted){setWatchedContextError(null);void load();}});
+    return()=>{controller.abort();clearTimeout(timer);};
+  },[visible,watchedTennisSlug,botId]);
   useEffect(()=>{
     if(!visible||!watchedSlug)return;
     let cancelled=false;

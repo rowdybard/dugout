@@ -295,3 +295,26 @@ body:has(.tennis-app){background:#17191e}
 .tennis-bot-tabs+.tennis-main{padding-top:22px}
 @media(max-width:1050px){.tennis-bot-tabs{padding-left:25px;padding-right:25px}}
 @media(max-width:720px){.tennis-bot-tabs{padding:16px 18px 0}.tennis-bot-tabs button{flex:1;justify-content:center;padding:9px 10px}.tennis-bot-tabs button span{display:none}}
+
+.tennis-live-scoreboard{margin:14px 0;border:1px solid var(--dg-line-2);border-radius:12px;background:var(--dg-surface-2);overflow:hidden}
+.tennis-live-scoreboard-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;padding:15px 17px 10px;color:var(--dg-muted);font-size:var(--fs-xs)}
+.tennis-live-scoreboard-head>div{display:flex;align-items:center;gap:8px}
+.tennis-live-scoreboard-head strong{color:var(--dg-text);font-size:var(--fs-sm)}
+.tennis-live-scoreboard-head small{font-size:var(--fs-xs)}
+.tennis-live-scoreboard-tour{padding:0 17px 12px;color:var(--dg-muted);font-size:var(--fs-xs)}
+.tennis-live-scoreboard-table{overflow-x:auto}
+.tennis-live-scoreboard table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tennis-live-scoreboard th,.tennis-live-scoreboard td{padding:11px 10px;text-align:center;border-top:1px solid var(--dg-line);min-width:48px;white-space:nowrap}
+.tennis-live-scoreboard thead th{color:var(--dg-muted);font-size:var(--fs-xs);font-weight:500}
+.tennis-live-scoreboard tbody th{color:var(--dg-text);font-size:var(--fs-md);font-weight:600}
+.tennis-live-scoreboard th:first-child{text-align:left;padding-left:17px;min-width:135px;white-space:normal}
+.tennis-live-scoreboard tbody th>span:first-child{overflow-wrap:anywhere}
+.tennis-live-scoreboard td{font-size:var(--fs-lg);color:var(--dg-text)}
+.tennis-live-scoreboard td.tennis-live-point{font-weight:700;color:var(--dg-accent)}
+.tennis-serving-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dg-accent);margin-left:8px;vertical-align:middle;flex-shrink:0}
+.tennis-serving-key{display:flex;align-items:center;gap:6px;padding:9px 17px;color:var(--dg-muted);font-size:var(--fs-xs);border-top:1px solid var(--dg-line)}
+.tennis-serving-key .tennis-serving-dot{margin-left:0}
+.tennis-live-scoreboard-fallback{padding:13px 17px;border-top:1px solid var(--dg-line);font-size:var(--fs-sm);color:var(--dg-muted)}
+.tennis-live-scoreboard-fallback strong{color:var(--dg-text);margin-left:7px;font-weight:650}
+.tennis-live-scoreboard-note{padding:11px 17px;border-top:1px solid var(--dg-line);font-size:var(--fs-xs);color:var(--dg-warn)}
+@media(max-width:640px){.tennis-live-scoreboard-head{padding:13px 12px 10px}.tennis-live-scoreboard-tour{padding-left:12px;padding-right:12px}.tennis-live-scoreboard th:first-child{padding-left:12px;min-width:120px}.tennis-live-scoreboard th,.tennis-live-scoreboard td{padding:10px 7px;min-width:42px}.tennis-live-scoreboard tbody th{font-size:var(--fs-sm)}.tennis-live-scoreboard td{font-size:var(--fs-md)}}

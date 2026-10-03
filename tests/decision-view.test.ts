@@ -131,3 +131,23 @@ test('"Both sides" gives each team its own line, so the second team never looks 
   value.enginePlan={time:now,slug:'focus',phase:'pregame',pack:'p',trust:'t',summary:'',considered:[{strategy:'s',side:'NO',style:'taker-hold',price:.3,stake:0,result:'NO_EVIDENCE',reason:'No tested rule covers this price.'}]};
   assert.equal(sideLines(value,'focus',{yesName:'Liberty',noName:'Delaware'})[1].text,'Not trading: No tested rule covers this price.');
 });
+
+test('a cancelled 74-cent idea never remains a planned buy after the price falls',()=>{
+  const value=session();
+  value.enginePlan={time:now-5000,slug:'focus',phase:'live',pack:'p',trust:'paper',summary:'',considered:[{strategy:'tennis-momentum',side:'YES',style:'taker-scalp',price:.74,stake:10,result:'ACTION',reason:'Confirmed rise.'}]};
+  value.quotes={focus:{time:now,bid:.62,ask:.63,source:'REST'}};
+  value.decisions=[{id:'cancel',time:now,slug:'focus',side:'YES',action:'SKIP',code:'SIGNAL_CHANGED',reason:'The confirmed price or buyers weakened during the execution delay.'}];
+  const line=sideLines(value,'focus',undefined)[0].text;
+  assert.match(line,/weakened/);assert.doesNotMatch(line,/74|Planned|queued/i);
+  value.decisions=[];
+  assert.equal(sideLines(value,'focus',undefined)[0].text,'No buy queued. Waiting for a new confirmed entry.');
+});
+
+test('side summaries describe an actual pending buy as a ceiling and hide old buy plans once held',()=>{
+  const value=session(),m=market();
+  value.enginePlan={time:now-5000,slug:'focus',phase:'live',pack:'p',trust:'paper',summary:'',considered:[{strategy:'tennis-momentum',side:'YES',style:'taker-scalp',price:.74,stake:10,result:'ACTION',reason:'Confirmed rise.'}]};
+  value.pending={id:'queued',slug:'focus',market:m,side:'YES',action:'BUY',limitPrice:.74,budget:10,createdAt:now-1000,executeAfter:now,observedAt:now-1000,source:'AUTOMATIC',reason:'Confirmed rise.'};
+  assert.match(sideLines(value,'focus',undefined)[0].text,/Buy queued, up to 74¢.*Rechecking/);
+  value.pending=null;value.positions=[{...position('focus'),side:'YES',entryPrice:.73}];
+  assert.equal(sideLines(value,'focus',undefined)[0].text,'Holding 5 at 73¢ average.');
+});

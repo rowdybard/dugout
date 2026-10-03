@@ -30,7 +30,7 @@ import {RunnerSetup} from './runner-setup';
 
 import {FeedKey} from './feed-key';
 
-import {supportsBot,tennisStrategyRules,walletHasOrders} from './bot-controls';
+import {supportsBot,tennisBetOptions,tennisStrategyRules,walletHasOrders} from './bot-controls';
 import {isFootballFreshnessReason} from './football-notice';
 
 import {DecisionCard} from './decision-card';
@@ -101,7 +101,9 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
   const [settingsOpen,setSettingsOpen]=useState(false);
 
-  const entryBudget=session?.config.entryBudget??5;
+  const entryBudget=session?.config.entryBudget??(tennis?10:5);
+
+  const betOptions=tennisBetOptions(session?.config.startingCash??100);
 
   const leagues=session?.config.leagues??[];
 
@@ -273,6 +275,8 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
   };
 
+  const setTennisBet=(budget:number)=>{if(session)void bot.perform(latest=>!latest||latest.config.entryBudget===budget?null:{action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules:{entryBudget:budget}});};
+
   // Octopus rule changes are built from the latest saved rules when sent (like the mode buttons).
 
   const setOctopus=(build:(config:NonNullable<typeof session>['config'])=>Partial<OctopusRules>)=>{if(session)void bot.perform(latest=>{
@@ -344,6 +348,11 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
                 :`Bigger orders (${money(entryBudget)} each) plus hold-to-final bets the research allows: bigger wins, bigger losses.`}</span>
 
+            </div>}
+
+            {tennis&&<div className="tennis-mode-choice" role="group" aria-label="Tennis bet size">
+              {betOptions.map(option=><button key={option.label} aria-pressed={entryBudget===option.budget} disabled={!session||controlsBusy||migrating} onClick={()=>setTennisBet(option.budget)}>{option.label} {money(option.budget)}</button>)}
+              <span>Up to {money(entryBudget)} per new bet, including fees. Default targets 10% of the starting balance, within the per-bet limits.</span>
             </div>}
 
           </div>

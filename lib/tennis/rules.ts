@@ -49,8 +49,13 @@ export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
 }
 
 /** Dedicated tennis paper experiments. The historical factory remains unchanged for saved sessions. */
+export function tennisBetSize(startingCash:number,fraction=.1):number {
+  const cap=Math.floor(Math.min(100,startingCash*.2)*1e6+1e-9)/1e6;
+  return Math.min(cap,Math.round(Math.max(1,startingCash*fraction)*1e6)/1e6);
+}
+
 export function defaultTennisBotConfig(startingCash=100,tennisStrategy:'auto'|'recovery'|'momentum'='auto'):TennisConfig {
-  return {...defaultTennisConfig(startingCash),decisionPolicy:'price-v1',tennisStrategy,strategy:tennisStrategy,evidenceGate:'evidence-v1',
+  return {...defaultTennisConfig(startingCash),entryBudget:tennisBetSize(startingCash),decisionPolicy:'price-v1',tennisStrategy,strategy:tennisStrategy,evidenceGate:'evidence-v1',
     explore:tennisStrategy==='auto'?['tennis-recovery','tennis-momentum']:[tennisStrategy==='recovery'?'tennis-recovery':'tennis-momentum']};
 }
 

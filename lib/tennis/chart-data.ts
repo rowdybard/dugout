@@ -14,10 +14,12 @@ export function marketWithWatchedContext(stored:TennisMarket,latest:TennisMarket
   // This field display uses the device clock; a small server-clock lead must not freeze its facts.
   if(latest.slug!==stored.slug||latest.league!==stored.league||latest.eventId!==stored.eventId||latest.yesName!==stored.yesName||latest.noName!==stored.noName||
     stored.footballIdentity&&(!latest.footballIdentity||latest.footballIdentity.yesTeamId!==stored.footballIdentity.yesTeamId||latest.footballIdentity.noTeamId!==stored.footballIdentity.noTeamId)||
+    stored.tennisIdentity&&(!latest.tennisIdentity||latest.tennisIdentity.yesPlayerId!==stored.tennisIdentity.yesPlayerId||latest.tennisIdentity.noPlayerId!==stored.tennisIdentity.noPlayerId)||
     !Number.isFinite(latest.observedAt)||latest.observedAt>now+CLOCK_SKEW_MS||latest.contextUpdatedAt===null||!Number.isFinite(latest.contextUpdatedAt)||latest.contextUpdatedAt>latest.observedAt||
     stored.contextUpdatedAt!==null&&(latest.contextUpdatedAt<stored.contextUpdatedAt||latest.contextUpdatedAt===stored.contextUpdatedAt&&(latest.observedAt<stored.observedAt||latest.observedAt===stored.observedAt&&!newerDrive&&!sourceIssueChanged)))return stored;
   return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&stored.execution?.active===true&&latest.active,
     score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,footballLastScore:latest.footballLastScore??(stored.footballLastScore?.score===latest.score?stored.footballLastScore:undefined),tournament:latest.tournament,
+    tennis:latest.tennis,tennisIdentity:latest.tennisIdentity,
     observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt};
 }
 const validPrice=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;

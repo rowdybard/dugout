@@ -1,5 +1,6 @@
 'use client';
 import {FootballField} from './football-field';
+import {TennisScoreboard} from './tennis-scoreboard';
 import {DecisionMetrics} from './decision-metrics';
 import {decisionEvidence} from '@/lib/tennis/decision-evidence';
 
@@ -30,6 +31,7 @@ export function TennisMatchChart({market,session,now,contextAssessment,contextCh
   const bid=side==='YES'?market.bid:market.ask===null?null:1-market.ask;
   const ask=side==='YES'?market.ask:market.bid===null?null:1-market.bid;
   const football=market.league==='NFL'||market.league==='CFB';
+  const tennis=market.league==='ATP'||market.league==='WTA';
   const drive=market.football;
   const noun=football?'team':'player';
   const bookIssue=quoteAvailabilityIssue(bid,ask,noun);
@@ -46,7 +48,7 @@ export function TennisMatchChart({market,session,now,contextAssessment,contextCh
   const fills=first?chartFills(session,market.slug,side,first.time,now):[];
   const gaps=quoteGaps(points);
   return <div className="tennis-match-chart">
-    <div className="tennis-score-row"><span><i className={`tennis-dot ${market.live&&market.active?'is-live':''}`}/>{market.ended?'ENDED':market.live&&market.active?'IN PLAY':market.live?'PLAY INTERRUPTED':'UPCOMING'} · {market.league}</span><b>{market.score||'No score yet'}{football&&market.period?` · ${market.period}`:''}{football&&market.clock?` · ${market.clock}`:''}</b><small>{market.contextUpdatedAt?`Reported ${ago(market.contextUpdatedAt,now)}`:`Checked ${ago(market.observedAt,now)}`}</small></div>
+    {tennis?<TennisScoreboard market={market} now={now} contextCheck={contextCheck}/>:<div className="tennis-score-row"><span><i className={`tennis-dot ${market.live&&market.active?'is-live':''}`}/>{market.ended?'ENDED':market.live&&market.active?'IN PLAY':market.live?'PLAY INTERRUPTED':'UPCOMING'} · {market.league}</span><b>{market.score||'No score yet'}{football&&market.period?` · ${market.period}`:''}{football&&market.clock?` · ${market.clock}`:''}</b><small>{market.contextUpdatedAt?`Reported ${ago(market.contextUpdatedAt,now)}`:`Checked ${ago(market.observedAt,now)}`}</small></div>}
     {football&&(market.live||market.ended)&&<FootballField market={market} now={now} assessment={contextAssessment} contextCheck={contextCheck} showFreshnessNotice={showFreshnessNotice}/>}
     {football&&!market.live&&!market.ended&&<p className="tennis-kickoff">Kicks off {new Date(market.startTime).toLocaleString([],{weekday:'short',hour:'numeric',minute:'2-digit'})}. The field appears once the game is on.</p>}
       <div className="tennis-outcomes" role="group" aria-label={`Choose ${noun} to follow`}>{(['YES','NO'] as const).map(s=><button type="button" key={s} aria-pressed={side===s} onClick={()=>setSide(s)}><span>{s==='YES'?market.yesName:market.noName}</span></button>)}</div>

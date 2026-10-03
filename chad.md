@@ -13,6 +13,8 @@ Dugout runs Football and Tennis bots that practise trading Polymarket games with
 
 Choose **Football** or **Tennis** at the top. Tennis starts idle, and opening it does not reset or add money. Tennis uses **Auto**, **Recovery** (a price falls and recovers) or **Momentum** (a confirmed rise). These are paper experiments. Football's modes are described below. Either bot can run while you look at the other tab.
 
+Tennis's new default bet is **$10 on a $100 starting balance**. Use the Small / Default / Large buttons on the bot card to change your saved bet size. An existing run keeps its saved size until you choose one; your balance and history stay intact.
+
 1. **Search box.** Type a team and pick a live or upcoming college game. That's the game the bot trades.
    - If it says the account is set to other sports, tap **Show college football games** once.
 2. **Bot card:**
@@ -21,7 +23,7 @@ Choose **Football** or **Tennis** at the top. Tennis starts idle, and opening it
    - the selected bot's main button: **Start bot**, **Pause**, **Resume** or **Acknowledge loss and resume**, and **End run** next to it while a run is going;
    - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
    - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now.
-3. **Game tracker:** Football's score and clock come from Polymarket. For a verified game, ESPN can fill in missing drive details. Each feed keeps its own age. During a gap after scoring, the last known scorer and play stay visible; if only the score changed, it shows the points without guessing what happened. Tennis shows its match prices and chart.
+3. **Game tracker:** Football's score and clock come from Polymarket. For a verified game, ESPN can fill in missing drive details. During a gap after scoring, the last known scorer and play stay visible; if only the score changed, it shows the points without guessing what happened. Feed timing is tucked into **Feed details**. Tennis shows a scoreboard above its prices and chart: sets, games, points and who's serving when supplied. It checks every five seconds even while the Tennis bot is idle. A small update age shows how recent the reported score is.
 4. **Trades & balance:** every fill, with price, fees and result, plus a balance chart.
 5. **Settings & history** (closed by default): rules, background running, your own price key, diagnostics and downloads. You don't need any of it to get started.
 

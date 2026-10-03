@@ -18,12 +18,15 @@ GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Clou
   - **Auto:** picks Bold while the research allows a bet on the game and the run is down less than 10%, Steady otherwise (`decideAuto`).
   - **Comeback test:** Bold and Auto paper-trade `comeback-drive@1` (`config.explore`) to measure it.
   - **Tennis:** Auto selects the existing Recovery or Momentum signal. Both are registered paper experiments, with entry checks repeated before a delayed fill and exit rules saved on purchase. This is not established profitable behavior.
+    - New Tennis bots default to 10% of starting cash per bet ($10 on $100), bounded by the existing cap and $1 minimum. The card exposes Small/Default/Large bet sizes; saved sizes remain until explicitly changed. The current short-trade rules still reject entries when spread and fees alone exceed their 8% trade-loss limit; reducing the signal threshold alone does not address this cost barrier at lower prices.
   - **Octopus** (experimental, `lib/tennis/octopus.ts`): up to 6 extra games in either mode, pinned or auto-picked every 5 minutes, all offers within 50% of the balance with the main game first, logged as tiny JSONL files.
 - **Paper only:** real money is not connected (`lib/live/README.md`). Connecting it is the owner's decision.
 
 **Shared account:** `lib/tennis/account.ts` coordinates the two bots through one cash balance, ledger and revision stream. Held cost, pending buys and all resting offers across both bots share the 50% spending limit. A loss stop stops entries for both bots; acknowledgement keeps the account/history and grants the original dollar allowance again. Ordinary stopped bots restart without resetting money. Reset balance is the explicit account reset. Untagged historical positions remain managed by the Football compatibility path, including older tennis holdings.
 
 **Football reports:** Polymarket keeps scoreboard, clock, prices, market status and settlement authority. A reviewed ESPN mapping can fill missing drives; see `ARCHITECTURE.md` for timing and identity checks. The tracker retains the last verified scorer and play type through report gaps. A bare score change names the scorer and points without guessing field goal versus another play.
+
+**Tennis scoreboard:** The selected ATP/WTA match refreshes through a read-only score endpoint every five seconds, independently of its prices. Competitor IDs map set scores and serving; point scores require unambiguous ordering against those sets. Ambiguous points remain a raw reported score. A five-second public cache bounds checks, and failed checks retain the last score and its original age. This display does not change strategy inputs, quote timestamps, wallet state or bot controls.
 
 ## Components and authority
 

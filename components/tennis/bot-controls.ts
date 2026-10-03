@@ -1,9 +1,15 @@
 import type {BotId,TennisAction,TennisConfig,TennisRuntime,TennisSession} from '../../lib/tennis/types';
+import {tennisBetSize} from '../../lib/tennis/rules.ts';
 
 /** Read requests select a view without initializing or resetting a bot. */
 export const botQuery=(url:string,botId:BotId)=>`${url}${url.includes('?')?'&':'?'}botId=${botId}`;
 
 export const tennisStrategyRules=(strategy:'auto'|'recovery'|'momentum'):Partial<TennisConfig>=>({tennisStrategy:strategy,strategy,explore:strategy==='auto'?['tennis-recovery','tennis-momentum']:[`tennis-${strategy}`]});
+
+export function tennisBetOptions(startingCash:number){
+  const options=[{label:'Small',budget:tennisBetSize(startingCash,.05)},{label:'Default',budget:tennisBetSize(startingCash)},{label:'Large',budget:tennisBetSize(startingCash,.2)}];
+  return options.filter(option=>option.label==='Default'||option.budget!==options[1].budget);
+}
 
 export function supportsBot(runtime:TennisRuntime|null,botId:BotId):boolean {
   return !!runtime&&runtime.mode!=='migrating'&&(runtime.mode==='browser'||runtime.supportedBots?.includes(botId)===true||botId==='football'&&!runtime.supportedBots);

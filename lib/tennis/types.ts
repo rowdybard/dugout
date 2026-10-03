@@ -58,6 +58,14 @@ export type ShadowExit={
  * onFirst/onSecond/onThird and inningHalf (T, B, M, E). Scores read "away-home".
  */
 export type BaseballContext={inning:number;half:'top'|'bottom'|'middle'|'end';outs:number;balls:number;strikes:number;onFirst:boolean;onSecond:boolean;onThird:boolean};
+/** Display-only tennis scores, mapped by the provider's competitor IDs. */
+export type TennisScoreboardState={
+  sets:{number:number;yes:number;no:number}[];
+  setsWon:{yes:number;no:number}|null;
+  games:{yes:number;no:number}|null;
+  points:{yes:string;no:string}|null;
+  serving:'YES'|'NO'|null;
+};
 export type TennisPricePoint=Point & {bid?:number;ask?:number;score?:string|null;period?:string|null;scoreUpdatedAt?:number|null};
 export type TennisMarket={
   slug:string;eventId:string;eventSlug:string;title:string;league:TennisLeague;
@@ -70,6 +78,8 @@ export type TennisMarket={
   footballIdentity?:{yesTeamId:string;noTeamId:string};
   /** MLB live state (lib/tennis/normalize.ts baseballContext); null when the report is incomplete. */
   baseball?:BaseballContext|null;
+  tennis?:TennisScoreboardState|null;
+  tennisIdentity?:{yesPlayerId:string;noPlayerId:string};
   /**
    * Team sports: whether YES is the away or home team. Scores read "away-home" (verified Sep 27, 2026 on
    * finished CFB and NFL games), so this maps the score string to the YES and NO sides.

@@ -3,6 +3,10 @@
 This manual describes the paper bot as of **October 3, 2026**. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for its balance, rules, focus and status. [RELEASE-STATUS.md](RELEASE-STATUS.md) records dated test and deployment evidence.
 
 Dugout is a **paper-trading dashboard** for Polymarket US sports markets, with Football and Tennis tabs. Its decision engine uses deterministic calculations, not Claude, and it simulates every fill. Tennis Recovery and Momentum are explicitly registered paper experiments, not established profitable strategies.
+
+The Tennis tracker shows Polymarket's set, game and point scores plus the server when those fields can be assigned to the verified players. It checks the selected match every five seconds independently of trading, so it works while the bot is idle. Missing fields stay blank, ambiguous point scores remain labeled as reported, and a failed check retains the last score with its original update age. Football's detailed source timings are under the closed **Feed details** disclosure.
+
+New Tennis bots default to $10 per bet on a $100 starting balance (10%, within the existing cap and $1 minimum). The bot card's Small, Default and Large buttons change the saved size for future entries; existing saved sizes are preserved until changed. The current short-trade rules reject entries when spread and fees alone exceed their 8% trade-loss limit. The Both sides summary shows an actual queued order or the latest check; old plans are never presented as current buy instructions.
 - **The site:** a Cloudflare Worker behind Cloudflare Access with Google sign-in, using a D1 database.
 - **The runner:** each person's background bot is a separate Cloudflare Worker with a per-account SQLite Durable Object. Closing the page does not stop a running background bot, and a paused account does not start itself.
 
