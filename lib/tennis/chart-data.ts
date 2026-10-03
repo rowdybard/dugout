@@ -1,13 +1,15 @@
 import type {TennisInput,TennisMarket,TennisPricePoint,TennisSession} from './types';
 import type {StreamQuote} from '../trading/stream-types';
 import {bookOrderIssue} from './book-order.ts';
+import {CLOCK_SKEW_MS} from './decision-view.ts';
 
 /** Independent play reports may update the field, never the book's receipt time or chart evidence. */
 export function marketWithWatchedContext(stored:TennisMarket,latest:TennisMarket,now:number):TennisMarket {
   // Discovery may arrive later with an older play. Provider time wins; receipt only breaks ties.
+  // This field display uses the device clock; a small server-clock lead must not freeze its facts.
   if(latest.slug!==stored.slug||latest.league!==stored.league||latest.eventId!==stored.eventId||latest.yesName!==stored.yesName||latest.noName!==stored.noName||
     stored.footballIdentity&&(!latest.footballIdentity||latest.footballIdentity.yesTeamId!==stored.footballIdentity.yesTeamId||latest.footballIdentity.noTeamId!==stored.footballIdentity.noTeamId)||
-    !Number.isFinite(latest.observedAt)||latest.observedAt>now||latest.contextUpdatedAt===null||!Number.isFinite(latest.contextUpdatedAt)||latest.contextUpdatedAt>latest.observedAt||
+    !Number.isFinite(latest.observedAt)||latest.observedAt>now+CLOCK_SKEW_MS||latest.contextUpdatedAt===null||!Number.isFinite(latest.contextUpdatedAt)||latest.contextUpdatedAt>latest.observedAt||
     stored.contextUpdatedAt!==null&&(latest.contextUpdatedAt<stored.contextUpdatedAt||latest.contextUpdatedAt===stored.contextUpdatedAt&&latest.observedAt<=stored.observedAt))return stored;
   return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&stored.execution?.active===true&&latest.active,
     score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,tournament:latest.tournament,

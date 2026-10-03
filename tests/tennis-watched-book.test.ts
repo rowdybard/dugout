@@ -19,6 +19,27 @@ test('priority field reports retain book and chart evidence and ignore late or w
   const preserved=marketWithWatchedContext(delayedCatalog,report,10000);
   assert.equal(preserved.score,'14-0');assert.equal(preserved.contextUpdatedAt,9500);assert.equal(preserved.observedAt,9950);
 });
+test('field display accepts a slightly ahead server receipt without refreshing book evidence',()=>{
+  const now=400_000,m={...market(),observedAt:now-360_000,contextUpdatedAt:now-360_000,score:'35-33',period:'Q4',clock:'2:00',quoteObservedAt:now-500,history:[{time:now-500,price:.4}]};
+  const report={...m,observedAt:now+100,contextUpdatedAt:now-1000,clock:'0:37',quoteObservedAt:now+100,bid:.01,ask:.99,history:[]};
+  const result=marketWithWatchedContext(m,report,now);
+  assert.equal(result.clock,'0:37');assert.equal(result.contextUpdatedAt,report.contextUpdatedAt);assert.equal(result.observedAt,now+100);
+  assert.equal(result.quoteObservedAt,m.quoteObservedAt);assert.equal(result.bid,m.bid);assert.equal(result.ask,m.ask);assert.deepEqual(result.history,m.history);
+  assert.equal(m.clock,'2:00');
+});
+test('field receipt skew tolerance retains strict provider time, identity and report ordering',()=>{
+  const now=10_000,m={...market(),footballIdentity:{yesTeamId:'team-a',noTeamId:'team-b'}},report={...m,observedAt:now+100,contextUpdatedAt:9500,score:'14-0'};
+  assert.equal(marketWithWatchedContext(m,{...report,observedAt:now+15_000},now).score,'14-0');
+  const invalid=[
+    {...report,observedAt:now+15_001},
+    {...report,contextUpdatedAt:report.observedAt+1},
+    {...report,contextUpdatedAt:m.contextUpdatedAt!-1},
+    {...report,contextUpdatedAt:m.contextUpdatedAt,observedAt:m.observedAt},
+    {...report,footballIdentity:{yesTeamId:'team-b',noTeamId:'team-a'}},
+    {...report,eventId:'different-game'},
+  ];
+  for(const candidate of invalid)assert.equal(marketWithWatchedContext(m,candidate,now),m);
+});
 test('selected book refresh updates a game beyond the stream cap without changing score/status clocks or paper state',()=>{
   const m=market(),i=input(),s=session(),before=structuredClone({m,i,s});
   const result=marketWithWatchedBook(m,i,s,10000);
