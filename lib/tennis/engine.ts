@@ -10,17 +10,18 @@ const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
 import {choiceOf,modeRules,tradeBudget,tradeMode} from './modes.ts';
-import {canAcknowledgeLoss,dayPnl,lossAllowance,lossLimitReached,realizedPnl} from './loss-limit.ts';
+import {canAcknowledgeLoss,dayPnl,lossAllowance,lossLimitReached,realizedPnl,remainingLossAllowance} from './loss-limit.ts';
+import {bindWalletProjection,copyWalletProjection,walletProjection,walletEquity,walletCommitments,walletMainMaker,type WalletProjection} from './wallet-risk.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
 import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
 import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
 import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
-import {assessFootballContext,footballBoundaryChanged,footballSourceChanged,isFootballMarket,normalizePositionExitRules,FOOTBALL_CONTEXT_MAX_AGE_MS} from './football-context.ts';
+import {assessFootballContext,footballBoundaryChanged,footballSourceChanged,footballSourceTimingIssue,isFootballMarket,normalizePositionExitRules,FOOTBALL_CONTEXT_MAX_AGE_MS} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
-import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
+import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,tennisSignalContext,type PlanEntry} from './engine-plan.ts';
 import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,recordPregame,recordWhyNot} from './research-tracking.ts';
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
@@ -47,6 +48,7 @@ export function createTennisSession(config: TennisConfig = defaultTennisConfig()
 
 /** Conservative executable equity: unavailable residual quantity has no assigned value. */
 export function tennisEquity(session: TennisSession): number {
+  if(walletProjection(session))return walletEquity(session);
   return exact(session.cash + session.positions.filter(position => position.status === 'open')
     .reduce((sum, position) => sum + (position.netLiquidationValue ?? 0), 0));
 }
@@ -75,7 +77,7 @@ function policy(session: TennisSession, input: TennisInput, now: number) {
     now, bookReceivedAt: input.receivedAt, bookSource: input.source, stateCertain: true,
     maxBookAgeMs: session.config.maxBookAgeMs, maxCommandAgeMs: Math.max(30_000, delay * 3),
     maxOrderBudget: Math.min(100, session.config.startingCash * 0.25), maxMarketExposure: Math.min(100, session.config.startingCash * 0.25),
-    maxTotalExposure: Math.min(100, session.config.startingCash * 0.25), automation: 'PAPER' as const,
+    maxTotalExposure: walletProjection(session)?walletCommitments(session,undefined,true).cap:Math.min(100, session.config.startingCash * 0.25), automation: 'PAPER' as const,
   };
 }
 
@@ -99,9 +101,9 @@ const swappedMain = new WeakMap<TennisSession, TennisSession['maker']>();
 /** Run maker code against one Octopus arm's own resting-order state (the same rules as the main game's). */
 function withChaosMaker<T>(session: TennisSession, slug: string, run: () => T): T {
   const main = session.maker, store = session.chaos ??= {};
-  session.maker = store[slug]; swappedMain.set(session, main);
+  session.maker = store[slug]; swappedMain.set(session, main);walletMainMaker(session,main);
   try { return run(); } finally {
-    swappedMain.delete(session);
+    swappedMain.delete(session);walletMainMaker(session,undefined);
     if (session.maker) store[slug] = session.maker; else delete store[slug];
     session.maker = main;
   }
@@ -112,6 +114,12 @@ function makerPositions(session: TennisSession) { return session.positions.filte
 
 function simulate(session: TennisSession, input: TennisInput, command: PaperCommand, now: number, position = holding(session)): PaperExecution {
   const cost = position?.costBasis ?? 0;
+  if(walletProjection(session)){
+    const commitments=walletCommitments(session,undefined,true),marketExposure=session.positions.filter(p=>p.status==='open'&&p.slug===input.market.slug).reduce((sum,p)=>sum+p.costBasis,0);
+    return executePaperCommand(command,{cash:command.action==='BUY'?Math.max(0,session.cash-commitments.pending-commitments.resting):session.cash,
+      marketExposure,totalExposure:commitments.total,availableQuantity:position?.slug===input.market.slug&&position.side===command.side?position.quantity:0},
+      input.market.execution!,input.book,policy(session,input,now));
+  }
   return executePaperCommand(command, { cash: session.cash, marketExposure: position?.slug === input.market.slug ? cost : 0,
     totalExposure: cost, availableQuantity: position?.slug === input.market.slug && position.side === command.side ? position.quantity : 0 },
   input.market.execution!, input.book, policy(session, input, now));
@@ -148,7 +156,7 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
   const quote = quotes(input, side);
   if (quote.bid === undefined || quote.ask === undefined || quote.bid > quote.ask) return { code: 'BOOK', reason: 'A valid two-sided book is required.' };
   if (quote.ask - quote.bid > session.config.maxSpreadPoints / 100 + EPSILON) return { code: 'SPREAD', reason: 'The gap between buying and selling prices is too wide.' };
-  if (session.config.evidenceGate === 'evidence-v1') {
+  if (session.config.evidenceGate === 'evidence-v1'&&!session.config.tennisStrategy) {
     // Every legacy strategy in this engine buys live and sells within minutes: a taker scalp.
     const resolved = sessionEngine(session);
     if ('error' in resolved) return { code: 'EVIDENCE_PACK_UNAVAILABLE', reason: resolved.error };
@@ -263,6 +271,14 @@ function enginePendingIssue(session: TennisSession, input: TennisInput, intent: 
   const plan = intent.plan!;
   const phase = marketPhase(input, now);
   if (phase !== plan.phase) return { code: 'PHASE_CHANGED', reason: `The game is no longer ${plan.phase}; the planned entry no longer matches its evidence.` };
+  if(plan.exit==='scalp'){
+    const issue=entryIssue(session,input,intent.side,intent.budget??0,now)??pendingSignalIssue(session,input,intent,now);
+    if(issue)return issue;
+    const signal=intent.signalSnapshot,config=intent.signalConfig;
+    if(!signal||!config?.tennisStrategy)return {code:'SIGNAL_CHANGED',reason:'The Tennis experiment is missing its frozen signal rules.'};
+    const checked=tennisSignalPlan(session,input,intent.side,signal,config,now);
+    return checked.issue;
+  }
   const issue = planEntryIssue(session, input, intent.side, intent.budget ?? 0, now, phase, plan.exit);
   if (issue) return issue;
   const resolved = sessionEngine(session);
@@ -292,6 +308,7 @@ type Evaluated = { input: TennisInput; phase: Phase | null; plan: Plan };
  * evaluation feeds the shadow measurements and the why-no-trade record (lib/tennis/research-tracking.ts).
  */
 function evaluateEngine(session: TennisSession, current: TennisInput[], now: number): Evaluated[] {
+  if(session.config.tennisStrategy)return [];
   const resolved = sessionEngine(session), out: Evaluated[] = [];
   for (const input of [...current].sort((a, b) => a.market.slug.localeCompare(b.market.slug))) {
     if (session.config.focusSlug && session.config.focusSlug !== input.market.slug && !chaosGame(session, input.market.slug)) continue;
@@ -417,6 +434,12 @@ function cancelMakerQuotes(session: TennisSession, reason: string, now: number) 
 /** Apply a conservative maker fill: a BUY into this side's maker position, with the rebate credited. */
 function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeSide, quote: RestingQuote, now: number) {
   const rebate = makerRebate(quote.price, quote.quantity), gross = exact(quote.quantity * quote.price), cashDelta = exact(rebate - gross);
+  if(walletProjection(session)&&(!freshLive(input,now)||input.book.state!=='MARKET_STATE_OPEN'||input.market.execution?.active!==true)){
+    record(session,now,input.market.slug,side,'SKIP','MATCH_STALE','The resting buy was withdrawn because live match status is stale, ended or closed.',input);return;
+  }
+  if(walletProjection(session)&&(gross>walletCommitments(session).available+EPSILON||gross>Math.min(100,session.config.startingCash*.25)+EPSILON)){
+    record(session,now,input.market.slug,side,'SKIP','WALLET_COMMITMENT','The shared account cannot cover this resting buy within its commitment limit; the quote was withdrawn.',input);return;
+  }
   if (session.cash + cashDelta < -EPSILON) {
     record(session, now, input.market.slug, side, 'SKIP', 'MAKER_CASH', 'A resting buy reached its price but cash no longer covers it; the quote was withdrawn.', input);
     return;
@@ -499,18 +522,22 @@ function sellMakerShares(session: TennisSession, input: TennisInput, now: number
 function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   const slug = input.market.slug, open = unpaired(session, slug);
   if (!open || tradeMode(session) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
+  if(walletProjection(session)&&(!freshLive(input,now)||input.book.state!=='MARKET_STATE_OPEN'||input.market.execution?.active!==true))return;
   if(fallbackFootballIssue(session,input,now))return;
   if (session.maker?.slug === slug && now < session.maker.pulledUntil) return;
   if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
   const position = open.position, ask = quotes(input, position.side).ask;
   if (ask === undefined || ask > position.entryPrice - DIP_STEP + EPSILON) return;
-  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * tradeBudget(session) - position.costBasis, session.cash));
+  const completeMarks=session.positions.filter(p=>p.status==='open').every(p=>p.netLiquidationValue!==null&&p.liquidationQuantity>=p.quantity-EPSILON&&p.markedAt!==null&&p.markedAt<=now&&now-p.markedAt<=session.config.maxBookAgeMs);
+  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * tradeBudget(session) - position.costBasis, session.cash,
+    ...(walletProjection(session)?[walletCommitments(session).available,remainingLossAllowance(session,completeMarks?tennisEquity(session):null)]:[])));
   if (budget < ask * input.market.execution.minimumTradeQty) return;
   session.consumedBooks[slug] = input.receivedAt;
   const command = { ...freshCommand(session, input, position.side, 'BUY', now, ask), commandId: `${position.id}:dip:${now}`, budget };
   const result = simulate(session, input, command, now, undefined);
-  position.dipBuys = (position.dipBuys ?? 0) + 1;
+  if(!walletProjection(session))position.dipBuys = (position.dipBuys ?? 0) + 1;
   if (!result.apply || result.filledQty <= 0) { record(session, now, slug, position.side, 'SKIP', 'DIP_BUY_UNFILLED', `Bold dip buy did not fill. ${result.reason}`, input); return; }
+  if(walletProjection(session))position.dipBuys = (position.dipBuys ?? 0) + 1;
   session.cash = exact(session.cash + result.cashDelta);
   position.quantity = exact(position.quantity + result.filledQty);
   position.initialQuantity = exact(position.initialQuantity + result.filledQty);
@@ -523,6 +550,7 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
     cashDelta: result.cashDelta, realizedPnl: 0, quotedPrice: ask, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt,
     executionBookTime: input.receivedAt, rulesRevision: session.rulesRevision ?? 0 });
   record(session, now, slug, position.side, 'BUY', 'DIP_BUY', reason, input);
+  if(walletProjection(session))markPosition(session,position,input,now);
 }
 
 /**
@@ -704,7 +732,7 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + resting(other), 0);
   const restingElsewhere = isArm ? arms + Math.max(resting(main), 2 * tradeBudget(session)) : arms;
   const octopus = octopusSlugs(session).length > 0;
-  const available = Math.max(0, (octopus ? Math.min(session.cash, OCTOPUS_RESERVE_FRACTION * tennisEquity(session)) : session.cash) - restingElsewhere);
+  const available = walletProjection(session)?walletCommitments(session,state).available:Math.max(0, (octopus ? Math.min(session.cash, OCTOPUS_RESERVE_FRACTION * tennisEquity(session)) : session.cash) - restingElsewhere);
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);
   if (reserve > available + EPSILON) for (const side of ['YES', 'NO'] as const) {
     const target = targets[side];
@@ -987,6 +1015,31 @@ function pendingSignalIssue(session:TennisSession,input:TennisInput,intent:Tenni
   return null;
 }
 
+function tennisSignalPlan(session:TennisSession,input:TennisInput,side:TradeSide,signal:TennisSignal,config:TennisConfig,now:number):{plan?:Plan;action?:PlannedTrade;issue:{code:string;reason:string}|null} {
+  if(session.config.evidenceGate!=='evidence-v1'||!session.config.tennisStrategy||!['ATP','WTA'].includes(input.market.league))return {issue:{code:'EVIDENCE_NO_EVIDENCE',reason:'Registered Tennis experiments require the evidence gate and an ATP or WTA match.'}};
+  const resolved=sessionEngine(session);
+  if('error' in resolved)return {issue:{code:'EVIDENCE_PACK_UNAVAILABLE',reason:resolved.error}};
+  const strategy=config.strategy==='momentum'?'tennis-momentum':'tennis-recovery';
+  const plan=resolved.engine.plan(tennisSignalContext(session,input,now,side,signal,config),{mode:session.mode,risk:sessionRisk(session,now),strategies:[strategy],explore:session.config.explore});
+  const action=plan.actions.find(trade=>trade.proposal.side===(side==='YES'?'yes':'no')&&trade.proposal.exit.kind==='scalp');
+  if(action)return {plan,action,issue:null};
+  const considered=plan.considered.find(trade=>trade.proposal.side===(side==='YES'?'yes':'no'));
+  return {plan,issue:{code:considered?.blocked??'SIGNAL_CHANGED',reason:considered?.reason??'The confirmed Tennis setup no longer meets the registered experiment.'}};
+}
+
+function stageTennisSignal(session:TennisSession,input:TennisInput,side:TradeSide,state:TennisSignal,now:number):{code:string;reason:string}|null {
+  const checked=tennisSignalPlan(session,input,side,state,session.config,now);
+  if(checked.plan)session.enginePlan=compactPlan(checked.plan);
+  if(checked.issue){recordWhyNot(session,input.market.slug,{strategy:`tennis-${session.config.strategy}`,code:noTradeCode(checked.issue.code),detail:checked.issue.reason},now);return checked.issue;}
+  const trade=checked.action!,exit=trade.proposal.exit;
+  if(exit.kind!=='scalp')return {code:'SIGNAL_CHANGED',reason:'The Tennis experiment did not supply its scalp exits.'};
+  stage(session,input,side,'BUY',now,'AUTOMATIC',`${trade.proposal.rationale} ${trade.verdict.reason}`,trade.stake);
+  if(session.pending?.action==='BUY')session.pending.plan={strategy:trade.proposal.strategy,strategyVersion:trade.proposal.strategyVersion,style:trade.proposal.style,phase:'live',exit:'scalp',
+    scalp:{targetReturn:exit.targetReturn,stopReturn:exit.stopReturn,maxHoldMs:exit.maxHoldMs},code:trade.verdict.code,evidence:trade.verdict.deciding?.id??null,pack:trade.verdict.pack,stake:trade.stake,reason:trade.verdict.reason};
+  recordWhyNot(session,input.market.slug,null,now);
+  return null;
+}
+
 function updateMomentum(session:TennisSession,input:TennisInput,side:TradeSide,state:TennisSignal,
   history:TennisSession['histories'][string],oldPrice:number|undefined,oldBid:number|undefined,now:number,
   wait:(code:string,reason:string,skip?:boolean)=>void) {
@@ -1012,6 +1065,7 @@ function updateMomentum(session:TennisSession,input:TennisInput,side:TradeSide,s
   if(issue)return wait(issue.code,issue.reason,true);
   const buy=simulate(session,input,{...freshCommand(session,input,side,'BUY',now,quote.ask!),budget:session.config.entryBudget},now);
   if(buy.filledQty/-buy.cashDelta-1<session.config.targetReturn-EPSILON)return wait('COST_HEADROOM','Even the maximum contract payout cannot reach this profit target after entry costs.',true);
+  if(session.config.tennisStrategy){const gated=stageTennisSignal(session,input,side,state,now);if(gated)wait(gated.code,gated.reason,true);return;}
   stage(session,input,side,'BUY',now,'AUTOMATIC','Price and executable buyers rose above their recent baselines; experimental momentum signal.',session.config.entryBudget);
 }
 
@@ -1069,10 +1123,11 @@ function updateSignal(session: TennisSession, input: TennisInput, side: TradeSid
   if (issue) return wait(issue.code, issue.reason, true);
   const headroom = recoveryHeadroomIssue(session, input, side, state.baseline, now);
   if (headroom) return wait('COST_HEADROOM', headroom, true);
+  if(session.config.tennisStrategy){const gated=stageTennisSignal(session,input,side,state,now);if(gated)wait(gated.code,gated.reason,true);return;}
   stage(session, input, side, 'BUY', now, 'AUTOMATIC', 'Temporary price drop followed by confirmed buyer recovery; experimental price-only signal.', session.config.entryBudget);
 }
 
-type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;cost:number};
+type AutoCandidate={intent:TennisIntent;signal:TennisSignal;input:TennisInput;cost:number;plan?:TennisSession['enginePlan']};
 type LocalCandidate={input:TennisInput;side:TradeSide;analysis:OpportunityAnalysis};
 
 function appendLocalHistory(session:TennisSession,input:TennisInput,side:TradeSide){
@@ -1145,6 +1200,7 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
     const sandbox:TennisSession={...session,config:{...session.config,declinePoints:rules.declinePoints,recoveryPoints:rules.recoveryPoints,momentumPoints:rules.momentumPoints,strategy},
       signals:{...session.signals,[key]:previous??{phase:'WARMING',confirmations:0,reason:'Building history for both entry patterns.'}},
       histories:{...session.histories,[key]:history},pending:null,decisions:[],rejectionCounts:{},decisionSequence:0,evaluated:0};
+    copyWalletProjection(session,sandbox);
     updateSignal(sandbox,input,side,now);
     const signal=sandbox.signals[key];signal.autoRules=rules;
     const last=sandbox.decisions.at(-1);
@@ -1157,7 +1213,7 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
       const sell=executePaperCommand({...freshCommand(session,input,side,'SELL',now,quote.bid),quantity:buy.filledQty},
         {cash:exact(session.cash+buy.cashDelta),marketExposure:-buy.cashDelta,totalExposure:-buy.cashDelta,availableQuantity:buy.filledQty},input.market.execution!,input.book,policy(session,input,now));
       const intent={...sandbox.pending,decisionMode:'auto' as const,signalSnapshot:structuredClone(signal),reason:`Auto selected ${strategy==='recovery'?'a recovery':'a sustained rise'}. ${sandbox.pending.reason}`};
-      candidates.push({intent,signal,input,cost:1-sell.cashDelta/-buy.cashDelta});
+      candidates.push({intent,signal,input,cost:1-sell.cashDelta/-buy.cashDelta,...(session.config.tennisStrategy&&sandbox.enginePlan?{plan:sandbox.enginePlan}:{})});
     }
   }
   // Advance shared observations once even if one pattern is waiting or too noisy.
@@ -1173,9 +1229,10 @@ function evaluateAutoSide(session:TennisSession,input:TennisInput,side:TradeSide
 }
 
 /** Pure reducer. Callers persist the complete returned state with one account revision/CAS. */
-export function stepTennisSession(previous: TennisSession, inputs: TennisInput[], now: number): TennisSession {
+export function stepTennisSession(previous: TennisSession, inputs: TennisInput[], now: number,projection?:WalletProjection): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
   const session = normalizePositionExitRules(structuredClone(previous));
+  bindWalletProjection(session,projection??walletProjection(previous));
   session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;
@@ -1210,8 +1267,10 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   for(const [slug,state] of Object.entries(session.footballReports))if(!current.some(input=>input.market.slug===slug&&input.source!=='REPLAY')&&(state.transition??state.report)){
     const report=(state.transition??state.report)!;
     state.assessment={...state.assessment,reportAgeMs:now-report.reportTime,receiptAgeMs:now-report.receiptTime};
-    if(['fresh','transition'].includes(state.assessment.status)&&(now-report.reportTime>45000||now-report.receiptTime>45000))
-      state.assessment={...state.assessment,status:'stale',reason:'The football report is older than 45 seconds. Waiting for fresh context.'};
+    const timingIssue=report.sources?footballSourceTimingIssue(report.sources,now):now-report.reportTime>FOOTBALL_CONTEXT_MAX_AGE_MS||now-report.receiptTime>FOOTBALL_CONTEXT_MAX_AGE_MS?
+      {status:'stale' as const,reason:'The football report is older than 45 seconds. Waiting for fresh context.'}:null;
+    if(['fresh','transition'].includes(state.assessment.status)&&timingIssue)
+      state.assessment={...state.assessment,...timingIssue};
   }
   session.coverage ??= {};
   session.quotes ??= {};
@@ -1362,6 +1421,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       candidates.sort((a,b)=>a.intent.createdAt-b.intent.createdAt||a.cost-b.cost||a.intent.slug.localeCompare(b.intent.slug)||a.intent.side.localeCompare(b.intent.side)||a.intent.signalConfig!.strategy.localeCompare(b.intent.signalConfig!.strategy));
       const chosen=candidates[0];
       if(chosen){
+        if(session.config.tennisStrategy&&chosen.plan)session.enginePlan=chosen.plan;
         session.pending=chosen.intent;session.signals[keyFor(chosen.intent.slug,chosen.intent.side)]=chosen.signal;
         record(session,now,chosen.intent.slug,chosen.intent.side,'SIGNAL','ENTRY_PENDING',`${chosen.intent.reason} Checking a later fresh book before entry.`,chosen.input,{strategy:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum',autoRules:chosen.signal.autoRules});
       }else{
@@ -1374,7 +1434,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
       }
       if((session.decisionSequence??0)>beforeSequence)session.autoStatus={time:now,checked:autoChecked,qualified:candidates.length,reason:session.lastReason,...(chosen?{selected:chosen.intent.signalConfig!.strategy as 'recovery'|'momentum'}:{})};
     }
-    if(session.config.evidenceGate==='evidence-v1'&&!session.pending){
+    if(session.config.evidenceGate==='evidence-v1'&&!session.config.tennisStrategy&&!session.pending){
       stageEnginePlan(session,evaluated,now);
       // The engine's plan explains the bot's state better than a refused legacy scalp.
       if(!session.pending&&session.enginePlan&&session.enginePlan.time===now)session.lastReason=`Decision engine: ${session.enginePlan.summary}`;
@@ -1386,14 +1446,15 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   return session;
 }
 
-export function applyTennisAction(previous: TennisSession, action: TennisAction, inputs: TennisInput[], now: number): TennisSession {
+export function applyTennisAction(previous: TennisSession, action: TennisAction, inputs: TennisInput[], now: number,projection?:WalletProjection): TennisSession {
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
   if ('sessionId' in action && action.sessionId && action.sessionId !== previous.id) return previous;
   if (action.action==='acknowledge-loss'&&(action.sessionId!==previous.id||!action.commandId)) return previous;
   if (action.commandId && previous.commandIds.includes(action.commandId)) return previous;
   if (action.action==='acknowledge-loss'&&action.expectedLossAcknowledgement!==(previous.lossCheckpoint?.commandId??null)) return previous;
-  if (action.action === 'tick') return stepTennisSession(applyOctopusPicks(previous, action.octopus, now), inputs, now);
+  if (action.action === 'tick') return stepTennisSession(applyOctopusPicks(previous, action.octopus, now), inputs, now,projection??walletProjection(previous));
   let session = normalizePositionExitRules(structuredClone(previous));
+  bindWalletProjection(session,projection??walletProjection(previous));
   session.config = normalizeTennisConfig(session.config);
   session.revision++;
   session.lastTickAt = now;
@@ -1431,8 +1492,9 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     const config = { ...session.config, ...action.config, version: 'tennis-recovery-v1' as const };
     const issue = validateTennisConfig(config);
     if (issue) return reject(issue);
-    session.config = structuredClone(config); session.cash = config.startingCash; session.startedAt = now;
-    session.equity = [{ time: now, price: config.startingCash }];
+    if(walletProjection(session)&&config.startingCash!==walletProjection(session)!.startingCash)return reject('The shared starting balance cannot be changed by starting a bot.');
+    session.config = structuredClone(config);if(!walletProjection(session))session.cash = config.startingCash;session.startedAt = now;
+    if(!walletProjection(session))session.equity = [{ time: now, price: config.startingCash }];
     session.status = 'running'; session.lastReason = 'Paper bot started. Gathering fresh live-match quotes.';
     beginObservation(session, action.runForMs, now);
     return stepTennisSession(session, inputs, now);

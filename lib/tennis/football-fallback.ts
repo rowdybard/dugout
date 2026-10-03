@@ -36,17 +36,25 @@ export async function loadEspnContext(market:TennisMarket,previous:EspnContextCa
 
 /** The primary owns every market/scoreboard field; ESPN can contribute only missing drive facts. */
 export function withEspnFootballFallback(market:TennisMarket,cached:EspnContextCache|undefined,now:number):TennisMarket{
+  return footballReportsWithFallback(market,cached,now).reportMarket;
+}
+
+/** Keep display history separate from entry evidence, including on the very first delayed response. */
+export function footballReportsWithFallback(market:TennisMarket,cached:EspnContextCache|undefined,now:number):{reportMarket:TennisMarket;displayMarket:TennisMarket}{
+  const same=(value:TennisMarket)=>({reportMarket:value,displayMarket:value});
   const mapping=espnFootballMapping(market);
-  if(!mapping)return market;
+  if(!mapping)return same(market);
   const primarySource=market.contextUpdatedAt===null?undefined:{provider:'POLYMARKET' as const,eventId:market.eventId,reportTime:market.contextUpdatedAt,receiptTime:market.observedAt};
-  const native=primarySource?{...market,footballSources:{scoreboard:primarySource,drive:{...primarySource}}}:market;
-  if(!market.live||market.ended||!market.active||market.football?.phase==='between-plays')return native;
+  const lastScore=cached?.report?.lastScore;
+  const scored=lastScore&&lastScore.score===market.score?{...market,footballLastScore:lastScore}:market;
+  const native=primarySource?{...scored,footballSources:{scoreboard:primarySource,drive:{...primarySource}}}:scored;
+  if(!market.live||market.ended||!market.active||market.football?.phase==='between-plays')return same(native);
   const primary=assessFootballContext(market,now);
-  if(primary.assessment.status==='fresh')return native;
+  if(primary.assessment.status==='fresh')return same(native);
   // A complete but old primary report is not repaired by borrowing another provider's possession.
-  if(primary.report)return native;
+  if(primary.report)return same(native);
   const report=cached?.report;
-  const missing=(reason:string,sources?:FootballSources):TennisMarket=>({...native,football:null,footballSourceIssue:reason,...(sources?{footballSources:sources}:{})});
+  const missing=(reason:string,sources?:FootballSources)=>same({...native,football:null,footballSourceIssue:reason,...(sources?{footballSources:sources}:{})});
   if(!report)return missing(cached?.error??'Polymarket has not supplied drive details. Waiting for ESPN.');
   const evidence=report.provenance;
   const sources:FootballSources|undefined=market.contextUpdatedAt!==null&&evidence.reportTime!==null?{
@@ -59,10 +67,14 @@ export function withEspnFootballFallback(market:TennisMarket,cached:EspnContextC
   if(cached?.error)return missing(cached.error,sources);
   if(report.status!=='drive'||!report.football)return missing(report.reason??'ESPN is between plays; waiting for a complete drive report.',sources);
   if(!sources)return missing('Waiting for verified timestamps from both game feeds.');
+  if(report.score!==market.score||report.period!==market.period)return missing('ESPN drive details do not match the Polymarket score and quarter.',sources);
   const partial=market.football,drive=report.football;
   if(partial&&(partial.possessionTeamId&&partial.possessionTeamId!==drive.possessionTeamId||partial.down!==null&&partial.down!==drive.down||partial.yardsToGo!==null&&partial.yardsToGo!==drive.yardsToGo||partial.fieldPosition&&(partial.fieldPosition.teamId!==drive.fieldPosition?.teamId||partial.fieldPosition.yard!==drive.fieldPosition?.yard)))
     return missing('Polymarket and ESPN disagree about the drive. Waiting for matching reports.',sources);
-  const combined={...market,football:{...drive,timeouts:market.football?.timeouts??[]},footballSources:sources};
+  const combined={...scored,football:{...drive,timeouts:market.football?.timeouts??[]},footballSources:sources};
   const assessment=assessFootballContext(combined,now);
-  return assessment.assessment.status==='fresh'?combined:missing(assessment.assessment.reason,sources);
+  if(assessment.assessment.status==='fresh')return same(combined);
+  const rejected=missing(assessment.assessment.reason,sources);
+  const validTimes=[sources.scoreboard,sources.drive].every(source=>Number.isFinite(source.reportTime)&&Number.isFinite(source.receiptTime)&&source.reportTime>=0&&source.reportTime<=source.receiptTime&&source.receiptTime<=now);
+  return validTimes?{...rejected,displayMarket:{...combined,footballSourceIssue:assessment.assessment.reason}}:rejected;
 }

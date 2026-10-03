@@ -18,9 +18,17 @@ test('matching ESPN drive supplies only missing fields; PM clock and every marke
   for(const key of ['bid','ask','execution','live','ended','active','score','period','quoteObservedAt'] as const)assert.deepEqual(result[key],market[key]);
 });
 test('score mismatch, old plays and excessive report skew never yield an executable drive',()=>{
-  const market=montanaMarket();
-  for(const result of [withEspnFootballFallback({...market,score:'10-14'},cache(),NOW),withEspnFootballFallback(market,cache(NOW-46_000),NOW),withEspnFootballFallback(market,cache(NOW-17_000),NOW)]){
+  const market=montanaMarket(),olderScoreboard=montanaMarket(NOW,NOW-15_001);
+  for(const result of [withEspnFootballFallback({...market,score:'10-14'},cache(),NOW),withEspnFootballFallback(market,cache(NOW-90_001),NOW),withEspnFootballFallback(olderScoreboard,cache(NOW),NOW)]){
     assert.equal(result.football,null);assert.ok(result.footballSourceIssue);assert.notEqual(assessFootballContext(result,NOW).assessment.status,'fresh');
+  }
+});
+test('a coherent ESPN play up to 90 seconds old can supplement the independently fresh PM clock',()=>{
+  const market=montanaMarket();
+  for(const age of [46_000,90_000]){
+    const result=withEspnFootballFallback(market,cache(NOW-age),NOW);
+    assert.equal(assessFootballContext(result,NOW).assessment.status,'fresh');assert.equal(result.football?.down,4);
+    assert.equal(result.footballSources?.drive.reportTime,NOW-age);assert.equal(result.contextUpdatedAt,market.contextUpdatedAt);
   }
 });
 test('native complete reports, explicit transitions and final status remain primary',()=>{

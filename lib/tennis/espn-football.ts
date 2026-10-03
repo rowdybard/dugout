@@ -4,6 +4,7 @@ type Side={polymarketTeamId:string;espnTeamId:string;name:string;homeAway:'home'
 export type EspnFootballMapping={eventId:string;polymarketEventId:string;kickoffAt:number;yes:Side;no:Side};
 export type EspnFootballReport={
   status:'drive'|'transition'|'unavailable';reason:string|null;score:string|null;period:string|null;football:FootballContext|null;
+  lastScore?:NonNullable<TennisMarket['footballLastScore']>;
   provenance:{eventId:string;driveId:string|null;playId:string|null;sequence:number|null;reportTime:number|null;playWallclock:number|null;metaUpdatedAt:number|null;receivedAt:number};
 };
 
@@ -28,6 +29,24 @@ const sameSide=(a:Side,b:Side)=>a.polymarketTeamId===b.polymarketTeamId&&a.espnT
 const verifiedMapping=(mapping:EspnFootballMapping)=>mapping.eventId===GAME.eventId&&mapping.polymarketEventId===GAME.polymarketEventId&&mapping.kickoffAt===GAME.kickoffAt&&
   (sameSide(mapping.yes,GAME.away)&&sameSide(mapping.no,GAME.home)||sameSide(mapping.yes,GAME.home)&&sameSide(mapping.no,GAME.away));
 
+/** Display evidence only: a historical scoring play never refreshes drive entry permission. */
+function lastScoringPlay(root:Raw,mapping:EspnFootballMapping,score:string,quarter:number,receivedAt:number):EspnFootballReport['lastScore']{
+  const scoring=list(root.scoringPlays).at(-1);if(!scoring)return undefined;
+  const playId=id(scoring.id),side=[mapping.yes,mapping.no].find(team=>team.espnTeamId===id(object(scoring.team).id));
+  const playQuarter=integer(object(scoring.period).number,1,20),away=integer(scoring.awayScore,0,200),home=integer(scoring.homeScore,0,200);
+  if(!playId||!side||playQuarter===null||playQuarter>quarter||away===null||home===null||away+'-'+home!==score)return undefined;
+  const type=object(scoring.scoringType).name,playType=object(scoring.type).text;
+  const kind:NonNullable<TennisMarket['footballLastScore']>['kind']|undefined=type==='field-goal'||playType==='Field Goal Good'?'field-goal':
+    type==='touchdown'||typeof playType==='string'&&/^(Passing|Rushing|Fumble Return|Interception Return|Kickoff Return|Punt Return|Blocked Punt) Touchdown$/.test(playType)?'touchdown':
+    type==='safety'?'safety':type==='extra-point'?'extra-point':type==='two-point-conversion'?'two-point':undefined;
+  if(!kind)return undefined;
+  const drives=object(root.drives),full=[object(drives.current),...list(drives.previous)].flatMap(drive=>list(drive.plays)).find(play=>id(play.id)===playId);
+  const reportTime=timestamp(scoring.wallclock)??timestamp(full?.wallclock);
+  // A timestamp-less scoring summary can still name the play, without inventing when it happened.
+  if(reportTime!==null&&(reportTime>receivedAt||reportTime<mapping.kickoffAt))return undefined;
+  return {teamId:side.polymarketTeamId,team:side.name,points:kind==='touchdown'?6:kind==='field-goal'?3:kind==='extra-point'?1:2,kind,score,reportTime,provider:'ESPN'};
+}
+
 /** Only the reviewed game qualifies. The outcome ordering may be away/home or home/away. */
 export function espnFootballMapping(market:TennisMarket):EspnFootballMapping|null {
   if(market.league!=='CFB'||market.eventId!==GAME.polymarketEventId||market.eventSlug!==GAME.eventSlug||market.slug!==GAME.marketSlug||timestamp(market.startTime)!==GAME.kickoffAt)return null;
@@ -44,8 +63,8 @@ export function normalizeEspnFootballReport(raw:unknown,mapping:EspnFootballMapp
   const playWallclock=timestamp(play.wallclock),metaUpdatedAt=timestamp(meta.lastUpdatedAt);
   const reportTime=playWallclock!==null&&metaUpdatedAt!==null?Math.min(playWallclock,metaUpdatedAt):null;
   const provenance={eventId:mapping.eventId,driveId:id(current.id),playId:id(play.id),sequence:integer(play.sequenceNumber,0,Number.MAX_SAFE_INTEGER),reportTime,playWallclock,metaUpdatedAt,receivedAt};
-  let score:string|null=null,period:string|null=null;
-  const reject=(reason:string,status:EspnFootballReport['status']='unavailable'):EspnFootballReport=>({status,reason,score,period,football:null,provenance});
+  let score:string|null=null,period:string|null=null,lastScore:EspnFootballReport['lastScore'];
+  const reject=(reason:string,status:EspnFootballReport['status']='unavailable'):EspnFootballReport=>({status,reason,score,period,football:null,provenance,...(lastScore?{lastScore}:{})});
   if(!verifiedMapping(mapping)||id(header.id)!==mapping.eventId||competitions.length!==1||id(competition?.id)!==mapping.eventId||timestamp(competition?.date)!==mapping.kickoffAt)return reject('ESPN did not match the verified game and kickoff.');
   const teams=list(competition.competitors);
   if(teams.length!==2||[mapping.yes,mapping.no].some(side=>teams.filter(team=>id(team.id)===side.espnTeamId&&id(object(team.team).id)===side.espnTeamId&&team.homeAway===side.homeAway).length!==1))return reject('ESPN team identities or home/away ordering did not match.');
@@ -56,6 +75,7 @@ export function normalizeEspnFootballReport(raw:unknown,mapping:EspnFootballMapp
   const awayScore=integer(away.score,0,200),homeScore=integer(home.score,0,200);
   if(awayScore===null||homeScore===null)return reject('ESPN has no complete score.');
   score=awayScore+'-'+homeScore;
+  if(Number.isFinite(receivedAt)&&receivedAt>=0)lastScore=lastScoringPlay(root,mapping,score,quarter,receivedAt);
   if(!Number.isFinite(receivedAt)||receivedAt<0||reportTime===null||playWallclock!>receivedAt||metaUpdatedAt!>receivedAt||timestamp(meta.lastPlayWallClock)!==playWallclock)return reject('ESPN play and report timestamps could not be verified.');
   let previousSequence=-1;
   const playIds=new Set<string>();
@@ -84,5 +104,5 @@ export function normalizeEspnFootballReport(raw:unknown,mapping:EspnFootballMapp
   const yard=yardsToEndzone>=50?100-yardsToEndzone:yardsToEndzone;
   const football:FootballContext={possessionTeam:side.name,possessionTeamId:side.polymarketTeamId,down,yardsToGo:distance,
     fieldPosition:{team:territory.name,teamId:territory.polymarketTeamId,yard},timeouts:[]};
-  return {status:'drive',reason:null,score,period,football,provenance};
+  return {status:'drive',reason:null,score,period,football,provenance,...(lastScore?{lastScore}:{})};
 }

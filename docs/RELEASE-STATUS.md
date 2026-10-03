@@ -2,6 +2,24 @@
 
 This records dated observations and test results; it is not a live account-status feed. Newest first.
 
+## October 3, 2026: game-report audit during Montana State–Idaho
+
+- At 03:52:21 UTC, Polymarket's scoreboard was about 2 seconds old with no drive details. ESPN supplied a correctly parsed Idaho first-and-10 at Montana State's 35, but its play was 48 seconds old. The original 45-second rule and 15-second source-gap rule both rejected it. This was not an absent ESPN feed or a field-direction parsing failure.
+- The ESPN play clock stayed at 7:11 across eight plays whose wallclock times and resulting down/field positions advanced. Its `meta.lastUpdatedAt` matched the latest play wallclock; a successful HTTP receipt was not proof of a new play. Retaining Polymarket's clock is necessary. Fetch time and ESPN's later, minute-precision `modified` value must not freshen a play.
+- At 03:54:41 UTC, the feeds briefly disagreed after Idaho scored: Polymarket showed 17–19, while ESPN bundled the touchdown and extra point as 17–20. Score disagreement and scoring/kick transitions remain reasons to wait for a complete next-play state.
+- The owner approved a 90-second ESPN report allowance and up to 90 seconds behind a matching Polymarket scoreboard. Polymarket remains at 45 seconds, as do receipt ages; ESPN may lead the scoreboard by at most 15 seconds. This allows delayed reports; it does not establish that the current possession is known in real time.
+- Audit fixes use one shared source-age policy, remove a hidden second 45-second check on cached engine reports, retain last-reported field display even before an entry-eligible report arrives, and distinguish a successful feed check from a report that cannot authorize a buy. Duplicate UI warnings are consolidated into one primary status. A failed primary request now explicitly blocks already-resting purchases; held exits continue on fresh books.
+- At 04:00:53 UTC, another read-only check found Polymarket's 17–20/Q2 scoreboard 355 seconds old and ESPN's matching drive 264 seconds old. Both HTTP requests succeeded. The owner identified this gap as the two-minute warning: an unchanged play during a stoppage is not evidence of a broken connection. The revised policy kept entries blocked and retained Idaho's last touchdown without calling the successful checks failures.
+- ESPN's conference/FCS scoreboards were also checked at 04:02:11 UTC. Both matched the event but had different last-play IDs and the same frozen 2:22 clock, with no play wallclock in those responses. Their HTTP Date cannot establish play freshness. Neither justified replacing the timestamped summary or Polymarket clock; the summary's alternate sync URL returned 404.
+- Local verification: the complete suite passed **853 tests**, followed by **2 additional passing request-failure regressions**. Main and runner TypeScript, changed-file ESLint, site production build and runner production dry-run build passed. Static React rendering checked the two tabs and a single football freshness notice. No browser or phone-width visual check was performed, as requested.
+
+## October 3, 2026: shared Football and Tennis wallet
+
+- Football and Tennis have independent focus, strategies and controls with one retained cash balance, ledger and account history. Tennis starts idle, with Auto selecting the registered Recovery or Momentum paper experiments. Opening or starting a tab does not reset the wallet.
+- Held cost, pending purchases and resting offers share one 50% account limit. Loss stops block both bots; acknowledgement retains history and the original dollar allowance. Reset balance and Sell everything apply account-wide. Existing untagged holdings and historical replay paths remain supported.
+- Regression coverage includes actual Tennis signal/stage/fill execution, independent pauses and completed-game behavior, shared reservations, exact loss boundaries, acknowledgement consent, restart windows, historical ATP exits, scoped signed commands and replay. Independent review found and fixed optional Tennis state inheriting Football's timers/orders.
+- Deployment is performed through the existing GitHub main branch and checked separately from local validation. No live account controls or balances were changed during development.
+
 ## October 3, 2026: Montana drive fallback
 
 - Polymarket's Montana State–Idaho event repeatedly returned a working scoreboard and clock with no drive state. A reviewed ESPN mapping supplies missing drive details while Polymarket retains all scoreboard and market authority.
@@ -9,6 +27,7 @@ This records dated observations and test results; it is not a live account-statu
 - Source ages appear separately; last-known drive details stay labeled. New buys wait on unusable context, while book exits and fresh Polymarket score/half exit triggers continue.
 - Verification: 787 tests passed, including native Penn State/Pitt fixtures, independent source clocks, stale/conflicting reports, field direction, turnovers, source handoffs, maker/dip buy guards and score-triggered exits. Main TypeScript, runner TypeScript, site build and runner dry-run build passed. Changed-file lint passed after its final constant-binding correction.
 - A read-only paired check at 03:30:16 UTC matched Montana correctly but found ESPN's play 54 seconds old; the combined drive was rejected. No automatic live fill is claimed. No account controls, cash or positions were changed during verification. Deployment evidence is recorded separately from these local checks.
+- Deployed commit `f5d916d`: GitHub reported successful Cloudflare builds for both `dugout` and `dugout-paper-runner`. Public read-only checks returned the expected site Access redirect and runner authentication rejection; private account contents were not inspected.
 
 ## October 2–3, 2026: Cloudflare hosting and live college football
 

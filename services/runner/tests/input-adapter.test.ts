@@ -4,6 +4,7 @@ import {PolymarketInputAdapter} from '../src/input-adapter.ts';
 import {RunnerStore} from '../src/store.ts';
 import {active,NOW,input} from './helpers.ts';
 import type {TennisInput,TennisMarket} from '../../../lib/tennis/types';
+import {applyAccountAction} from '../../../lib/tennis/account.ts';
 const marketRaw=(slug='synthetic-tennis')=>({slug,sportsMarketType:'tennis_match_winner',minimumTradeQty:1,orderPriceMinTickSize:.01,feeCoefficient:.05,active:true,status:'MARKET_STATUS_OPEN',marketSides:[{long:true,description:'Synthetic A'},{long:false,description:'Synthetic B'}]});
 const eventRaw=(slug='synthetic-tennis')=>({id:'fixture',slug:'fixture',title:'Synthetic A vs Synthetic B',active:true,live:true,ended:false,startTime:new Date(NOW).toISOString(),eventState:{updatedAt:new Date(NOW).toISOString(),live:true},markets:[marketRaw(slug)]});
 const bookRaw=(time:number)=>({marketData:{marketSlug:'synthetic-tennis',bids:[{px:{value:'0.49',currency:'USD'},qty:'1000'}],offers:[{px:{value:'0.50',currency:'USD'},qty:'1000'}],state:'MARKET_STATE_OPEN',transactTime:new Date(time).toISOString()}});
@@ -192,3 +193,32 @@ for(const [name,maxBytes] of [['event',4_000_000],['metadata',1_000_000],['leagu
     if(name==='league')assert.match(store.get<{error:string}>('discovery:ATP')!.error,/16000000 bytes/);
   });
 }
+
+test('each running bot fetches its own focus, and a paused flat bot leaves only its peer in the source selection',async(t)=>{
+  const {store}=await active();let now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const footballSlug='synthetic-football',session=store.session()!;session.status='running';session.config.leagues=['CFB'];session.config.focusSlug=footballSlug;
+  const football:TennisMarket={...input(now).market,slug:footballSlug,eventId:'900001',eventSlug:'cfb-synthetic',league:'CFB',score:'7-7',period:'Q2',clock:'10:00',contextUpdatedAt:now,
+    footballIdentity:{yesTeamId:'11',noTeamId:'22'},football:{possessionTeam:'Synthetic A',possessionTeamId:'11',down:1,yardsToGo:10,fieldPosition:{team:'Synthetic A',teamId:'11',yard:25},timeouts:[]},
+    execution:{...input(now).market.execution!,slug:footballSlug,league:'CFB'}};
+  const account=applyAccountAction(session,{action:'start',botId:'tennis',commandId:'dual-focus-start',config:{focusSlug:'synthetic-tennis'}},[],now);
+  assert.equal(account.bots?.tennis?.status,'running');store.set('focused-market:'+footballSlug,football);store.set('focused-market:synthetic-tennis',input(now).market);
+  const footballMetadata={...marketRaw(footballSlug),sportsMarketType:'football_team_full_game_winner',marketSides:[
+    {long:true,description:'Synthetic A',teamId:11,team:{id:11,name:'Synthetic A',league:'CFB',ordering:'away'}},
+    {long:false,description:'Synthetic B',teamId:22,team:{id:22,name:'Synthetic B',league:'CFB',ordering:'home'}}]};
+  const requests:string[]=[];t.mock.method(globalThis,'fetch',async(url:string)=>{
+    const source=new URL(url);requests.push(source.pathname);
+    if(source.pathname==='/v1/events')return Response.json({events:[{id:'900001',slug:'cfb-synthetic',title:'Synthetic A vs Synthetic B',startTime:new Date(NOW).toISOString(),active:true,live:true,ended:false,score:'7-7',period:'Q2',
+      eventState:{type:'football',live:true,period:'Q2',elapsed:'10:00',updatedAt:new Date(now).toISOString(),footballState:{driveState:{possessionTeamId:'11',down:1,yfd:10,fieldPosition:{teamId:'11',yard:25}}}},markets:[footballMetadata]}]},
+      {headers:{'CF-Cache-Status':'DYNAMIC'}});
+    if(source.pathname.startsWith('/v1/events/slug/'))return Response.json(eventRaw());
+    if(source.pathname.startsWith('/v1/market/slug/'))return Response.json({market:source.pathname.endsWith(footballSlug)?footballMetadata:marketRaw()});
+    if(source.pathname.endsWith('/book'))return Response.json({...bookRaw(now),marketData:{...bookRaw(now).marketData,marketSlug:source.pathname.includes(footballSlug)?footballSlug:'synthetic-tennis'}},{headers:{'CF-Cache-Status':'DYNAMIC'}});
+    throw new Error('Unexpected source route: '+source.pathname);
+  });
+  const adapter=new PolymarketInputAdapter(store,async()=>null),both=await adapter.gather(account);
+  assert.deepEqual(both.inputs.map(book=>book.market.slug).sort(),[footballSlug,'synthetic-tennis'].sort(),both.failures.join('; '));
+  now++;requests.length=0;const pausedFootball=applyAccountAction(account,{action:'pause',botId:'football',commandId:'pause-football-focus'},[],now),tennisOnly=await adapter.gather(pausedFootball);
+  assert.deepEqual(tennisOnly.inputs.map(book=>book.market.slug),['synthetic-tennis']);assert.ok(!requests.some(path=>path.includes(footballSlug)));
+  now++;requests.length=0;const pausedTennis=applyAccountAction(account,{action:'pause',botId:'tennis',commandId:'pause-tennis-focus'},[],now),footballOnly=await adapter.gather(pausedTennis);
+  assert.deepEqual(footballOnly.inputs.map(book=>book.market.slug),[footballSlug]);assert.ok(!requests.some(path=>path.includes('synthetic-tennis')));adapter.close();
+});

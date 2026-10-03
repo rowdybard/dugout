@@ -8,6 +8,9 @@ import {signRunnerRequest} from '../../../lib/runner/protocol.ts';
 import {active,activeStoppedLoss,OWNER,EPOCH,NOW,SECRET,input} from './helpers.ts';
 import type {InputAdapter} from '../src/input-adapter';
 import type {RunnerStore} from '../src/store';
+import {createTennisSession,defaultTennisConfig} from '../../../lib/tennis/engine.ts';
+import {accountBotView} from '../../../lib/tennis/account.ts';
+import type {TennisSession} from '../../../lib/tennis/types.ts';
 
 // Load the actual Worker entry with only the runtime base class substituted.
 // All reducer, signing, SQL transactions and request dispatch remain real.
@@ -18,7 +21,7 @@ new Function('require','module','exports',ts.transpileModule(readFileSync(filena
   (id:string)=>id==='cloudflare:workers'?{DurableObject:MockDO}:requireFromWorker(id),moduleObject,moduleObject.exports);
 type TestDO={fetch(request:Request):Promise<Response>;alarm():Promise<void>;store:RunnerStore;adapter:InputAdapter};
 const worker=moduleObject.exports as {OwnerPaperRunner:new(ctx:unknown,env:unknown)=>TestDO;default:{fetch(request:Request,env:unknown):Promise<Response>}};
-async function setup(stoppedLoss=false){const fixture=stoppedLoss?await activeStoppedLoss():await active();let alarm:number|null=null;let writes=0;const storage={...fixture.storage,getAlarm:async()=>alarm,setAlarm:async(value:number)=>{alarm=value;writes++;},deleteAlarm:async()=>{alarm=null;writes++;}};
+async function setup(stoppedLoss=false,session?:TennisSession){const fixture=session?await active(session,{journal:session.ledger.map(entry=>({id:OWNER+':'+entry.id,kind:'execution',value:entry,time:entry.time})),observations:[]}):stoppedLoss?await activeStoppedLoss():await active();let alarm:number|null=null;let writes=0;const storage={...fixture.storage,getAlarm:async()=>alarm,setAlarm:async(value:number)=>{alarm=value;writes++;},deleteAlarm:async()=>{alarm=null;writes++;}};
   const env={RUNNER_OWNER_ID:OWNER,RUNNER_HMAC_SECRET:SECRET,RUNNER_ENGINE_VERSION:'synthetic-build'},instance=new worker.OwnerPaperRunner({storage,waitUntil:()=>{}},env);
   return {...fixture,instance,env,alarm:()=>alarm,writes:()=>writes};}
 async function request(instance:TestDO,path:string,value?:unknown){const body=value===undefined?'':JSON.stringify(value),url='https://runner.invalid'+path,method=value===undefined?'GET':'POST';return instance.fetch(new Request(url,{method,headers:await signRunnerRequest(SECRET,url,method,body,OWNER,EPOCH),...(body?{body}:{})}));}
@@ -88,4 +91,74 @@ test('signed loss acknowledgement requires explicit session and command identiti
   assert.equal((await request(f.instance,'/v1/command',{command:{...valid,sessionId:'different-session'}})).status,409);
   assert.equal((await request(f.instance,'/v1/command',{command:{...valid,expectedLossAcknowledgement:'11111111-1111-4111-8111-111111111111'}})).status,409);
   assert.deepEqual(f.instance.store.session(),before);assert.equal(f.alarm(),null);
+});
+
+const FOOTBALL='synthetic-football',TENNIS='synthetic-tennis';
+function footballInput(time:number){
+  const book=input(time);book.market={...book.market,slug:FOOTBALL,eventId:'900001',eventSlug:'cfb-synthetic',league:'CFB',score:'7-7',period:'Q2',clock:'10:00',contextUpdatedAt:time,
+    footballIdentity:{yesTeamId:'11',noTeamId:'22'},football:{possessionTeam:book.market.yesName,possessionTeamId:'11',down:1,yardsToGo:10,fieldPosition:{team:book.market.yesName,teamId:'11',yard:25},timeouts:[]},
+    execution:{...book.market.execution!,slug:FOOTBALL,league:'CFB'}};return book;
+}
+/** A reconciled, closed $8 paper loss proves starting another bot cannot restore the original $100. */
+function paidAccount(){
+  const session=createTennisSession({...defaultTennisConfig(),leagues:['CFB'],focusSlug:FOOTBALL},NOW),market=footballInput(NOW-2000).market,id='synthetic-paid-position';
+  session.status='paused';session.cash=92;session.ledger=[
+    {id:'synthetic-paid-buy',time:NOW-2000,slug:FOOTBALL,side:'YES',action:'BUY',source:'AUTOMATIC',positionId:id,reason:'Synthetic fixture',cashDelta:-10,realizedPnl:0},
+    {id:'synthetic-paid-sell',time:NOW-1000,slug:FOOTBALL,side:'YES',action:'SELL',source:'AUTOMATIC',positionId:id,reason:'Synthetic fixture',cashDelta:2,realizedPnl:-8}];
+  session.positions=[{id,slug:FOOTBALL,league:'CFB',title:market.title,side:'YES',name:market.yesName,quantity:0,initialQuantity:20,costBasis:0,entryCost:10,entryPrice:.5,entryFees:0,openedAt:NOW-2000,
+    status:'closed',closedAt:NOW-1000,exitPrice:.1,realizedPnl:-8,exitFees:0,proceeds:2,netLiquidationValue:0,liquidationQuantity:0,markedAt:NOW-1000,market}];
+  session.equity=[{time:NOW,price:92}];return session;
+}
+async function startBoth(instance:TestDO){
+  assert.equal((await request(instance,'/v1/command',{command:{action:'resume',botId:'football',commandId:'shared-football-resume'}})).status,200);
+  assert.equal((await request(instance,'/v1/command',{command:{action:'start',botId:'tennis',commandId:'shared-tennis-start',config:{focusSlug:TENNIS}}})).status,200);
+}
+
+test('signed Tennis start, pause and resume keep the existing shared wallet and Football control state',async(t)=>{
+  const f=await setup(false,paidAccount()),now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const originalId=f.instance.store.session()!.id;
+  await startBoth(f.instance);const both=f.instance.store.session()!,football=accountBotView(both,'football');
+  assert.equal(both.cash,92);assert.equal(both.id,originalId);assert.equal(both.ledger.length,2);assert.equal(both.bots?.tennis?.status,'running');assert.equal(both.status,'running');
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'pause',botId:'tennis',sessionId:both.id,commandId:'tennis-only-pause'}})).status,200);
+  const paused=f.instance.store.session()!;assert.equal(paused.status,'running');assert.equal(paused.bots?.tennis?.status,'paused');assert.equal(paused.cash,92);assert.ok(f.alarm()!==null);
+  assert.deepEqual(accountBotView(paused,'football').config,football.config);assert.deepEqual(paused.ledger,both.ledger);assert.deepEqual(paused.positions,both.positions);
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'resume',botId:'tennis',sessionId:both.id,commandId:'tennis-only-resume'}})).status,200);
+  const resumed=f.instance.store.session()!;assert.equal(resumed.cash,92);assert.equal(resumed.status,'running');assert.equal(resumed.bots?.tennis?.status,'running');assert.deepEqual(resumed.ledger,both.ledger);
+});
+
+test('background checks trade Tennis through the shared ledger while Football remains paused',async(t)=>{
+  const f=await setup(false,paidAccount());let now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'start',botId:'tennis',commandId:'tennis-background-start',config:{focusSlug:TENNIS}}})).status,200);
+  let bid=.59,ask=.60;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic Tennis book'}),async gather(){return {inputs:[input(now,bid,ask)],failures:[]};}};
+  for(let i=0;i<12;i++){now+=4000;await f.instance.alarm();}
+  for(const prices of [[.61,.62],[.64,.65],[.64,.65]]){[bid,ask]=prices;now+=5000;await f.instance.alarm();}
+  const queued=f.instance.store.session()!;assert.equal(queued.status,'paused');assert.equal(queued.cash,92);assert.equal(queued.bots?.tennis?.pending?.plan?.strategy,'tennis-momentum');
+  now+=2000;await f.instance.alarm();const filled=f.instance.store.session()!;
+  assert.equal(filled.status,'paused');assert.equal(filled.bots?.tennis?.status,'running');assert.ok(filled.cash<92);assert.equal(filled.ledger.length,3);
+  assert.equal(filled.ledger.at(-1)?.botId,'tennis');assert.equal(filled.positions.find(p=>p.status==='open')?.botId,'tennis');assert.equal(filled.positions.find(p=>p.status==='open')?.plan?.code,'EXPLORE_PAPER');
+  assert.equal(filled.cash,Math.round((100+filled.ledger.reduce((sum,row)=>sum+row.cashDelta,0))*1e6)/1e6);assert.ok(f.alarm()!==null);
+  assert.ok(f.instance.store.exportPage(null,0,500,now).records.some(row=>row.kind==='execution'&&row.value.botId==='tennis'));
+});
+
+test('a finished Football focus pauses only Football and keeps Tennis background checks scheduled',async(t)=>{
+  const f=await setup(false,paidAccount()),now=NOW+2000;t.mock.method(Date,'now',()=>now);await startBoth(f.instance);
+  const ended=footballInput(now);ended.market.ended=true;ended.market.live=false;ended.market.active=false;
+  f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic Football final'}),async gather(){return {inputs:[input(now)],failures:[],endedMarket:ended.market};}};
+  await f.instance.alarm();const account=f.instance.store.session()!;
+  assert.equal(account.status,'paused');assert.match(account.lastReason,/focused game ended/);assert.equal(account.bots?.tennis?.status,'running');assert.equal(account.cash,92);assert.ok(f.alarm()!==null);
+  assert.equal(f.instance.store.state().runner.botHealth?.tennis?.lastSuccessfulCheck,now);
+  assert.equal(f.instance.store.state().runner.botHealth?.tennis?.quoteAgeMs,0);
+  const event=f.instance.store.exportPage(null,0,500,now).records.find(row=>row.kind==='control'&&(row.value.cause as {code?:string}|undefined)?.code==='FOCUSED_GAME_ENDED');
+  assert.equal((event?.value.action as {botId?:string})?.botId,'football');
+});
+
+for(const botId of ['football','tennis'] as const)test(`pausing ${botId} during a shared slow fetch defeats the stale whole-account tick without pausing its peer`,async(t)=>{
+  const f=await setup(false,paidAccount()),now=NOW+2000;t.mock.method(Date,'now',()=>now);await startBoth(f.instance);
+  let release!:(v:{inputs:ReturnType<typeof input>[];failures:string[]})=>void,started!:()=>void;const ready=new Promise<void>(resolve=>{started=resolve;});
+  f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic shared fetch'}),gather(){started();return new Promise(resolve=>{release=resolve;});}};
+  const alarm=f.instance.alarm();await ready;
+  assert.equal((await request(f.instance,'/v1/command',{command:{action:'pause',botId,sessionId:f.instance.store.session()!.id,commandId:'concurrent-'+botId}})).status,200);
+  const paused=f.instance.store.session()!;release({inputs:[footballInput(now),input(now)],failures:[]});await alarm;
+  const after=f.instance.store.session()!;assert.deepEqual(after,paused);assert.equal(accountBotView(after,botId).status,'paused');
+  assert.equal(accountBotView(after,botId==='football'?'tennis':'football').status,'running');assert.ok(f.alarm()!==null);
 });

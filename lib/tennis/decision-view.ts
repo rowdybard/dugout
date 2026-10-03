@@ -59,8 +59,8 @@ export function decisionView(session:TennisSession,market:TennisMarket|undefined
       /paused/i.test(session.lastReason)?`${session.lastReason} Press Start when ready.`:`${session.lastReason} Entries are paused; press Start when ready.`):
     session.status==='idle'?(focus?'The paper bot has not started. Press Start to check the saved bot focus.':'Choose a bot focus, then press Start to begin paper checks.'):
     lossStopped?(canAcknowledgeLoss(session)?`The loss limit was reached. Acknowledge the loss to resume this run with another $${lossAllowance(session).toFixed(2)} loss allowance. Your balance and history stay intact.`:
-      session.cash<=0?'The loss limit was reached and no cash remains. Start a new run when ready.':'The loss limit was reached. Existing exits must finish before the loss can be acknowledged.'):
-    session.status==='stopped'?'This paper run is stopped. Its chart can still update; create a new run when ready.':
+      session.cash<=0?'The loss limit was reached and no cash remains. Reset the shared balance to begin again.':'The loss limit was reached. Existing exits must finish before the loss can be acknowledged.'):
+    session.status==='stopped'?'This bot is stopped. Press Start bot when ready; your balance and history stay saved.':
     checkStale?`The bot's last check was ${checkAge===null?'not recorded':`${Math.round(checkAge/1000)} seconds ago`}. It normally checks every few seconds; if this lasts more than a minute, reload the page.`:
     runtime?.failureReason||(offers.length?`Offering to buy ${offers.join(' or ')}. It fills only if someone sells at that price.`:session.lastReason);
   return {state,reason,quoteAge,gameAge,checkAge,checkStale,focus,side,

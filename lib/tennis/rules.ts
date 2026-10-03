@@ -13,7 +13,8 @@ export const tennisRulesSchema=z.object({
   chaosSlugs:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(6).optional(),
   octopusAuto:z.boolean().optional(),
   octopusSkip:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(30).optional(),
-  explore:z.array(z.enum(['comeback-drive'])).max(5).optional(),
+  explore:z.array(z.enum(['comeback-drive','tennis-recovery','tennis-momentum'])).max(5).optional(),
+  tennisStrategy:z.enum(['auto','recovery','momentum']).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB','MLB'])).min(1).max(5),
@@ -47,6 +48,12 @@ export function defaultLiveTennisConfig(startingCash=100):TennisConfig {
   return {...defaultTennisConfig(startingCash),strategy:'auto',decisionEngine:'local-move-v1',evidenceGate:'evidence-v1',maker:'paper-v1'};
 }
 
+/** Dedicated tennis paper experiments. The historical factory remains unchanged for saved sessions. */
+export function defaultTennisBotConfig(startingCash=100,tennisStrategy:'auto'|'recovery'|'momentum'='auto'):TennisConfig {
+  return {...defaultTennisConfig(startingCash),decisionPolicy:'price-v1',tennisStrategy,strategy:tennisStrategy,evidenceGate:'evidence-v1',
+    explore:tennisStrategy==='auto'?['tennis-recovery','tennis-momentum']:[tennisStrategy==='recovery'?'tennis-recovery':'tennis-momentum']};
+}
+
 /** Add newly introduced fields without rewriting saved balances or historical rules. */
 export function normalizeTennisConfig(config:TennisConfig):TennisConfig {
   // Old exports retain their original price-only semantics during replay.
@@ -59,6 +66,13 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   if(!Number.isFinite(startingCash)||startingCash<5||startingCash>MAX_BALANCE||Math.round(startingCash*1e6)/1e6!==startingCash)return 'Starting fake balance must be $5–$10,000 with at most six decimal places.';
   const parsed=tennisRulesSchema.safeParse(rules);
   if(!parsed.success)return `Check ${parsed.error.issues[0].path.join(' ')}: ${parsed.error.issues[0].message}`;
+  if(config.tennisStrategy){
+    if(config.strategy!==config.tennisStrategy)return 'The Tennis strategy and its entry pattern must match.';
+    if(config.evidenceGate!=='evidence-v1')return 'Tennis experiments need the evidence gate.';
+    if(config.leagues.some(league=>league!=='ATP'&&league!=='WTA'))return 'The Tennis bot only trades ATP and WTA matches.';
+    if(config.decisionEngine||config.maker||config.autoMode||config.chaosSlugs?.length||config.octopusAuto)return 'Tennis uses Recovery and Momentum experiments with one position at a time.';
+    if(config.explore?.includes('comeback-drive'))return 'Comeback drives belong to the football bot.';
+  }
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
   if((config.chaosSlugs?.length||config.octopusAuto)&&(!config.maker||config.evidenceGate!=='evidence-v1'))return 'The Octopus needs resting orders and the evidence gate: press Use decision engine first.';
   if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Octopus game can be added once.';
@@ -81,5 +95,5 @@ export function describeTennisRules(config:TennisConfig):string {
     :config.strategy==='momentum'
     ?`Follow a ${config.momentumPoints}¢ rise after ${config.momentumConfirmations} confirming quotes`
     :`Wait for a ${config.declinePoints}¢ drop, then a ${config.recoveryPoints}¢ recovery confirmed ${config.recoveryConfirmations} times`;
-  return `${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match${config.focusSlug?' in your focused game':''}. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
+  return `${config.tennisStrategy?'Paper experiments; these Tennis rules have no measured profit result yet. ':''}${entry}. Spend up to $${config.entryBudget.toFixed(2)} on a live ${config.leagues.join(' or ')} match${config.focusSlug?' in your focused game':''}. Try to exit at +${+(config.targetReturn*100).toFixed(2)}%, −${+(config.stopReturn*100).toFixed(2)}%, or after ${+(config.maxHoldMs/60000).toFixed(2)} minutes. Only enter when the spread is at most ${config.maxSpreadPoints}¢ and estimated round-trip costs stay below the loss limit.`;
 }

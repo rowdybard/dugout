@@ -12,6 +12,7 @@ import {octopusSlugs} from '../../../lib/tennis/octopus.ts';
 import {ChaosFiles,chaosLines,chaosOn,type ChaosCursor} from '../../../lib/datastore/chaos-log.ts';
 import {createSweepSession,listInput,SWEEP_EVERY_MS,SWEEP_LEAGUES,sweepAwaiting,sweepStep,sweepSummary} from '../../../lib/tennis/sweep.ts';
 import type {TennisAction,TennisInput,TennisMarket,TennisSession} from '../../../lib/tennis/types';
+import {accountBotIds,accountBotView} from '../../../lib/tennis/account.ts';
 /** Check interval before kickoff with nothing held (each check costs storage writes). */
 const PREGAME_CHECK_MS=10_000;
 
@@ -25,6 +26,8 @@ const stateResponse=(state:RunnerState)=>new Response(JSON.stringify(state),{hea
 function parseCommand(body:string):TennisAction{
   const value=json<RunnerCommand>(body),c=value?.command;
   if(!c||!['start','resume','pause','stop','reset','update-rules','exit-now','acknowledge-loss'].includes(c.action)||typeof c.commandId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(c.commandId))throw new RunnerError(400,'A supported command and unique commandId are required.');
+  if(c.botId!==undefined&&!['football','tennis'].includes(c.botId))throw new RunnerError(400,'Choose the Football or Tennis bot.');
+  if(c.action==='start'&&c.config!==undefined&&!tennisRulesPatchSchema.safeParse(c.config).success)throw new RunnerError(400,'Invalid start settings.');
   if(c.action==='acknowledge-loss'&&(typeof c.sessionId!=='string'||!/^[a-zA-Z0-9:_.-]{1,250}$/.test(c.sessionId)))throw new RunnerError(400,'The stopped paper session is required to acknowledge its loss.');
   if(c.action==='acknowledge-loss'&&c.expectedLossAcknowledgement!==null&&(typeof c.expectedLossAcknowledgement!=='string'||!/^[a-zA-Z0-9:_.-]{1,128}$/.test(c.expectedLossAcknowledgement)))throw new RunnerError(400,'The current loss acknowledgement is required. Refresh the stopped paper session.');
   if(c.action==='update-rules'&&!tennisRulesPatchSchema.safeParse(c.rules).success)throw new RunnerError(400,'Invalid rule update.');
@@ -116,8 +119,9 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
    * no watched game live) the runner checks every 10 s; once a game is live, or anything is held or pending, every 2.5 s.
    */
   private delay(session:TennisSession){
-    const watched=[session.config.focusSlug,...octopusSlugs(session)].filter((slug):slug is string=>!!slug);
-    const busy=session.status==='stopping'||!!session.pending||session.positions.some(position=>position.status==='open');
+    const bots=accountBotIds(session).map(botId=>accountBotView(session,botId));
+    const watched=[...bots.filter(bot=>bot.status==='running'||bot.status==='stopping').map(bot=>bot.config.focusSlug),...octopusSlugs(session)].filter((slug):slug is string=>!!slug);
+    const busy=bots.some(bot=>bot.status==='stopping'||!!bot.pending)||session.positions.some(position=>position.status==='open');
     const live=watched.some(slug=>this.store.get<TennisMarket>('focused-market:'+slug)?.live);
     return busy||live||!watched.length?2500:PREGAME_CHECK_MS;
   }
@@ -138,8 +142,11 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
     if(this.tickInFlight){await this.tickInFlight;return;}
     const run=async()=>{
       const before=this.store.session();if(!before||!runnable(before)){await this.schedule();return;}
-      if(before.status==='running'&&this.store.usage().estimatedRowsWritten>=this.store.usage().entryPauseAt){
-        await this.store.advance({action:'pause',sessionId:before.id,commandId:'runner-budget-'+before.id+'-'+before.revision},[],Date.now(),[],before.revision,{code:'WRITE_BUDGET'});
+      if(accountBotIds(before).some(botId=>accountBotView(before,botId).status==='running')&&this.store.usage().estimatedRowsWritten>=this.store.usage().entryPauseAt){
+        for(const botId of accountBotIds(before)){
+          const current=this.store.session()!;
+          if(accountBotView(current,botId).status==='running')await this.store.advance({action:'pause',...(current.bots?{botId}:{}),sessionId:current.id,commandId:'runner-budget-'+current.id+'-'+current.revision},[],Date.now(),[],current.revision,{code:'WRITE_BUDGET'});
+        }
         this.store.set('source',{updatedAt:Date.now(),state:'waiting',message:'New entries paused at the runner write-budget estimate. Existing exits remain managed.'});
       }
       // Persist the next wakeup before external I/O. Recovery never depends on the browser.
@@ -148,7 +155,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       try{
         const current=this.store.session()!;
         if(!runnable(current)){await this.schedule();return;}
-        const {inputs,failures,endedMarket,octopus}=await this.adapter.gather(current);
+        const {inputs,failures,endedMarket,endedMarkets,octopus}=await this.adapter.gather(current);
         this.setSource(this.adapter.health());
         // Read-only research capture of every accepted book; never delays or affects the paper step.
         const lake=(this.env as RunnerEnv&LakeBindings).LAKE;
@@ -163,10 +170,13 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
           this.chaosFiles.add(lines);this.store.set('chaos-cursor',cursor);
           this.ctx.waitUntil(this.chaosFiles.flush(lake,account).catch(()=>null));
         }
-        const finalMarket=endedMarket??inputs.find(i=>i.market.slug===after?.config.focusSlug&&i.market.ended)?.market;
-        if(after?.status==='running'&&finalMarket&&finalMarket.slug===after.config.focusSlug&&finalMarket.ended&&finalMarket.observedAt<=Date.now()&&Date.now()-finalMarket.observedAt<=45000){
-          await this.store.advance({action:'pause',sessionId:after.id,commandId:'runner-game-ended-'+after.id+'-'+after.revision},[],Date.now(),[],after.revision,{code:'FOCUSED_GAME_ENDED',market:finalMarket});
-          this.store.set('source',{updatedAt:Date.now(),state:'waiting',message:'The focused game ended. New entries are paused; existing exits remain managed.'});
+        for(const botId of after?accountBotIds(after):[]){
+          const current=this.store.session()!,bot=accountBotView(current,botId);
+          const finalMarket=[...(endedMarkets??[]),...(endedMarket?[endedMarket]:[]),...inputs.map(i=>i.market)].find(m=>m.slug===bot.config.focusSlug&&m.ended);
+          if(bot.status==='running'&&finalMarket&&finalMarket.observedAt<=Date.now()&&Date.now()-finalMarket.observedAt<=45000){
+            await this.store.advance({action:'pause',...(current.bots?{botId}:{}),sessionId:current.id,commandId:'runner-game-ended-'+current.id+'-'+current.revision},[],Date.now(),[],current.revision,{code:'FOCUSED_GAME_ENDED',market:finalMarket});
+            this.store.set('source',{updatedAt:Date.now(),state:'waiting',message:`The ${botId} game ended. Its entries are paused; existing exits and the other bot continue.`});
+          }
         }
       }catch(error){
         if(!(error instanceof RunnerError&&error.status===409))this.store.set('source',{updatedAt:Date.now(),state:'error',message:'A runner data check failed; retrying with existing limits.'});

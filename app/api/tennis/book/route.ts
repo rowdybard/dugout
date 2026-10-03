@@ -4,6 +4,8 @@ import {readTennisSession} from '@/lib/tennis/server';
 import {loadTennisInput} from '@/lib/tennis/data';
 import {watchedBookIssue} from '@/lib/tennis/chart-data';
 import type {TennisMarket} from '@/lib/tennis/types';
+import {accountBotView} from '@/lib/tennis/account';
+import {requestedBot} from '@/lib/tennis/bot-request';
 
 const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 
@@ -24,9 +26,10 @@ async function load(req:Request,signal:AbortSignal){
     if(!owner||!/^[a-zA-Z0-9_-]{8,160}$/.test(owner))return reply({error:'Sign in to your private Dugout account.'},401);
     const slug=new URL(req.url).searchParams.get('slug');
     if(!slug||!/^[-a-zA-Z0-9]{1,200}$/.test(slug))return reply({error:'Choose a verified game market.'},400);
-    const {session,ownerId}=await abortable(readTennisSession(req),signal);
+    const {session:account,ownerId}=await abortable(readTennisSession(req),signal);
     signal.throwIfAborted();
     if(ownerId!==owner)return reply({error:'The selected paper account could not be verified.'},403);
+    const session=accountBotView(account,requestedBot(req));
     // Discovery has already verified this mapping. Never put full schedule pagination on a quote request.
     const cached=await abortable(readCached<TennisMarket>(`tennis:verified:${slug}`),signal);
     signal.throwIfAborted();

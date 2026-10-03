@@ -3,11 +3,12 @@ import {packFor} from '../decision/registry.ts';
 import type {DecisionContext,PricePoint} from '../decision/context.ts';
 import type {Phase,Style} from '../decision/evidence.ts';
 import type {RiskState} from '../decision/risk.ts';
-import {QUARTER_SECONDS} from '../decision/sports/index.ts';
+import {QUARTER_SECONDS,tennisSignalKey} from '../decision/sports/index.ts';
 import type {FeatureValue} from '../decision/context.ts';
-import type {TennisInput,TennisMarket,TennisSession} from './types';
+import type {TennisConfig,TennisInput,TennisMarket,TennisSession,TennisSignal} from './types';
 import type {NoTradeCode} from '../decision/why.ts';
 import {dayRiskPnl,lossAllowance,sessionPnl} from './loss-limit.ts';
+import {walletCommitments,walletProjection} from './wallet-risk.ts';
 
 /**
  * Adapter between the paper bot's session/inputs and the decision engine (lib/decision).
@@ -18,8 +19,9 @@ import {dayRiskPnl,lossAllowance,sessionPnl} from './loss-limit.ts';
 export type PlanEntry={
   strategy:string;strategyVersion:string;style:Style;phase:Phase;
   /** hold-to-settlement: held to the final. drive: sold when the football drive ends, at the stop, or at the time limit. */
-  exit:'hold-to-settlement'|'drive';
+  exit:'hold-to-settlement'|'drive'|'scalp';
   drive?:{stopReturn:number;maxHoldMs:number};
+  scalp?:{targetReturn:number;stopReturn:number;maxHoldMs:number};
   /** The setup this entry traded (one entry per setup, lib/decision/strategies.ts Proposal.setupKey). */
   setupKey?:string;
   code:string;evidence:string|null;pack:string;stake:number;reason:string;
@@ -42,10 +44,11 @@ export function sessionEngine(session:TennisSession):{engine:Engine}|{error:stri
   const entry=packFor(session.config.evidencePack);
   if(!entry)return {error:`Evidence pack ${session.config.evidencePack} is not loaded on this host. New entries are blocked until it is.`};
   const cap=Math.min(100,session.config.startingCash*0.25);
+  const exposureCap=walletProjection(session)?walletCommitments(session).cap:cap;
   const lossLimit=lossAllowance(session);
   return {engine:createEngine({pack:entry.pack,trust:entry.trust,
     sizing:{bankroll:session.config.startingCash,kellyFraction:0.25,maxStake:Math.min(session.config.entryBudget,cap),maxBankrollFraction:0.25,paperStake:session.config.entryBudget},
-    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:cap,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
+    risk:{maxDailyLoss:lossLimit,maxSessionLoss:lossLimit,maxOpenExposure:exposureCap,maxTradesPerDay:20,maxDataAgeMs:session.config.maxBookAgeMs}})};
 }
 
 /**
@@ -155,13 +158,25 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
     history,events:session.gameTape?.[market.slug]??[]};
 }
 
+/** Only the existing state machines can supply a confirmed Tennis snapshot; the registered plugs then gate it. */
+export function tennisSignalContext(session:TennisSession,input:TennisInput,now:number,side:'YES'|'NO',signal:TennisSignal,config:TennisConfig):DecisionContext {
+  const pattern=config.strategy==='momentum'?'momentum':'recovery',key=side==='YES'?'yes':'no';
+  const required=pattern==='recovery'?config.recoveryConfirmations:config.momentumConfirmations;
+  const values:Record<string,FeatureValue|null>={confirmed:signal.phase===(pattern==='recovery'?'RECOVERING':'RISING')&&signal.confirmations>=required,
+    observedAt:signal.lastObservedAt??null,setupAt:signal.dipAt??null,windowMs:config.baselineWindowMs,baseline:signal.baseline??null,baselineBid:signal.baselineBid??null,
+    lastBid:signal.lastBid??null,lastPrice:signal.lastPrice??null,trough:signal.trough??null,troughBid:signal.troughBid??null,confirmations:signal.confirmations,requiredConfirmations:required,
+    declinePoints:config.declinePoints,recoveryPoints:config.recoveryPoints,momentumPoints:config.momentumPoints,
+    targetReturn:config.targetReturn,stopReturn:config.stopReturn,maxHoldMs:config.maxHoldMs};
+  return {...decisionContext(session,input,now,marketPhase(input,now)),signals:Object.fromEntries(Object.entries(values).map(([field,value])=>[tennisSignalKey(key,pattern,field),value]))};
+}
+
 /** Risk state from the paper account, using the same realised-loss measure as the bot's own stop. */
 export function sessionRisk(session:TennisSession,now:number):RiskState {
   const day=new Date(now).toISOString().slice(0,10),today=session.ledger.filter(entry=>new Date(entry.time).toISOString().slice(0,10)===day);
   const open=session.positions.filter(position=>position.status==='open');
   return {dayPnl:dayRiskPnl(session,day),
     sessionPnl:sessionPnl(session),
-    openExposure:open.reduce((sum,position)=>sum+position.costBasis,0),
+    openExposure:walletProjection(session)?walletCommitments(session,undefined,true).total:open.reduce((sum,position)=>sum+position.costBasis,0),
     // Resting-quote fills are many small trades by design; the trade-count limit is for taker entries.
     tradesToday:today.filter(entry=>entry.action==='BUY'&&!entry.positionId.includes(':maker:')).length,
     halted:session.status==='running'?null:`bot is ${session.status}`};

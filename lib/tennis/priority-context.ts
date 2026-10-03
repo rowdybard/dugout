@@ -1,7 +1,8 @@
 import {normalizeTennisEvent} from './normalize.ts';
-import {assessFootballContext,isFootballMarket} from './football-context.ts';
-import {loadEspnContext,withEspnFootballFallback,type EspnContextCache,type EspnSummaryFetcher} from './football-fallback.ts';
+import {assessFootballContext,footballDriveVersion,isFootballMarket} from './football-context.ts';
+import {loadEspnContext,footballReportsWithFallback,type EspnContextCache,type EspnSummaryFetcher} from './football-fallback.ts';
 import {espnFootballMapping} from './espn-football.ts';
+import {retainFootballScore} from './football-score.ts';
 import type {FootballAssessment,FootballReportState,TennisMarket} from './types';
 
 export const PRIORITY_CONTEXT_TTL_MS=3000;
@@ -20,6 +21,13 @@ export type PriorityContextDependencies={
 const message=(e:unknown)=>e instanceof Error?e.message:'The current game report is unavailable.';
 const sameGame=(a:TennisMarket,b:TennisMarket)=>a.slug===b.slug&&a.eventId===b.eventId&&a.eventSlug===b.eventSlug&&a.league===b.league&&a.yesName===b.yesName&&a.noName===b.noName&&
   (!a.footballIdentity||!!b.footballIdentity&&a.footballIdentity.yesTeamId===b.footballIdentity.yesTeamId&&a.footballIdentity.noTeamId===b.footballIdentity.noTeamId);
+const orderedDisplayDrive=(next:TennisMarket,previous:TennisMarket)=>{
+  const before=previous.footballSources?.drive,after=next.footballSources?.drive;
+  if(!after)return false;
+  if(!before||before.provider!==after.provider||before.eventId!==after.eventId)return true;
+  if(after.reportTime<before.reportTime||after.receiptTime<before.receiptTime||after.sequence!==undefined&&before.sequence!==undefined&&after.sequence<before.sequence)return false;
+  return footballDriveVersion(before)!==footballDriveVersion(after)||JSON.stringify(previous.football)===JSON.stringify(next.football);
+};
 const lastSuccessfulCheck=(record:PriorityContextRecord|null,now:number):number|null=>{
   // Legacy records have no proof of an uncached provider check; wait for the next one.
   const value=record?.successfulCheckAt??null;
@@ -32,7 +40,7 @@ const result=(record:PriorityContextRecord,now:number,cacheHit:boolean):Priority
 const unavailable=(market:TennisMarket,previous:PriorityContextRecord|null,now:number,error:string):PriorityContextRecord=>{
   const accepted=previous?.market??market;
   // Unknown context blocks context-based entries without touching quotes or ordinary risk exits.
-  const reportMarket={...accepted,football:null};
+  const reportMarket={...accepted,football:null,footballSourceIssue:error};
   return {fetchedAt:now,successfulCheckAt:lastSuccessfulCheck(previous,now),market:accepted,reportMarket,state:assessFootballContext(reportMarket,now,previous?.state),error,...(previous?.espn?{espn:previous.espn}:{})};
 };
 
@@ -81,10 +89,12 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
     const candidates=normalizeTennisEvent(event,market.league,receivedAt).filter(candidate=>sameGame(market,candidate));
     if(candidates.length!==1||!candidates[0].footballIdentity?.yesTeamId||!candidates[0].footballIdentity.noTeamId||candidates[0].footballIdentity.yesTeamId===candidates[0].footballIdentity.noTeamId)throw new Error('The current report did not match this game and its explicit team identities.');
     const checkedAt=deps.now();
-    const reportMarket=deps.fetchEspn?withEspnFootballFallback(candidates[0],espn,checkedAt):candidates[0];
+    const composed=deps.fetchEspn?footballReportsWithFallback(candidates[0],espn,checkedAt):{reportMarket:candidates[0],displayMarket:candidates[0]};
+    let reportMarket=composed.reportMarket;
     // Another caller may have accepted a newer provider report while this request was in flight.
     const latest=await deps.read(key);
     if(latest&&sameGame(market,latest.market)&&sameGame(market,latest.reportMarket)&&(!previous||latest.fetchedAt>previous.fetchedAt))previous=latest;
+    reportMarket=retainFootballScore(reportMarket,previous?.market);
     const state=assessFootballContext(reportMarket,checkedAt,previous?.state??assessFootballContext(market,checkedAt));
     const oldMarket=previous?.market??market;
     const ordered=reportMarket.contextUpdatedAt!==null&&Number.isFinite(reportMarket.contextUpdatedAt)&&reportMarket.contextUpdatedAt<=receivedAt&&
@@ -97,7 +107,11 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
       accepted={...reportMarket,football:oldMarket.football,footballSourceIssue:reportMarket.footballSourceIssue??state.assessment.reason,footballSources:{...oldMarket.footballSources,
         scoreboard:{provider:'POLYMARKET',eventId:reportMarket.eventId,reportTime:reportMarket.contextUpdatedAt!,receiptTime:reportMarket.observedAt}}};
     }
-    const record:PriorityContextRecord={fetchedAt:checkedAt,successfulCheckAt:receivedAt,market:accepted,reportMarket,state,error:reportMarket.footballSourceIssue??(state.assessment.status==='conflicting'?state.assessment.reason:null),...(espn?{espn}:{})};
+    if(ordered&&state.assessment.status!=='conflicting'&&composed.displayMarket!==composed.reportMarket&&orderedDisplayDrive(composed.displayMarket,oldMarket)){
+      // A correctly identified delayed play can inform the field without ever reaching an entry check.
+      accepted={...composed.displayMarket,footballLastScore:reportMarket.footballLastScore};
+    }
+    const record:PriorityContextRecord={fetchedAt:checkedAt,successfulCheckAt:receivedAt,market:accepted,reportMarket,state,error:reportMarket.footballSourceIssue?espn?.error??null:null,...(espn?{espn}:{})};
     await deps.write(key,record);
     return {...record,successfulCheckAt:receivedAt,assessment:state.assessment,cacheHit:false};
   }catch(error){
@@ -113,6 +127,7 @@ export function marketWithPriorityReport(stored:TennisMarket,report:PriorityCont
   return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&latest.active,
     score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,tournament:latest.tournament,
     footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,
+    footballLastScore:latest.footballLastScore,
     observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt};
 }
 

@@ -17,7 +17,7 @@ export function marketWithWatchedContext(stored:TennisMarket,latest:TennisMarket
     !Number.isFinite(latest.observedAt)||latest.observedAt>now+CLOCK_SKEW_MS||latest.contextUpdatedAt===null||!Number.isFinite(latest.contextUpdatedAt)||latest.contextUpdatedAt>latest.observedAt||
     stored.contextUpdatedAt!==null&&(latest.contextUpdatedAt<stored.contextUpdatedAt||latest.contextUpdatedAt===stored.contextUpdatedAt&&(latest.observedAt<stored.observedAt||latest.observedAt===stored.observedAt&&!newerDrive&&!sourceIssueChanged)))return stored;
   return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&stored.execution?.active===true&&latest.active,
-    score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,tournament:latest.tournament,
+    score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,footballLastScore:latest.footballLastScore??(stored.footballLastScore?.score===latest.score?stored.footballLastScore:undefined),tournament:latest.tournament,
     observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt};
 }
 const validPrice=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;

@@ -287,3 +287,11 @@ body:has(.tennis-app){background:#17191e}
 /* Octopus: red Experimental label */
 .tennis-tag.tennis-experimental{color:#f3b7bb;border:1px solid #b5454d;background:#4a1f23}
 .tennis-chaos-games small .tennis-tag{font-size:10px;padding:1px 6px;margin-right:4px}
+
+.tennis-bot-tabs{display:flex;gap:6px;padding:18px 40px 0}
+.tennis-bot-tabs button{display:flex;align-items:center;gap:9px;background:var(--dg-surface);border:1px solid var(--dg-line-2);border-radius:7px;padding:10px 15px;color:var(--dg-muted);font-size:var(--fs-sm);font-weight:650;min-height:44px}
+.tennis-bot-tabs button span{font-size:var(--fs-xs);font-weight:400}
+.tennis-bot-tabs button[aria-selected=true]{color:var(--dg-accent);border-color:var(--dg-accent);background:var(--dg-surface-2)}
+.tennis-bot-tabs+.tennis-main{padding-top:22px}
+@media(max-width:1050px){.tennis-bot-tabs{padding-left:25px;padding-right:25px}}
+@media(max-width:720px){.tennis-bot-tabs{padding:16px 18px 0}.tennis-bot-tabs button{flex:1;justify-content:center;padding:9px 10px}.tennis-bot-tabs button span{display:none}}

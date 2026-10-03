@@ -3,7 +3,8 @@ import {readRunnerOwnedSession,type RunnerBindings} from '../runner/sites-proxy'
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
 import {siteOwnerEnabled,type SiteOwnerBindings} from '../server/owner-access';
-import {createTennisSession,stepTennisSession,applyTennisAction} from './engine';
+import {createTennisSession} from './engine';
+import {accountBotIds,accountBotView,applyAccountAction,stepAccountSession} from './account';
 import {defaultLiveTennisConfig,normalizeTennisConfig} from './rules';
 import {normalizePositionExitRules} from './football-context';
 import {applyOctopusPicks,octopusPickDue,octopusSlugs,pickOctopusGames} from './octopus.ts';
@@ -14,7 +15,7 @@ import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} 
 
 /** Browser-mode runtime. The signed live stream is offered only to the pinned site owner. */
 export function tennisRuntime(ownerId:string):TennisRuntime {
-  return {mode:'browser',intervalMs:2500,backgroundConnected:false,
+  return {mode:'browser',intervalMs:2500,backgroundConnected:false,supportedBots:['football','tennis'],
     streamConfigured:!!polymarketSecrets(env as unknown as Record<string,unknown>)&&siteOwnerEnabled(ownerId,env as unknown as SiteOwnerBindings),
     description:'Paper checks run while this page is open and visible. Keep it open to manage exits.'};
 }
@@ -40,6 +41,16 @@ async function withDeadline<T>(promise:Promise<T>,ms:number,message='Tennis disc
 }
 
 export async function gatherTennisInputs(session:TennisSession,action:TennisAction){
+  const ids=accountBotIds(session);
+  if(ids.length===1)return {...await gatherBotInputs(session,action),botCursors:undefined};
+  const gathered=await Promise.all(ids.map(async botId=>({botId,...await gatherBotInputs(accountBotView(session,botId),{...action,botId})})));
+  const football=gathered.find(value=>value.botId==='football')!;
+  return {inputs:[...new Map(gathered.flatMap(value=>value.inputs).map(input=>[input.market.slug,input])).values()],
+    failures:gathered.flatMap(value=>value.failures.map(message=>`${value.botId==='tennis'?'Tennis':'Football'}: ${message}`)),cursor:football.cursor,octopus:football.octopus,
+    botCursors:Object.fromEntries(gathered.map(value=>[value.botId,value.cursor]))};
+}
+
+async function gatherBotInputs(session:TennisSession,action:TennisAction){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis data deadline','TimeoutError')),9500);
   const chosen=new Map<string,{market:TennisMarket;allowRest:boolean;lastContext?:TennisMarket}>(),failures:string[]=[];
   let cursor=session.scanCursor??0,octopus:string[]|undefined;
@@ -114,12 +125,15 @@ async function persist(loaded:Loaded,next:TennisSession,action:TennisAction,inpu
   for(const e of next.ledger)if(!knownLedger.has(e.id))addJournal(`${next.id}:${e.id}`,'execution',{...e,configVersion:next.config.version},e.time);
   for(const [positionId,shadow] of Object.entries(next.shadowExits??{}))if(JSON.stringify(shadow)!==JSON.stringify(old.shadowExits?.[positionId]))
     addJournal(`${next.id}:shadow:${positionId}:${revision}`,'shadow-exit',shadow,Date.now());
+  for(const [positionId,shadow] of Object.entries(next.bots?.tennis?.shadowExits??{}))if(JSON.stringify(shadow)!==JSON.stringify(old.bots?.tennis?.shadowExits?.[positionId]))
+    addJournal(`${next.id}:shadow:${positionId}:${revision}`,'shadow-exit',{...shadow,botId:'tennis'},Date.now());
   if(action.commandId)addJournal(`command:${action.commandId}`,'control',{fingerprint:JSON.stringify(action),action,sessionId:next.id},Date.now());
   if(next.id!==old.id){addJournal(`archive:${old.id}`,'archive',old,Date.now());addJournal(`config:${next.id}`,'config',next.config,Date.now());}
   if(JSON.stringify(next.config)!==JSON.stringify(old.config))addJournal(`rules:${next.id}:${next.rulesRevision??0}:${revision}`,'config',{before:old.config,after:next.config,rulesRevision:next.rulesRevision??0,source:'USER'},Date.now());
+  if(next.bots?.tennis&&JSON.stringify(next.bots.tennis.config)!==JSON.stringify(old.bots?.tennis?.config))addJournal(`rules:${next.id}:tennis:${next.bots.tennis.rulesRevision??0}:${revision}`,'config',{botId:'tennis',before:old.bots?.tennis?.config??null,after:next.bots.tennis.config,rulesRevision:next.bots.tennis.rulesRevision??0,source:'USER'},Date.now());
   // Capture each decision's exact input once. Shared market rows contain no account data.
   const usedBooks=new Set(next.decisions.filter(d=>!knownDecisions.has(d.id)).map(d=>`${d.slug}:${d.bookTime}`));
-  for(const shadow of Object.values(next.shadowExits??{})){
+  for(const shadow of [...Object.values(next.shadowExits??{}),...Object.values(next.bots?.tennis?.shadowExits??{})]){
     if(shadow.pending)usedBooks.add(`${shadow.slug}:${shadow.pending.bookTime}`);
     for(const fill of shadow.fills){usedBooks.add(`${shadow.slug}:${fill.signalBookTime}`);usedBooks.add(`${shadow.slug}:${fill.executionBookTime}`);}
   }
@@ -143,9 +157,10 @@ export async function updateTennisSession(req:Request,action:TennisAction){
   if('sessionId' in action&&action.sessionId&&action.sessionId!==s.id)throw new Error('The paper session changed. Refresh before sending that action.');
   if(action.action==='tick'&&now-s.lastTickAt<2000)return s;
   const needsInputs=action.action==='tick';
-  const {inputs,failures,cursor,octopus}=needsInputs?await gatherTennisInputs(s,action):{inputs:[] as TennisInput[],failures:[] as string[],cursor:s.scanCursor??0,octopus:undefined};
-  const next=action.action==='tick'?stepTennisSession(applyOctopusPicks(s,octopus,Date.now()),inputs,Date.now()):applyTennisAction(s,action,inputs,Date.now());
+  const {inputs,failures,cursor,octopus,botCursors}=needsInputs?await gatherTennisInputs(s,action):{inputs:[] as TennisInput[],failures:[] as string[],cursor:s.scanCursor??0,octopus:undefined,botCursors:undefined};
+  const next=action.action==='tick'?stepAccountSession(applyOctopusPicks(s,octopus,Date.now()),inputs,Date.now()):applyAccountAction(s,action,inputs,Date.now());
   next.scanCursor=cursor;
+  if(next.bots?.tennis&&botCursors?.tennis!==undefined)next.bots.tennis.scanCursor=botCursors.tennis;
   if(failures.length){
     const time=Date.now(),message=failures[0];
     next.decisions.push({id:crypto.randomUUID(),time,slug:'',side:'YES',action:'SKIP',code:'SOURCE',reason:message});

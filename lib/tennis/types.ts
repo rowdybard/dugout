@@ -12,7 +12,8 @@ import type {NoTradeCode} from '../decision/why';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
-export type ExplorableStrategy='comeback-drive';
+export type BotId='football'|'tennis';
+export type ExplorableStrategy='comeback-drive'|'tennis-recovery'|'tennis-momentum';
 /** Original evidence clocks. Fetching one source never refreshes the other. */
 export type FootballSources={
   scoreboard:{provider:'POLYMARKET';eventId:string;reportTime:number;receiptTime:number};
@@ -65,6 +66,7 @@ export type TennisMarket={
   football?:FootballContext|null;
   footballSources?:FootballSources;
   footballSourceIssue?:string;
+  footballLastScore?:{teamId:string;team:string;points:number;kind:'touchdown'|'field-goal'|'safety'|'extra-point'|'two-point'|'score-change';score:string;reportTime:number|null;provider:'POLYMARKET'|'ESPN'};
   footballIdentity?:{yesTeamId:string;noTeamId:string};
   /** MLB live state (lib/tennis/normalize.ts baseballContext); null when the report is incomplete. */
   baseball?:BaseballContext|null;
@@ -83,6 +85,8 @@ export type TennisCatalog={markets:TennisMarket[];updatedAt:number;errors:string
 export type TennisInput={market:TennisMarket;book:Book;receivedAt:number;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null;restReceipt?:RestBookReceipt;settlement?:number|null;settlementReceivedAt?:number};
 export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
+  /** Registered tennis experiments; absent keeps the historical reducer path. */
+  tennisStrategy?:'auto'|'recovery'|'momentum';
   decisionPolicy?:'price-v1'|'football-context-v1';
   /** Absent retains historical strategy/replay semantics. New live accounts use local-move-v1. */
   decisionEngine?:'local-move-v1';
@@ -129,6 +133,7 @@ export type TennisObservation=TennisPricePoint;
 export type TennisAutoRules={declinePoints:number;recoveryPoints:number;momentumPoints:number;noisePoints:number};
 export type TennisSignal={phase:'WARMING'|'WATCHING'|'DIP'|'RECOVERING'|'RISING'|'COOLDOWN';baseline?:number;baselineBid?:number;trough?:number;troughBid?:number;lastBid?:number;lastPrice?:number;dipAt?:number;confirmations:number;lastObservedAt?:number;cooldownUntil?:number;reason:string;autoRules?:TennisAutoRules;analysis?:OpportunityAnalysis};
 export type TennisPosition={
+  botId?:BotId;
   id:string;slug:string;league:TennisLeague;title:string;side:TradeSide;name:string;
   quantity:number;initialQuantity:number;costBasis:number;entryCost:number;entryPrice:number;entryFees:number;openedAt:number;
   status:'open'|'closed'|'settled';closedAt?:number;exitPrice?:number;
@@ -146,14 +151,18 @@ export type TennisPosition={
    * maker: inventory from resting-quote fills; settles, or is sold on Stop or the loss limit.
    * drive: engine-planned football trade; sold when the drive ends, at its stop or time limit (plan.drive).
    */
-  exitPolicy?:'hold-to-settlement'|'maker'|'drive';plan?:PlanEntry;
+  exitPolicy?:'hold-to-settlement'|'maker'|'drive'|'scalp';plan?:PlanEntry;
   /** Worst and best net return seen while open (for the scorecard), and the spread paid at entry. */
   mae?:number;mfe?:number;entrySpread?:number;
 };
-export type TennisIntent={id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
-export type TennisDecision={id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
-export type TennisLedgerEntry={id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
+export type TennisIntent={botId?:BotId;id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
+export type TennisDecision={botId?:BotId;id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
+export type TennisLedgerEntry={botId?:BotId;id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
 export type TennisSession={
+  /** Optional bot-local state. Root cash, positions, ledger and loss checkpoint are the shared account. */
+  bots?:{tennis?:TennisBotState};
+  /** Bots stopped by the current shared loss period; manual stops are independent. */
+  accountLossStops?:BotId[];
   id:string;revision:number;scanCursor?:number;decisionSequence?:number;mode:'paper';status:'idle'|'running'|'paused'|'stopping'|'stopped';
   rulesRevision?:number;coverage?:Record<string,{league:TennisLeague;time:number;live:boolean}>;
   quotes?:Record<string,{time:number;bid:number|null;ask:number|null;source:'REST'|'WEBSOCKET'|'REPLAY';sourceTime?:number|null}>;
@@ -203,7 +212,8 @@ export type TennisSession={
   decisions:TennisDecision[];ledger:TennisLedgerEntry[];equity:{time:number;price:number}[];
   rejectionCounts:Record<string,number>;evaluated:number;commandIds:string[];
 };
-export type TennisAction=
+export type TennisBotState=Omit<TennisSession,'bots'|'accountLossStops'|'id'|'revision'|'mode'|'cash'|'positions'|'ledger'|'equity'|'commandIds'|'lossCheckpoint'|'decisions'>;
+export type TennisAction=({botId?:BotId}&(
  |{action:'start';config?:Partial<TennisConfig>;runForMs?:number;commandId:string}
  |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string;
    /** tick only: Octopus auto picks chosen for this check, when due (recorded so replays are exact). */
@@ -213,10 +223,12 @@ export type TennisAction=
  |{action:'reset';bankroll:number;commandId:string;
   /** Paper only: drop open paper positions, pending orders and resting quotes instead of refusing (fake money). */
   abandon?:true}
- |{action:'update-rules';rules:Partial<Omit<TennisConfig,'startingCash'|'version'>>;expectedRulesRevision:number;sessionId:string;commandId:string};
+ |{action:'update-rules';rules:Partial<Omit<TennisConfig,'startingCash'|'version'>>;expectedRulesRevision:number;sessionId:string;commandId:string}));
 /** The all-games sweep's dashboard summary (lib/tennis/sweep.ts). */
 export type SweepSummary={updatedAt:number;games:number;open:number;measured:number;records:TradeRecord[]};
 export type TennisRuntime={mode:'browser'|'migrating'|'service';intervalMs:number;backgroundConnected:boolean;streamConfigured:boolean;description:string;
+  supportedBots?:BotId[];
+  botHealth?:Partial<Record<BotId,{lastSuccessfulCheck:number;quoteAgeMs:number|null;gameReportAgeMs:number|null}>>;
   lastSuccessfulCheck?:number;quoteAgeMs?:number|null;gameReportAgeMs?:number|null;failureReason?:string|null;
   usage?:{day:string;estimatedRowsWritten:number;alarmChecks:number;entryPauseAt:number};
   /** The runner's all-games sweep (lib/tennis/sweep.ts): shadow measurements across every open college game. */

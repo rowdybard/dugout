@@ -1,6 +1,7 @@
 import type {FootballAssessment,FootballReport,FootballReportState,FootballScoreboard,FootballSources,FootballTransition,TennisMarket,TennisSession} from './types.ts';
 
 export const FOOTBALL_CONTEXT_MAX_AGE_MS=45_000;
+export const ESPN_FOOTBALL_REPORT_MAX_AGE_MS=90_000;
 export const FOOTBALL_SOURCE_GAP_MS=15_000;
 export const isFootballMarket=(market:TennisMarket)=>market.league==='NFL'||market.league==='CFB';
 const integer=(value:unknown,min:number,max:number):value is number=>typeof value==='number'&&Number.isInteger(value)&&value>=min&&value<=max;
@@ -8,6 +9,25 @@ const facts=(report:FootballReport)=>JSON.stringify({...report,reportTime:0,rece
 
 const validClock=(time:number,receipt:number,now:number)=>Number.isFinite(time)&&Number.isFinite(receipt)&&time>=0&&receipt>=0&&time<=receipt&&receipt<=now;
 const freshClock=(time:number,receipt:number,now:number)=>validClock(time,receipt,now)&&now-time<=FOOTBALL_CONTEXT_MAX_AGE_MS&&now-receipt<=FOOTBALL_CONTEXT_MAX_AGE_MS;
+/** ESPN timestamps the last completed play; Polymarket timestamps the scoreboard update.
+ * Their source ages differ, while both actual receipt ages remain bounded to 45 seconds.
+ */
+export function footballSourceTimingIssue(sources:FootballSources,now:number):{status:'stale'|'unknown';reason:string}|null{
+  const pm=sources.scoreboard,drive=sources.drive;
+  if(!Number.isFinite(now)||!validClock(pm.reportTime,pm.receiptTime,now)||!validClock(drive.reportTime,drive.receiptTime,now))
+    return {status:'unknown',reason:'Football source report and receipt times are invalid or in the future.'};
+  if(now-pm.reportTime>FOOTBALL_CONTEXT_MAX_AGE_MS)return {status:'stale',reason:'The Polymarket scoreboard report is older than 45 seconds.'};
+  if(now-pm.receiptTime>FOOTBALL_CONTEXT_MAX_AGE_MS)return {status:'stale',reason:'The Polymarket scoreboard receipt is older than 45 seconds.'};
+  const reportLimit=drive.provider==='ESPN'?ESPN_FOOTBALL_REPORT_MAX_AGE_MS:FOOTBALL_CONTEXT_MAX_AGE_MS;
+  if(now-drive.reportTime>reportLimit)return {status:'stale',reason:`The ${drive.provider==='ESPN'?'ESPN':'Polymarket'} drive report is older than ${reportLimit/1000} seconds.`};
+  if(now-drive.receiptTime>FOOTBALL_CONTEXT_MAX_AGE_MS)return {status:'stale',reason:`The ${drive.provider==='ESPN'?'ESPN':'Polymarket'} drive receipt is older than 45 seconds.`};
+  const behind=pm.reportTime-drive.reportTime;
+  if(drive.provider==='ESPN'){
+    if(behind>ESPN_FOOTBALL_REPORT_MAX_AGE_MS)return {status:'unknown',reason:'The ESPN drive report is more than 90 seconds behind the Polymarket scoreboard.'};
+    if(behind<-FOOTBALL_SOURCE_GAP_MS)return {status:'unknown',reason:'The ESPN drive report is more than 15 seconds ahead of the Polymarket scoreboard.'};
+  }else if(Math.abs(behind)>FOOTBALL_SOURCE_GAP_MS)return {status:'unknown',reason:'The scoreboard and drive source timestamps are more than 15 seconds apart.'};
+  return null;
+}
 const scoreboardFacts=(report:FootballScoreboard)=>JSON.stringify([report.eventId,report.yesTeamId,report.noTeamId,report.score,report.period,report.clock]);
 const driveFacts=(report:FootballReport|FootballTransition)=>'phase' in report?'between-plays':JSON.stringify([report.possessionTeamId,report.down,report.yardsToGo,report.fieldPosition]);
 export const footballDriveVersion=(source:FootballSources['drive'])=>JSON.stringify([source.provider,source.eventId,source.playId??null,source.sequence??null,source.reportTime]);
@@ -54,9 +74,8 @@ function assessSourcedFootball(market:TennisMarket,now:number,previous?:Football
   if(!scoreboard)return reject(pm&&validClock(pm.reportTime,pm.receiptTime,now)&&!freshClock(pm.reportTime,pm.receiptTime,now)?'stale':'unknown','Waiting for a fresh verified Polymarket scoreboard.');
   if(market.footballSourceIssue)return reject('unknown',market.footballSourceIssue);
   if(!sources||!ds||!pm)return reject('unknown','Waiting for independently timestamped drive details.');
-  if(!validClock(ds.reportTime,ds.receiptTime,now)||!validClock(pm.reportTime,pm.receiptTime,now))return reject('unknown','Football source report and receipt times are invalid or in the future.');
-  if(!freshClock(ds.reportTime,ds.receiptTime,now)||!freshClock(pm.reportTime,pm.receiptTime,now))return reject('stale','One football source is older than 45 seconds.');
-  if(Math.abs(pm.reportTime-ds.reportTime)>FOOTBALL_SOURCE_GAP_MS)return reject('unknown','The scoreboard and drive source timestamps are more than 15 seconds apart.');
+  const timingIssue=footballSourceTimingIssue(sources,now);
+  if(timingIssue)return reject(timingIssue.status,timingIssue.reason);
   if(ds.sequence!==undefined&&!integer(ds.sequence,0,Number.MAX_SAFE_INTEGER))return reject('unknown','The drive source sequence is invalid.');
   if(ds.provider==='ESPN'){
     const mapping=sources.mapping;

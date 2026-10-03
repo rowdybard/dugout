@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {footballFieldView,FOOTBALL_FIELD_FRESH_MS,type FootballFieldMarket} from '../lib/tennis/football-field.ts';
+import {footballFieldView,footballLastScoreView,FOOTBALL_FIELD_FRESH_MS,type FootballFieldMarket} from '../lib/tennis/football-field.ts';
 import type {FootballAssessment} from '@/lib/tennis/types';
 
 const now=1_000_000;
@@ -105,11 +105,11 @@ test('a mixed field names each source and displays its own report and receipt ag
   assert.equal(v.reportAgeMs,20000);assert.equal(v.ageLabel,'Reported 20s ago');assert.equal(v.freshness,'fresh');
 });
 test('fresh clock and receipts cannot freshen a retained ESPN field',()=>{
-  const m=mixed(now-8000,now-87000),before=structuredClone(m);
+  const m=mixed(now-8000,now-97000),before=structuredClone(m);
   const assessment:FootballAssessment={status:'fresh',reason:'Earlier fresh assessment.',reportTime:now-20000,receiptTime:now-1000,reportAgeMs:20000,receiptAgeMs:1000};
   const v=footballFieldView(m,now,assessment);
   assert.equal(v.sources.clock.freshness,'fresh');assert.equal(v.sources.drive.freshness,'stale');
-  assert.equal(v.freshness,'stale');assert.equal(v.reportAgeMs,87000);
+  assert.equal(v.freshness,'stale');assert.equal(v.reportAgeMs,97000);
   assert.equal(v.possessionLabel,'Last reported possession: Clemson');assert.equal(v.lineOfScrimmage,35);
   assert.deepEqual(m,before);
 });
@@ -126,4 +126,40 @@ test('a recent clock report cannot label missing drive facts fresh',()=>{
   assert.equal(v.freshness,'unknown');assert.equal(v.sources.clock.freshness,'fresh');
   assert.equal(v.sources.drive.provider,'Not supplied');assert.equal(v.sources.drive.freshness,'unknown');
   assert.match(v.issue!,/field report/);
+});
+
+test('a verified field goal persists while the next drive is pending, with its own advancing age',()=>{
+  const m=market({football:{...market().football!,phase:'between-plays',down:null,yardsToGo:null},
+    footballLastScore:{teamId:'cal',team:'California',points:3,kind:'field-goal',score:'10–13',reportTime:now-120_000,provider:'ESPN'}});
+  const v=footballFieldView(m,now);
+  assert.equal(v.lastScore?.label,'California field goal · 10–13');
+  assert.equal(v.lastScore?.ageLabel,'2m 0s ago');assert.equal(v.lastScore?.waitingForDrive,true);
+  assert.equal(v.lineOfScrimmage,null);assert.equal(v.firstDownLine,null);
+  assert.match(v.issue!,/after the reported score/);
+  assert.equal(footballLastScoreView(m,now+60_000)?.ageLabel,'3m 0s ago');
+});
+
+test('three verified points alone never infer a field goal or change drive freshness',()=>{
+  const m=market({footballLastScore:{teamId:'clemson',team:'Clemson',points:3,kind:'score-change',score:'13–10',reportTime:now-1000,provider:'POLYMARKET'}});
+  const v=footballFieldView(m,now);
+  assert.equal(v.lastScore?.label,'Clemson scored 3 points · 13–10');
+  assert.equal(v.lastScore?.waitingForDrive,true);assert.equal(v.freshness,'fresh');
+  const advanced=market({...m,contextUpdatedAt:now-500,observedAt:now});
+  assert.equal(footballLastScoreView(advanced,now)?.waitingForDrive,false);
+  assert.equal(footballFieldView({...m,ended:true},now).lastScore?.waitingForDrive,false);
+});
+
+test('last-score banners require matching team IDs, names and non-future evidence',()=>{
+  const score:NonNullable<FootballFieldMarket['footballLastScore']>={teamId:'cal',team:'California',points:3,kind:'field-goal',score:'10–13',reportTime:now-1000,provider:'ESPN'};
+  for(const patch of [{teamId:'other'},{team:'Clemson'},{reportTime:now+1},{reportTime:NaN},{points:0}]){
+    assert.equal(footballLastScoreView(market({footballLastScore:{...score,...patch}}),now),null);
+  }
+});
+
+test('verified scorer and play type remain visible when the scoring timestamp is unverified',()=>{
+  const m=market({football:{...market().football!,phase:'between-plays'},footballLastScore:{teamId:'cal',team:'California',points:3,kind:'field-goal',score:'10–13',reportTime:null,provider:'ESPN'}});
+  const v=footballFieldView(m,now);
+  assert.equal(v.lastScore?.label,'California field goal · 10–13');
+  assert.equal(v.lastScore?.ageLabel,'Score time unverified');assert.equal(v.lastScore?.waitingForDrive,true);
+  assert.equal(v.lineOfScrimmage,null);assert.equal(v.firstDownLine,null);
 });

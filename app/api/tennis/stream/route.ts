@@ -6,6 +6,8 @@ import { getTennisCatalog } from '@/lib/tennis/data';
 import { readTennisSession } from '@/lib/tennis/server';
 import { selectTennisStreamMarkets } from '@/lib/trading/stream-types';
 import type { TennisMarket } from '@/lib/tennis/types';
+import {accountBotView} from '@/lib/tennis/account';
+import {requestedBot} from '@/lib/tennis/bot-request';
 
 /** Authenticated Site boundary; upstream is market data only and cannot submit orders. */
 export async function GET(req: Request) {
@@ -14,7 +16,7 @@ export async function GET(req: Request) {
     const denied = streamOwnerIssue(req, env as unknown as SiteOwnerBindings);
     if (denied) return denied;
     // This reuses the same authenticated owner and persisted ledger as the paper API.
-    const { session } = await readTennisSession(req);
+    const {session:account}=await readTennisSession(req),session=accountBotView(account,requestedBot(req));
     const slug = new URL(req.url).searchParams.get('slug');
     const watch = new URL(req.url).searchParams.get('watch');
     if(watch!==null&&!/^[-a-zA-Z0-9]{1,200}$/.test(watch))return Response.json({error:'Choose a valid game market.'},{status:400});

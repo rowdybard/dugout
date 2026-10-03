@@ -1,5 +1,6 @@
 export {abortable} from '../../lib/server/request-budget.ts';
 import {normalizeTennisEvent} from '../../lib/tennis/normalize.ts';
+import {createTennisSession,defaultTennisConfig} from '../../lib/tennis/engine.ts';
 import type {TennisInput,TennisMarket,TennisSession} from '../../lib/tennis/types';
 
 export const OWNER='synthetic-owner-0001';
@@ -7,7 +8,7 @@ export const state={sessionGate:null as Promise<void>|null,cacheGate:null as Pro
 export function reset(){
   const now=Date.now(),event={id:'112943',slug:'cfb-navy-uab-2026-09-26',title:'Navy vs UAB',startTime:new Date(now-3600000).toISOString(),active:true,live:true,ended:false,score:'7-0',period:'Q1',eventState:{type:'football',live:true,ended:false,period:'Q1',elapsed:'10:37',updatedAt:new Date(now-1000).toISOString(),footballState:{driveState:{possessionTeamId:'1245',down:2,yfd:12,fieldPosition:{teamId:'1157',yard:12}}}},markets:[{slug:'aec-cfb-navy-uab-2026-09-26',sportsMarketType:'football_team_full_game_winner',active:true,closed:false,status:'MARKET_STATUS_OPEN',minimumTradeQty:.01,orderPriceMinTickSize:.005,feeCoefficient:.0695,bestBidQuote:{value:'.415'},bestAskQuote:{value:'.420'},marketSides:[{long:false,description:'Blazers',teamId:1157,team:{id:1157,name:'UAB',league:'cfb',ordering:'home'}},{long:true,description:'Midshipmen',teamId:1245,team:{id:1245,name:'Navy',league:'cfb',ordering:'away'}}]}]};
   const market=normalizeTennisEvent(event,'CFB',now-500)[0];
-  state.sessionGate=null;state.cacheGate=null;state.bookGate=null;state.bookSignal=null;state.bookCalls=0;state.staleBook=false;state.owner=OWNER;state.session={id:'synthetic-session',config:{leagues:['CFB']},positions:[],pending:null,cash:100,ledger:[]} as unknown as TennisSession;
+  state.sessionGate=null;state.cacheGate=null;state.bookGate=null;state.bookSignal=null;state.bookCalls=0;state.staleBook=false;state.owner=OWNER;state.session={...createTennisSession({...defaultTennisConfig(),leagues:['CFB']},now),id:'synthetic-session'};
   state.event=event;state.sessionReads=0;state.paths=[];state.writes=[];state.error=null;state.cache.clear();state.cache.set(`tennis:verified:${market.slug}`,{value:market,updated:market.observedAt});
   return market;
 }

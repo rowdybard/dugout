@@ -1,25 +1,29 @@
 'use client';
 import {useState} from 'react';
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
-import {defaultLiveTennisConfig,describeTennisRules,normalizeTennisConfig,validateTennisConfig} from '@/lib/tennis/rules';
-import type {TennisAction,TennisConfig,TennisSession} from '@/lib/tennis/types';
+import {defaultLiveTennisConfig,defaultTennisBotConfig,describeTennisRules,normalizeTennisConfig,validateTennisConfig} from '@/lib/tennis/rules';
+import type {BotId,TennisAction,TennisConfig,TennisSession} from '@/lib/tennis/types';
 import {VISIBLE_LEAGUES} from '@/lib/tennis/leagues';
 import {tennisCommandId} from './command-id';
 import {localMoveUpgradeRules} from '@/lib/tennis/start-control';
+import {tennisStrategyRules} from './bot-controls';
 type NumberKey={ [K in keyof TennisConfig]-?:TennisConfig[K] extends number?K:never }[keyof TennisConfig];
-export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session:TennisSession;busy:boolean;error:string|null;onClose:()=>void;onAction:(action:TennisAction)=>Promise<boolean>}) {
+export function TennisRulesDialog({botId='football',session,busy,error,onClose,onAction}:{botId?:BotId;session:TennisSession;busy:boolean;error:string|null;onClose:()=>void;onAction:(action:TennisAction)=>Promise<boolean>}) {
   const [draft,setDraft]=useState(()=>normalizeTennisConfig(session.config));
   const [revision]=useState(session.rulesRevision??0),[more,setMore]=useState(false);
-  const local=draft.decisionEngine==='local-move-v1';
+  const tennis=botId==='tennis';
+  const local=!tennis&&draft.decisionEngine==='local-move-v1';
+  const visibleLeagues=tennis?(['ATP','WTA'] as const):VISIBLE_LEAGUES;
   const field=(key:NumberKey,label:string,unit:string,min:number,max:number,scale=1,step=1)=>
     <label className="tennis-rule-field" key={key}><span>{label}<small>{unit}</small></span><input type="number" aria-label={label} min={min} max={max} step={step} value={Number.isFinite(draft[key])?+(draft[key]/scale).toFixed(6):''} onChange={e=>setDraft({...draft,[key]:e.target.value===''?NaN:Number(e.target.value)*scale})}/></label>;
   const issue=validateTennisConfig(draft);
-  const apply=async()=>{const rules={...draft} as Partial<TennisConfig>;delete rules.startingCash;delete rules.version;if(await onAction({action:'update-rules',rules,expectedRulesRevision:revision,sessionId:session.id,commandId:tennisCommandId()}))onClose();};
+  const apply=async()=>{const rules={...draft} as Partial<TennisConfig>;delete rules.startingCash;delete rules.version;if(tennis)delete rules.maxSessionLossFraction;if(await onAction({action:'update-rules',rules,expectedRulesRevision:revision,sessionId:session.id,commandId:tennisCommandId()}))onClose();};
   return <Dialog open onOpenChange={open=>!open&&onClose()}><DialogContent className="tennis-market-dialog tennis-rules-dialog">
-    <DialogTitle className="tennis-dialog-title">Set limits. Let the bot decide.</DialogTitle>
-    <DialogDescription className="tennis-dialog-description">{local?'The bot measures price movement, buyer recovery, liquidity and costs locally. Set your budget and risk limits; it decides whether the evidence is sufficient.':'This run has older entry rules. Switch to the local decision engine for future entries; your balance and history stay saved.'}</DialogDescription>
-    {!local&&<><button className="tennis-secondary" onClick={()=>setDraft({...draft,...localMoveUpgradeRules(draft)})}>Use local decision engine</button><details className="tennis-details"><summary><strong>Legacy entry rules</strong></summary><div className="tennis-details-content"><div className="tennis-strategy-choices" role="group" aria-label="Legacy bot strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button className={strategy==='auto'?'is-auto':''} key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='auto'?'Legacy Auto':strategy==='recovery'?'Fixed recovery':'Fixed rise'}</b></button>)}</div></div></details></>}
-    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{VISIBLE_LEAGUES.map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':league==='MLB'?'MLB':'NFL'}</button>)}</div>
+    <DialogTitle className="tennis-dialog-title">{tennis?'Tennis rules':'Set limits. Let the bot decide.'}</DialogTitle>
+    <DialogDescription className="tennis-dialog-description">{tennis?'Choose Auto, Recovery or Momentum, then set the entry budget and exit limits. These are paper experiments using fresh executable prices.':local?'The bot measures price movement, buyer recovery, liquidity and costs locally. Set your budget and risk limits; it decides whether the evidence is sufficient.':'This run has older entry rules. Switch to the local decision engine for future entries; your balance and history stay saved.'}</DialogDescription>
+    {!tennis&&!local&&<><button className="tennis-secondary" onClick={()=>setDraft({...draft,...localMoveUpgradeRules(draft)})}>Use local decision engine</button><details className="tennis-details"><summary><strong>Legacy entry rules</strong></summary><div className="tennis-details-content"><div className="tennis-strategy-choices" role="group" aria-label="Legacy bot strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button className={strategy==='auto'?'is-auto':''} key={strategy} aria-pressed={draft.strategy===strategy} onClick={()=>setDraft({...draft,strategy})}><b>{strategy==='auto'?'Legacy Auto':strategy==='recovery'?'Fixed recovery':'Fixed rise'}</b></button>)}</div></div></details></>}
+    {tennis&&<div className="tennis-mode-choice" role="group" aria-label="Tennis strategy">{(['auto','recovery','momentum'] as const).map(strategy=><button key={strategy} aria-pressed={(draft.tennisStrategy??draft.strategy)===strategy} onClick={()=>setDraft({...draft,...tennisStrategyRules(strategy)})}>{strategy==='auto'?'Auto':strategy==='recovery'?'Recovery':'Momentum'}</button>)}</div>}
+    <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{visibleLeagues.map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':league==='MLB'?'MLB':'NFL'}</button>)}</div>
     <div className="tennis-rules-grid">
       {field('entryBudget','Dollars per trade','Maximum spend, including fees',.01,Math.min(100,draft.startingCash*.2),1,.01)}
       {!local&&field('targetReturn','Take profit at','Percent after fees',.01,100,.01,.1)}
@@ -35,13 +39,13 @@ export function TennisRulesDialog({session,busy,error,onClose,onAction}:{session
       {field('minSamples','Minimum quotes','Fresh observations needed',local?10:3,200)}
       {field('cooldownMs','Rest between trades','Seconds for this match',0,3600,1000)}
       {field('executionDelayMs','Simulated delay','Seconds plus a later fresh quote',1,30,1000)}
-      {field('maxBookAgeMs','Oldest allowed quote','Seconds',.1,local?5:30,1000,.1)}
-      {field('maxSessionLossFraction','Stop the session at','Percent lost from the starting balance',.1,50,.01,.1)}
+      {field('maxBookAgeMs','Oldest allowed quote','Seconds',.1,local||tennis?5:30,1000,.1)}
+      {!tennis&&field('maxSessionLossFraction','Stop the wallet at','Percent lost from the original starting balance',.1,50,.01,.1)}
     </div>}
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
     {local&&<p className="tennis-order-help">Profit exits follow executable gains, measured price noise and the remaining recovery scenario. There is no fixed profit-percentage trigger. Local calculations make no AI calls and do not predict the winner.</p>}
-    <p className="tennis-order-help">Paper money, live games, one position at a time. Entries are capped at 20% of the starting balance. The entry plan and original loss/time limits stay with each position; edits apply to future positions. Exits need fresh buyers and can fill beyond a loss threshold. This strategy is unproven.</p>
+    <p className="tennis-order-help">Paper money, live games, one position per bot at a time. Both bots share one wallet and its loss allowance. Entries are capped at 20% of the starting balance. The entry plan and original loss/time limits stay with each position; edits apply to future positions. Exits need fresh buyers and can fill beyond a loss threshold. This strategy is unproven.</p>
     {error&&<p className="tennis-dialog-error" role="alert">{error}</p>}
-    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...defaultLiveTennisConfig(session.config.startingCash),leagues:draft.leagues,focusSlug:draft.focusSlug})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
+    <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...(tennis?defaultTennisBotConfig(session.config.startingCash):defaultLiveTennisConfig(session.config.startingCash)),leagues:draft.leagues,focusSlug:draft.focusSlug})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
   </DialogContent></Dialog>;
 }

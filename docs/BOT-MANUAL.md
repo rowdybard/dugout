@@ -2,7 +2,7 @@
 
 This manual describes the paper bot as of **October 3, 2026**. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for its balance, rules, focus and status. [RELEASE-STATUS.md](RELEASE-STATUS.md) records dated test and deployment evidence.
 
-Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The view currently shows college football only. Its decision engine uses deterministic calculations from research evidence, not Claude, and it simulates every fill.
+Dugout is a **paper-trading dashboard** for Polymarket US sports markets, with Football and Tennis tabs. Its decision engine uses deterministic calculations, not Claude, and it simulates every fill. Tennis Recovery and Momentum are explicitly registered paper experiments, not established profitable strategies.
 - **The site:** a Cloudflare Worker behind Cloudflare Access with Google sign-in, using a D1 database.
 - **The runner:** each person's background bot is a separate Cloudflare Worker with a per-account SQLite Durable Object. Closing the page does not stop a running background bot, and a paused account does not start itself.
 
@@ -31,10 +31,18 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
   - Accounts ran on background runners during live college games.
   - Resting offers were posted, a one-sided fill occurred (Penn State, 23.76 shares at 50.5¢), and the panels showed it.
   - Issues found in that use were fixed the same day: game-report staleness, write budgets, 503s and a status flicker ([RELEASE-STATUS.md](RELEASE-STATUS.md)).
-- **Automated tests:** the full suite (718 tests on October 3) covers the engine, resting-order fills, pairing and exits, Bold's dip buy and loss limit, the runner store and protocol, and sign-in verification.
+- **Automated tests:** the full suite (853 tests on October 3, plus two subsequent request-failure regressions) covers the engine, shared wallet, independent Football/Tennis controls, source-specific game reports, resting-order fills, pairing and exits, the runner store and protocol, and sign-in verification.
 - **Not established:** that any strategy is profitable, or that real exchange fills would match paper fills. Paper results are evidence collection, not a forecast.
 
 ## Using the dashboard
+
+### Two bots, one wallet
+
+Football and Tennis use the same layout and share your existing balance, open holdings and trade history. Each has its own chosen game, settings and Start/Pause/Resume/End run controls. Tennis begins idle. Switching tabs or starting a stopped bot does not reset money or history, and one bot can keep running while the other is paused.
+
+Football has Steady, Bold and Auto. Tennis has Recovery, Momentum and Auto: Recovery waits for a price decline and recovery, while Momentum waits for a confirmed rise. Auto selects between these existing signals. Both still check executable prices, fees, available money and the saved exit rules.
+
+Together the bots reserve at most half the lower of your starting balance and current conservatively valued balance, counting holdings at cost, pending purchases and resting offers. A loss stop blocks new entries for both bots. After all exits finish, acknowledgement grants the original dollar loss allowance again and resumes the bot you selected; it keeps your balance and full history. **Sell everything now** and **Reset balance** apply to both bots. Reset is the explicit way to start a fresh wallet.
 
 ### First run
 
@@ -63,13 +71,12 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | --- | --- |
 | Pick a game | Sets the bot's focus. Allowed while shares are held: they stay managed on their own game, and new offers go to the new game. |
 | Steady / Bold / Auto | Switches the trading mode and resizes the order. Auto shows which mode it picked and why. The button lights up at once; the change is saved from the latest rules. The Octopus keeps running at the new size. |
-| Start bot / Resume | Starts an idle account or resumes a paused one. Needs a chosen game. |
+| Start bot / Resume | Starts the selected idle or ordinarily stopped bot, or resumes a paused one. Keeps the shared wallet and history. Needs a chosen game. |
 | Pause | No new entries; held shares stay managed. |
 | Sell everything now | Big button while anything is held: green when the holdings are up, red when down (neutral until priced). Pauses entries, pulls offers, and sells every held share at the best bid on the next fresh book (`exit-now`). Resume continues the run. |
-| End run | Cancels offers, sells what is held, and ends the run. |
+| End run | Cancels the selected bot's offers, sells its holdings, and ends that bot's run. The other bot can continue. |
 | Acknowledge loss and resume | After a completed loss-limit stop, resumes the same account and run without resetting cash, trades, history or rules. Each acknowledgement grants the original run's dollar loss allowance again. Needs remaining cash and a chosen game; exits must finish first. |
-| New run | After a run ends: opens Reset balance. |
-| Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold/Auto, and drops open paper trades (fake money). |
+| Reset balance | Any time, $5–$10,000. Explicitly resets the whole shared paper wallet and both bots, including open paper trades. |
 | Octopus | Either mode: the same offers on up to 6 extra games ("arms") at the mode's size and with its one-sided rules. **Auto-pick** fills free arms with open college games that are live or start within 6 h, with a listed spread of 2¢ or less. It picks the narrowest spread first, keeps current picks while they stay eligible, and re-checks every 5 minutes. **Pin** a game with the search. × removes a pinned game or skips an auto one. All resting offers together use at most 50% of the balance, and room for the main game's two offers is always kept. Removing an arm pulls its offers; shares stay managed. |
 | Download Octopus log / saved history | JSONL of Octopus events built in the browser / the full account journal export. |
 
@@ -93,7 +100,7 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 
 **When offers come down:**
 - for 30 s after each live play;
-- whenever the live game report is older than 45 s (except at **halftime**: offers may stay up while the report says halftime, for up to 20 minutes after that report);
+- whenever the required game report expires: 45 s for Polymarket, or 90 s for a verified ESPN drive with a fresh matching Polymarket scoreboard. The separate halftime policy does not make missing drive evidence fresh;
 - when the book is wider than 5¢;
 - on stale data, pause, End run, or a rule change.
 
@@ -105,7 +112,7 @@ The engine only posts where the evidence permits resting orders ([DECISION-ENGIN
 - `running`: posts offers, stages entries, manages holdings.
 - `paused`: no new entries; holdings still managed.
 - `stopping`: selling held quantity before stopping.
-- `stopped`: the run is over; New run starts another.
+- `stopped`: this bot's run ended. Start bot keeps the existing wallet; a loss stop requires acknowledgement first.
 
 **Browser mode:** the page must stay open and visible.
 
@@ -142,7 +149,7 @@ A fresh selected chart and an old **last bot quote** can coexist: they can conce
 
 ### Football field
 
-The field uses explicit team identities, possession, down, distance, field-position team/yard, score, quarter, and clock. It does not invent plays or interpolate ball movement. Under `football-context-v1`, both provider-report and receipt age must be at most **45 seconds** for entry screening. Missing mappings/facts, future times, regressing reports, and conflicting facts at the same timestamp block entry. Down zero during an incomplete kickoff report is not valid first-down context.
+The field uses explicit team identities, possession, down, distance, field-position team/yard, score, quarter, and clock. It does not invent plays or interpolate ball movement. Polymarket supplies scoreboard and clock; a reviewed ESPN mapping can fill missing drive details. Polymarket reports must be at most **45 seconds** old, ESPN drive reports at most **90 seconds**, and both receipt ages at most **45 seconds**. ESPN may lag a matching Polymarket scoreboard by up to 90 seconds, or lead it by at most 15 seconds. Missing mappings/facts, future times, regressing reports, score/quarter disagreement and conflicting facts at the same timestamp block entry. Down zero during an incomplete kickoff report is not valid first-down context. Last-known details and verified scoring summaries remain visible with their own ages while entries wait.
 
 The display can retain the last consistent facts while marking them stale/unknown/conflicting. Quotes are independent. A three-second poll cannot force a new upstream play report. Fresh compact transport can remove cache delay, but never replaces the provider timestamp or promises a play-by-play SLA.
 
@@ -268,7 +275,7 @@ Completed trades invoke the configured per-game rest for both outcomes/tracks, d
 | Execution delay | 1 second | 1–30 seconds plus a later usable book. |
 | Maximum book age | 5 seconds | Local and native reject >5 seconds; legacy shared schema permits up to 30 seconds. |
 | Session loss threshold | 20% | Positive, ≤50% of starting cash. |
-| Football report age | 45 seconds | Fixed quality-policy constant, independently for report and receipt; not a normal UI rule. |
+| Football report age | Polymarket 45 seconds; ESPN 90 seconds | Separate provider report ages; both receipts stay within 45 seconds. A new clock or fetch never resets the drive's age. |
 
 The local rules dialog hides fixed strategy/drop/rise/target inputs. Main controls are budget, loss threshold, maximum hold and spread; additional history, delay, freshness, rest and session-risk controls remain expandable. A legacy draft has an explicit Use local decision engine option; Apply is still required. Legacy dialog/schema ranges can be broader than native limits, but a rejected save does not mean the wider value was accepted.
 
@@ -588,7 +595,7 @@ A useful report includes the time, game, status-box text, the ages in its chips,
 
 - **Unproven strategies:** no strategy is proven profitable. Resting-order evidence is still being collected; paper fills are conservative and do not model queue position.
 - **Bold's extra rules:** the dip buy and loss limit were chosen by the owner on October 3, 2026 for bigger swings, not derived from evidence. Their ledger rows ("Bold dip buy", "Bold loss limit") exist so their results can be measured.
-- **Game reports:** reports come from Polymarket and can lag or pause. The 45-second gate correctly keeps live offers down when context is old.
+- **Game reports:** Polymarket and ESPN can lag or pause independently. Source-specific age limits and matching scoreboard facts keep new entries waiting when the drive cannot be used. Increasing an allowance does not make delayed data live.
 - **Provider and quotas:** provider outages, payload changes and Cloudflare quotas are external; the guards above reduce but do not remove them.
 - **Real money:** not connected (`lib/live/README.md`).
 

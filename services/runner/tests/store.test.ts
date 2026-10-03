@@ -7,6 +7,7 @@ import {OWNER,EPOCH,NOW,sqlite,migration,active,activeStoppedLoss,input,snapshot
 import type {ReplayFrame} from '../../../lib/runner/contracts';
 import type {TennisInput} from '../../../lib/tennis/types';
 import {replayFrame} from '../../../lib/runner/replay.ts';
+import {accountBotView,applyAccountAction} from '../../../lib/tennis/account.ts';
 
 test('runner freshness follows the accepted focused book, never a newer rejected receipt',async(t)=>{
   const {store}=await active();let time=NOW+2000;t.mock.method(Date,'now',()=>time);
@@ -137,6 +138,29 @@ test('indefinite service resume clears an expired browser window with an exactly
   const frames=page.records.filter(r=>r.kind==='replay').map(r=>r.value as unknown as ReplayFrame);assert.equal(frames[0].clearObservationWindow,true);
   for(const frame of frames)replay=await replayFrame(replay,frame,new Map());assert.deepEqual(replay,store.session());
   assert.deepEqual((page.records.find(r=>r.kind==='migration')?.value.sourceSnapshot as typeof source).testRun,source.testRun);
+});
+for(const botId of ['football','tennis'] as const)test(`stopped ${botId} Start clears its persisted window only after valid rules and replays exactly`,async()=>{
+  const old=snapshot();old.config.leagues=['CFB'];old.config.focusSlug='synthetic-football';
+  const source=applyAccountAction(old,{action:'start',botId:'tennis',config:{focusSlug:'synthetic-tennis'}},[],NOW);
+  source.status='stopped';source.bots!.tennis!.status='stopped';
+  source.testRun={startedAt:NOW-60000,endsAt:NOW-1,watchedMs:60000,lastCheckAt:NOW-1,startingCash:100,startingLedgerCount:0,liveSlugs:[],complete:true};
+  source.bots!.tennis!.testRun={...source.testRun};
+  const {store}=await active(source),initial=store.session()!,peerId=botId==='football'?'tennis':'football',peer=accountBotView(initial,peerId);
+  const rejected=(await store.advance({action:'start',botId,commandId:botId+'-invalid-stopped-start',config:{entryBudget:100}},[],NOW+2)).session;
+  assert.equal(accountBotView(rejected,botId).status,'stopped');assert.deepEqual(accountBotView(rejected,botId).testRun,accountBotView(initial,botId).testRun);
+  const started=(await store.advance({action:'start',botId,commandId:botId+'-valid-stopped-start'},[],NOW+3)).session;
+  assert.equal(accountBotView(started,botId).status,'running');assert.equal(accountBotView(started,botId).testRun,undefined);
+  assert.equal(started.id,initial.id);assert.equal(started.cash,initial.cash);assert.deepEqual(started.ledger,initial.ledger);
+  assert.equal(accountBotView(started,peerId).status,peer.status);assert.deepEqual(accountBotView(started,peerId).testRun,peer.testRun);
+  const page=store.exportPage(null,0,500,NOW+4),frames=page.records.filter(record=>record.kind==='replay').map(record=>record.value as unknown as ReplayFrame);
+  assert.equal(frames[0].clearObservationWindow,undefined);assert.equal(frames[1].clearObservationWindow,true);
+  let replay=initial;for(const frame of frames)replay=await replayFrame(replay,frame,new Map());assert.deepEqual(replay,started);
+  assert.deepEqual(accountBotView(page.records.find(record=>record.kind==='migration')!.value.sourceSnapshot as typeof source,botId).testRun,accountBotView(source,botId).testRun);
+  const timed=await active(source),timedInitial=timed.store.session()!,now=NOW+2;
+  const bounded=(await timed.store.advance({action:'start',botId,commandId:botId+'-timed-stopped-start',runForMs:60000},[],now)).session;
+  assert.equal(accountBotView(bounded,botId).status,'running');assert.equal(accountBotView(bounded,botId).testRun!.endsAt,now+60000);
+  const boundedFrame=timed.store.exportPage(null,0,500,now+1).records.find(record=>record.kind==='replay')!.value as unknown as ReplayFrame;
+  assert.equal(boundedFrame.clearObservationWindow,undefined);assert.deepEqual(await replayFrame(timedInitial,boundedFrame,new Map()),bounded);
 });
 test('loss acknowledgement retains account history, records one control and replays its cleared observation window',async()=>{
   const {store}=await activeStoppedLoss(),initial=store.session()!;

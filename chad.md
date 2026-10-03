@@ -2,7 +2,7 @@
 
 Updated October 3, 2026.
 
-Dugout runs a bot that practises trading college football games on Polymarket with **fake money**. It never places real bets. A paper profit isn't money you can withdraw, and a good weekend on paper doesn't prove the bot would make money for real.
+Dugout runs Football and Tennis bots that practise trading Polymarket games with **fake money**. They share one balance and trade history, with separate Start, Pause and game choices. It never places real bets. A paper profit isn't money you can withdraw, and a good weekend on paper doesn't prove the bot would make money for real.
 
 ## Getting in
 
@@ -11,15 +11,17 @@ Dugout runs a bot that practises trading college football games on Polymarket wi
 
 ## The screen, top to bottom
 
+Choose **Football** or **Tennis** at the top. Tennis starts idle, and opening it does not reset or add money. Tennis uses **Auto**, **Recovery** (a price falls and recovers) or **Momentum** (a confirmed rise). These are paper experiments. Football's modes are described below. Either bot can run while you look at the other tab.
+
 1. **Search box.** Type a team and pick a live or upcoming college game. That's the game the bot trades.
    - If it says the account is set to other sports, tap **Show college football games** once.
 2. **Bot card:**
    - the game name, and **Steady** / **Bold** / **Auto** (see below);
    - your **balance**, and **Reset balance**;
-   - the main button: **Start bot**, **Pause**, **Resume**, **Acknowledge loss and resume** or **New run**, and **End run** next to it while a run is going;
+   - the selected bot's main button: **Start bot**, **Pause**, **Resume** or **Acknowledge loss and resume**, and **End run** next to it while a run is going;
    - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
    - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now.
-3. **Game tracker:** score, clock and a drawing of the field from Polymarket's game reports. It's not live video and can lag.
+3. **Game tracker:** Football's score and clock come from Polymarket. For a verified game, ESPN can fill in missing drive details. Each feed keeps its own age. During a gap after scoring, the last known scorer and play stay visible; if only the score changed, it shows the points without guessing what happened. Tennis shows its match prices and chart.
 4. **Trades & balance:** every fill, with price, fees and result, plus a balance chart.
 5. **Settings & history** (closed by default): rules, background running, your own price key, diagnostics and downloads. You don't need any of it to get started.
 
@@ -48,10 +50,10 @@ The line under the buttons says which one it's in and why. Switching never chang
 
 - **Start bot:** pick a game first, then press it.
 - **Pause:** no new trades. Anything already held stays managed. **Resume** carries on.
-- **End run:** sells what it holds and closes the run. **New run** then starts fresh.
+- **End run:** sells that bot's holdings and stops it. **Start bot** can start it again with the same balance and history.
 - **Acknowledge loss and resume:** appears after the bot hits its loss limit and finishes selling. Keeps the same run, balance and history. Each acknowledgement allows the original dollar amount again: with a $100 start and a 20% limit, a stop at $79.94 can resume with another $20 allowance, reaching the next limit at $59.94. It never resumes a loss stop automatically.
 - **Sell everything now:** the big button that appears while the bot holds shares. It's green when they're up and red when down, and shows the amount. It sells everything at the best price on the next price check (a few seconds) and pauses the bot. Press Resume to carry on.
-- **Reset balance:** starts over at any amount from $5 to $10,000, any time. Open paper trades are dropped, which is fine because it's fake money.
+- **Reset balance:** explicitly starts the whole shared wallet over at any amount from $5 to $10,000. It resets both bots and drops open paper trades.
 - **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game.
 
 ## Leaving it running
@@ -66,7 +68,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 | **Buy offers posted** | Offers are waiting, e.g. "Offering to buy Liberty at 70¢ or Delaware at 29.5¢". Nothing happens until someone sells at that price. Most checks change nothing. |
 | **Watching** | It's checking, but the research doesn't allow a trade right now. |
 | **Bot is behind** | No check from the bot for 30–45 seconds. If it lasts more than a minute, reload the page. |
-| **Paused / Ready / Stopped** | Not trading. Press Resume, Start or New run. |
+| **Paused / Ready / Stopped** | This bot is not trading. Press Resume or Start; a loss stop needs acknowledgement first. |
 | **Loss limit hit** | Trading stopped at the loss limit. After exits finish, acknowledge the loss to continue the same run. |
 | **Managing position** | It holds shares and is handling them (see Open orders & shares). |
 
@@ -74,7 +76,7 @@ The line under the buttons says which one it's in and why. Switching never chang
 
 These are all normal. It's the bot being careful, not broken:
 - **After every play:** it pulls its offers for 30 seconds, because prices jump right after plays.
-- **Old game report:** during a live game it only posts offers while Polymarket's game report is less than 45 seconds old. Polymarket goes quiet during halftime, reviews and TV timeouts. At **halftime** the bot keeps its offers up anyway (prices are calm and no plays happen), for up to 20 minutes. If the game tracker says the report is stale, it waits, and the tracker shows the reason the last check failed.
+- **Old game report:** prices can keep moving while a drive report is delayed. Polymarket's report must stay within 45 seconds, and an ESPN drive report within 90 seconds, with matching score and quarter. A newer clock does not freshen an older drive. During gaps the tracker keeps the last known details and explains what is missing. Existing exits continue.
 - **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
 - **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.
 
@@ -85,7 +87,7 @@ Don't reset or change rules just to make it trade. If something looks wrong, not
 - **The Octopus** (red **Experimental** label, on the bot card): the bot works up to 6 extra games ("arms") at once, with the same offers and rules as your main game, at your Steady or Bold size.
   - **Auto-pick on:** it chooses calm, liquid college games itself and re-checks every 5 minutes.
   - **Your own picks:** use the search box to pin games. × removes a pinned game, or skips an auto one so it won't be picked again.
-  - **Spending limit:** all offers together use at most half your balance, and your main game always gets its offers first.
+  - **Spending limit:** both bots' holdings, queued purchases and offers together use at most half the available account limit. They cannot each spend a separate half of the same wallet.
 - **Your own Polymarket key** (Settings & history → Live prices): gives your bot instant price updates instead of a check every few seconds. Make a separate read-only key for it; it's stored encrypted and never shown again.
 - **Download Octopus log / saved history:** a full record of what the bot did, under Settings & history.
 

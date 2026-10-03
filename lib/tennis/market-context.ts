@@ -21,6 +21,6 @@ export function retainedTennisContext(stored:TennisMarket,latest:TennisMarket|nu
     stored.contextUpdatedAt!==null&&(latest.contextUpdatedAt===null||latest.contextUpdatedAt<stored.contextUpdatedAt))return stored;
   // Catalog freshness must not reopen exchange metadata or replace its rules.
   return {...stored,live:latest.live,ended:latest.ended,active:exchangeActive&&stored.execution?.active===true&&latest.active,
-    score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,tournament:latest.tournament,
+    score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,footballLastScore:latest.footballLastScore??(stored.footballLastScore?.score===latest.score?stored.footballLastScore:undefined),tournament:latest.tournament,
     observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt,history:[]};
 }

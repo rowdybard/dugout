@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assessFootballContext} from '../lib/tennis/football-context.ts';
+import {assessFootballContext,footballSourceTimingIssue} from '../lib/tennis/football-context.ts';
 import {applyTennisAction,createTennisSession,stepTennisSession} from '../lib/tennis/engine.ts';
 import {decisionContext} from '../lib/tennis/engine-plan.ts';
 import {recordGameEvents} from '../lib/tennis/research-tracking.ts';
@@ -30,7 +30,7 @@ function changedPlay(book:TennisInput,sequence:number,team:'A'|'B'='A'){
   return book;
 }
 
-test('PM clock refreshes never refresh the ESPN play time; the older component controls freshness',()=>{
+test('PM clock refreshes do not refresh ESPN play time; each source keeps its own age limit',()=>{
   const first=assessFootballContext(input().market,T0);
   const clock=input(T0+10000);clock.market.clock='9:50';
   const fresh=assessFootballContext(clock.market,T0+10000,first);
@@ -38,9 +38,60 @@ test('PM clock refreshes never refresh the ESPN play time; the older component c
   assert.equal(fresh.report?.clock,'9:50');assert.equal(fresh.scoreboard?.reportTime,T0+10000);
   const session=started();session.footballReports={[SLUG]:fresh};
   assert.equal(decisionContext(session,clock,T0+10000,'live').game?.observedAt,T0);
-  const stale=input(T0+46000);stale.market.footballSources!.scoreboard.reportTime=T0+44000;stale.market.contextUpdatedAt=T0+44000;
-  assert.equal(assessFootballContext(stale.market,T0+46000,fresh).assessment.status,'stale');
-  const gap=input(T0+15001);assert.equal(assessFootballContext(gap.market,T0+15001,first).assessment.status,'unknown');
+  const olderPlay=input(T0+46000);olderPlay.market.footballSources!.scoreboard.reportTime=T0+44000;olderPlay.market.contextUpdatedAt=T0+44000;
+  assert.equal(assessFootballContext(olderPlay.market,T0+46000,fresh).assessment.status,'fresh');
+  const boundary=input(T0+90000);
+  assert.equal(assessFootballContext(boundary.market,T0+90000,fresh).assessment.status,'fresh');
+  const expired=input(T0+90001),stale=assessFootballContext(expired.market,T0+90001,fresh);
+  assert.equal(stale.assessment.status,'stale');assert.match(stale.assessment.reason,/ESPN.*90 seconds/);
+  assert.equal(stale.scoreboard?.reportTime,T0+90001,'the fresh PM scoreboard remains available for exits');
+});
+
+test('ESPN may trail the PM clock by 90 seconds but may lead it by only 15 seconds',()=>{
+  const behind=input(T0+90000);assert.equal(footballSourceTimingIssue(behind.market.footballSources!,T0+90000),null);
+  const ahead=input(T0+16000);ahead.market.contextUpdatedAt=T0;Object.assign(ahead.market.footballSources!.scoreboard,{reportTime:T0});
+  ahead.market.footballSources!.drive.reportTime=T0+15000;
+  assert.equal(assessFootballContext(ahead.market,T0+16000).assessment.status,'fresh');
+  ahead.market.footballSources!.drive.reportTime=T0+15001;
+  const blocked=assessFootballContext(ahead.market,T0+16000);assert.equal(blocked.assessment.status,'unknown');assert.match(blocked.assessment.reason,/15 seconds ahead/);
+  const nativeGap=native(T0+16000);nativeGap.market.footballSources!.drive.reportTime=T0;
+  assert.equal(assessFootballContext(nativeGap.market,T0+16000).assessment.status,'unknown','native PM source skew retains its 15-second guard');
+});
+
+test('PM source reports and both provider receipts still expire after 45 seconds',()=>{
+  const nativeBoundary=native(T0+45000);nativeBoundary.market.contextUpdatedAt=T0;
+  nativeBoundary.market.footballSources!.scoreboard.reportTime=T0;nativeBoundary.market.footballSources!.drive.reportTime=T0;
+  assert.equal(assessFootballContext(nativeBoundary.market,T0+45000).assessment.status,'fresh');
+  const nativeExpired=structuredClone(nativeBoundary);nativeExpired.market.observedAt=T0+45001;
+  nativeExpired.market.footballSources!.scoreboard.receiptTime=T0+45001;nativeExpired.market.footballSources!.drive.receiptTime=T0+45001;
+  assert.equal(assessFootballContext(nativeExpired.market,T0+45001).assessment.status,'stale');
+  for(const provider of ['scoreboard','drive'] as const){
+    const boundary=input(T0+45000);boundary.market.footballSources![provider].receiptTime=T0;
+    if(provider==='scoreboard'){boundary.market.contextUpdatedAt=T0;boundary.market.observedAt=T0;boundary.market.footballSources!.scoreboard.reportTime=T0;}
+    assert.equal(assessFootballContext(boundary.market,T0+45000).assessment.status,'fresh');
+    const expired=structuredClone(boundary);
+    if(provider==='scoreboard'){expired.market.contextUpdatedAt=T0+1;expired.market.footballSources!.scoreboard.reportTime=T0+1;expired.market.footballSources!.scoreboard.receiptTime=T0+1;}
+    const issue=footballSourceTimingIssue(expired.market.footballSources!,T0+45002);
+    assert.equal(issue?.status,'stale');assert.match(issue?.reason??'',provider==='drive'?/ESPN drive receipt.*45 seconds/:/Polymarket scoreboard.*45 seconds/);
+    assert.equal(assessFootballContext(expired.market,T0+45002).assessment.status,'stale');
+  }
+  const driveBoundary=native(T0+45000);driveBoundary.market.footballSources!.drive.reportTime=T0;
+  // A native drive report is independently 45-second bounded even when the scoreboard is newer.
+  assert.match(footballSourceTimingIssue(driveBoundary.market.footballSources!,T0+45001)?.reason??'',/Polymarket drive report.*45 seconds/);
+});
+
+test('cached composite assessments use source limits without reapplying the oldest 45-second report cap',()=>{
+  let session=stepTennisSession(started(),[input(T0+46000)],T0+46000);
+  assert.equal(session.footballReports?.[SLUG].assessment.status,'fresh');
+  session=stepTennisSession(session,[],T0+47000);
+  assert.equal(session.footballReports?.[SLUG].assessment.status,'fresh','missing book updates do not impose a second report limit');
+  session=stepTennisSession(session,[],T0+90000);
+  assert.equal(session.footballReports?.[SLUG].assessment.status,'fresh');
+  session=stepTennisSession(session,[],T0+90001);
+  assert.equal(session.footballReports?.[SLUG].assessment.status,'stale');assert.match(session.footballReports?.[SLUG].assessment.reason??'',/ESPN.*90 seconds/);
+  let nativeSession=stepTennisSession(started(),[native(T0)],T0);
+  nativeSession=stepTennisSession(nativeSession,[],T0+45001);
+  assert.equal(nativeSession.footballReports?.[SLUG].assessment.status,'stale','native cached evidence keeps 45 seconds');
 });
 
 test('component regressions and same-play changes are blocked independently of the PM clock',()=>{
@@ -94,6 +145,17 @@ test('invalid composite evidence cancels resting maker buys before a crossing bo
     const blocked=stepTennisSession(quoted,[invalid],T0+2000);
     assert.equal(blocked.ledger.length,0);assert.equal(blocked.cash,100);assert.equal(blocked.maker?.quotes.YES,undefined);
   }
+});
+
+test('maker fills and Bold dips accept coherent ESPN plays older than 45 seconds, but cancel after 90',()=>{
+  const quoted=stepTennisSession(started(true),[input(T0+46000)],T0+46000);
+  assert.ok(quoted.maker?.quotes.YES,quoted.lastReason);
+  const held=stepTennisSession(quoted,[input(T0+48000,.59,.60)],T0+48000);
+  assert.ok(held.positions.some(position=>position.status==='open'&&position.side==='YES'),'the maker can fill using a 48-second-old ESPN play');
+  const dipped=stepTennisSession(held,[input(T0+50000,.54,.55)],T0+50000);
+  assert.equal(dipped.positions.find(position=>position.side==='YES')?.dipBuys,1,'the same validated play can support a dip within its provider limit');
+  const expired=stepTennisSession(quoted,[input(T0+90001,.59,.60)],T0+90001);
+  assert.equal(expired.cash,100);assert.equal(expired.ledger.length,0);assert.equal(expired.maker?.quotes.YES,undefined);
 });
 
 test('an invalid fallback cannot spend the Bold dip allowance; a later valid report can',()=>{

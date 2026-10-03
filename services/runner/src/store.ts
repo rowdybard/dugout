@@ -2,6 +2,7 @@ import {validateTennisConfig} from '../../../lib/tennis/engine.ts';
 import {reduceRunnerAction} from '../../../lib/runner/reducer.ts';
 import type {SweepSummary,TennisAction,TennisInput,TennisSession} from '../../../lib/tennis/types';
 import {toUnits} from '../../../lib/trading/money.ts';
+import {accountBotIds,accountBotView} from '../../../lib/tennis/account.ts';
 import {RunnerError,sha256} from '../../../lib/runner/protocol.ts';
 import type {MigrationChunk,MigrationData,MigrationManifest,MigrationStart,ReplayFrame,RunnerMeta,RunnerState,SourceHealth,RunnerUsage,RunnerCause,RunnerJournalRow,RunnerObservation} from '../../../lib/runner/contracts';
 
@@ -19,7 +20,7 @@ const equivalent=(a:unknown,b:unknown)=>JSON.stringify(ordered(a))===JSON.string
 export const RUNNER_ENTRY_WRITE_LIMIT=90000;
 type AuditBundle={version:1;records:RunnerJournalRow[];observations:RunnerObservation[]};
 function assertCutover(session:TennisSession){
-  if(!['idle','paused','stopped'].includes(session.status)||session.pending||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Migration requires inactive entries, no open position and no pending order.');
+  if(accountBotIds(session).some(botId=>{const bot=accountBotView(session,botId);return !['idle','paused','stopped'].includes(bot.status)||!!bot.pending;})||session.positions.some(p=>p.status==='open'))throw new RunnerError(409,'Migration requires inactive entries, no open position and no pending order for either bot.');
   const positions=new Set(session.positions.map(p=>p.id));
   if(positions.size!==session.positions.length||session.ledger.some(e=>!positions.has(e.positionId)))throw new RunnerError(400,'Positions and execution ledger differ.');
   for(const p of session.positions){
@@ -43,9 +44,14 @@ function observationRefs(kind:string,value:Record<string,unknown>):string[]{
 function assertSession(session:TennisSession){
   if(!session||session.mode!=='paper'||typeof session.id!=='string'||!Number.isSafeInteger(session.revision)||session.revision<0||
     !Array.isArray(session.ledger)||!Array.isArray(session.positions)||!['idle','running','paused','stopping','stopped'].includes(session.status))throw new RunnerError(400,'Invalid paper snapshot.');
-  const issue=validateTennisConfig(session.config);if(issue)throw new RunnerError(400,issue);
-  if(session.config.maxSpreadPoints>2||session.config.maxBookAgeMs>5000)throw new RunnerError(400,'Runner spread and book-age limits cannot exceed 2 cents and 5 seconds.');
-  if(session.positions.filter(p=>p.status==='open').length>1)throw new RunnerError(400,'Snapshot has multiple open positions.');
+  if([...session.positions,...session.ledger].some(row=>row.botId!==undefined&&!['football','tennis'].includes(row.botId)))throw new RunnerError(400,'Unknown bot in the shared wallet.');
+  if(session.positions.some(row=>row.botId==='tennis')&&!session.bots?.tennis)throw new RunnerError(400,'Tennis positions require their saved bot.');
+  for(const botId of accountBotIds(session)){
+    const bot=accountBotView(session,botId),issue=validateTennisConfig(bot.config);if(issue)throw new RunnerError(400,issue);
+    if(!['idle','running','paused','stopping','stopped'].includes(bot.status))throw new RunnerError(400,'Invalid bot status.');
+    if(bot.config.maxSpreadPoints>2||bot.config.maxBookAgeMs>5000)throw new RunnerError(400,'Runner spread and book-age limits cannot exceed 2 cents and 5 seconds.');
+    if(bot.positions.filter(p=>p.status==='open'&&p.exitPolicy!=='maker').length>1)throw new RunnerError(400,'Each bot can manage only one ordinary open position.');
+  }
   try{const expected=session.ledger.reduce((sum,row)=>sum+toUnits(row.cashDelta),toUnits(session.config.startingCash));if(expected!==toUnits(session.cash)||session.cash<0)throw new Error('cash');}
   catch{throw new RunnerError(400,'Snapshot cash does not reconcile to its ledger.');}
   if(new Set(session.ledger.map(row=>row.id)).size!==session.ledger.length)throw new RunnerError(400,'Duplicate ledger commands.');
@@ -95,7 +101,12 @@ export class RunnerStore {
     const now=Date.now(),slug=session.positions.find(p=>p.status==='open')?.slug??session.pending?.slug??session.config.focusSlug;
     const quote=slug?session.quotes?.[slug]:undefined,context=slug?session.footballReports?.[slug]:undefined,report=context?.transition??context?.report;
     const age=(time:number|undefined|null)=>typeof time==='number'&&Number.isFinite(time)&&time>=0&&time<=now?now-time:null;
-    return {session,sweep:this.get<SweepSummary>('sweep-summary'),runner:{feedKey:!!this.get('feed-credentials'),mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
+    const botHealth=Object.fromEntries(accountBotIds(session).map(botId=>{
+      const bot=accountBotView(session,botId),focus=bot.positions.find(p=>p.status==='open')?.slug??bot.pending?.slug??bot.config.focusSlug;
+      const context=focus?bot.footballReports?.[focus]:undefined,report=context?.transition??context?.report;
+      return [botId,{lastSuccessfulCheck:bot.lastTickAt,quoteAgeMs:age(focus?bot.quotes?.[focus]?.time:null),gameReportAgeMs:age(report?.reportTime)}];
+    }));
+    return {session,sweep:this.get<SweepSummary>('sweep-summary'),runner:{supportedBots:['football','tennis'],botHealth,feedKey:!!this.get('feed-credentials'),mode:'service',backgroundConnected:true,epoch:meta.epoch,lastTickAt:session.lastTickAt,lastEngineCheck:session.lastTickAt,quoteAgeMs:age(quote?.time),contextAgeMs:age(report?.reportTime),source:this.health(),usage:this.usage(now),paperOnly:true}};
   }
   acceptNonce(nonce:string,now:number){
     this.storage.transactionSync(()=>{this.storage.sql.exec('DELETE FROM runner_nonces WHERE expires<?',now);
@@ -165,6 +176,7 @@ export class RunnerStore {
     }
     if(executions.length!==session.ledger.length||session.ledger.some(entry=>executions.filter(e=>e.id===entry.id&&equivalent(e,entry)).length!==1))throw new RunnerError(409,'Snapshot executions do not match the complete imported execution journal.');
     if(session.status!=='stopped')session.status='paused';
+    if(session.bots?.tennis&&session.bots.tennis.status!=='stopped')session.bots.tennis.status='paused';
     session.lastReason='History migrated. Paper runner is paused until you resume it.';
     // The observation window and all original ledger/positions survive migration.
     session.revision++;session.lastTickAt=Math.max(session.lastTickAt,now);
@@ -189,7 +201,8 @@ export class RunnerStore {
     const commandId=action.commandId,fingerprint=JSON.stringify(action);
     if(commandId){const previous=this.commandResult(commandId,fingerprint);if(previous)return previous;}
     if(['start','resume','acknowledge-loss'].includes(action.action)&&this.usage(now).estimatedRowsWritten>=this.usage(now).entryPauseAt)throw new RunnerError(409,'New entries are paused until the next UTC day because the runner write-budget estimate was reached.');
-    if(['resume','start','acknowledge-loss'].includes(action.action)&&!(action.action==='start'?action.config?.focusSlug??before.config.focusSlug:before.config.focusSlug))throw new RunnerError(400,'Choose one focused game before starting the runner.');
+    const selected=accountBotView(before,action.botId??'football');
+    if(['resume','start','acknowledge-loss'].includes(action.action)&&!(action.action==='start'?action.config?.focusSlug??selected.config.focusSlug:selected.config.focusSlug))throw new RunnerError(400,'Choose one focused game before starting this bot.');
     if(commandId&&before.commandIds.includes(commandId))throw new RunnerError(409,'This command was already recorded before migration. Refresh the saved session.');
     const reduced=reduceRunnerAction(before,action,inputs,now,cause),next=reduced.session;
     if(next===before||next.id===before.id&&next.revision===before.revision)throw new RunnerError(409,'Session or clock changed. Refresh and retry.');
@@ -208,6 +221,7 @@ export class RunnerStore {
       for(const d of next.decisions)if(!oldDecisions.has(d.id))record(meta.ownerId+':'+next.id+':'+d.id,'decision',{...d,...evidence},d.time);
       for(const e of next.ledger)if(!oldLedger.has(e.id))record(meta.ownerId+':'+next.id+':'+e.id,'execution',{...e,...evidence},e.time);
       for(const [positionId,shadow] of Object.entries(next.shadowExits??{}))if(!equivalent(shadow,before.shadowExits?.[positionId]))record(meta.ownerId+':shadow:'+positionId+':'+next.revision,'shadow-exit',{...shadow,...evidence},now);
+      for(const [positionId,shadow] of Object.entries(next.bots?.tennis?.shadowExits??{}))if(!equivalent(shadow,before.bots?.tennis?.shadowExits?.[positionId]))record(meta.ownerId+':shadow:'+positionId+':'+next.revision,'shadow-exit',{...shadow,botId:'tennis',...evidence},now);
       record(meta.ownerId+':frame:'+next.id+':'+next.revision,'replay',frame,now);
       if(commandId)record(meta.ownerId+':runner-command:'+commandId,'control',{action,fingerprint,...(cause?{cause}:{})},now);
       if(next.id!==before.id)record(meta.ownerId+':runner-archive:'+before.id,'archive',before,now);
