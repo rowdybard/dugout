@@ -17,6 +17,8 @@ export type PriorityContextDependencies={
   fetchEvent:(path:string,signal:AbortSignal)=>Promise<unknown>;
   fetchEspn?:EspnSummaryFetcher;
   timeoutMs?:number;
+  /** How long a saved report is reused (default PRIORITY_CONTEXT_TTL_MS); longer for games well before kickoff. */
+  ttlMs?:number;
 };
 const message=(e:unknown)=>e instanceof Error?e.message:'The current game report is unavailable.';
 const sameGame=(a:TennisMarket,b:TennisMarket)=>a.slug===b.slug&&a.eventId===b.eventId&&a.eventSlug===b.eventSlug&&a.league===b.league&&a.yesName===b.yesName&&a.noName===b.noName&&
@@ -60,7 +62,7 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
     const saved=await deps.read(key);
     if(saved&&sameGame(market,saved.market)&&sameGame(market,saved.reportMarket))previous=saved;
     const now=deps.now();
-    if(previous&&Number.isFinite(previous.fetchedAt)&&previous.fetchedAt<=now&&now-previous.fetchedAt<PRIORITY_CONTEXT_TTL_MS)return result(previous,now,true);
+    if(previous&&Number.isFinite(previous.fetchedAt)&&previous.fetchedAt<=now&&now-previous.fetchedAt<(deps.ttlMs??PRIORITY_CONTEXT_TTL_MS))return result(previous,now,true);
     if(!/^[1-9]\d{0,19}$/.test(market.eventId))throw new Error('A verified numeric event ID is required for the current game report.');
     signal?.throwIfAborted();
     const controller=new AbortController(),timeoutMs=Math.max(1,Math.min(PRIORITY_CONTEXT_TIMEOUT_MS,deps.timeoutMs??PRIORITY_CONTEXT_TIMEOUT_MS));

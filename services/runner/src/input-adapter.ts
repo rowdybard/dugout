@@ -12,6 +12,9 @@ import {advanceLeagueDiscovery,visibleLeagueMarkets,type LeagueDiscoveryState} f
 import {gameCopyDue} from '../../../lib/tennis/catalog-loader.ts';
 import {applyOctopusPicks,octopusPickDue,octopusSlugs,pickOctopusGames} from '../../../lib/tennis/octopus.ts';
 import {loadPriorityContext,joinBookWithPriorityContext,type PriorityContextRecord,type PriorityContextResult} from '../../../lib/tennis/priority-context.ts';
+import {PREGAME_STATUS_MAX_AGE_MS} from '../../../lib/tennis/engine-plan.ts';
+/** Game reports for games more than ~6 minutes from kickoff are reused for up to a minute. */
+const PREGAME_REPORT_TTL_MS=60_000;
 import type {TennisInput,TennisLeague,TennisMarket,TennisSession} from '../../../lib/tennis/types';
 import type {SourceHealth} from '../../../lib/runner/contracts';
 import type {RunnerStore} from './store';
@@ -204,7 +207,10 @@ export class PolymarketInputAdapter implements InputAdapter {
     const results=await Promise.allSettled(markets.map(m=>{
       const requireReport=!held.some(position=>position.slug===m.slug)||pending.some(intent=>intent.action==='BUY'&&intent.slug===m.slug);
       if(m.league==='NFL'||m.league==='CFB'){
-        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal),fetchEspn:fetchFreshEspnFootballSummary}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
+        // Well before kickoff nothing happens in a game, so its report is fetched at most once a minute (with the Octopus
+        // that is up to 7 games; fetching every one every check invites provider rate limits that silence them all).
+        const start=Date.parse(m.startTime),farPregame=!m.live&&Number.isFinite(start)&&start-now()>PREGAME_STATUS_MAX_AGE_MS+PREGAME_REPORT_TTL_MS;
+        const report=loadPriorityContext(m,{now,...(farPregame?{ttlMs:PREGAME_REPORT_TTL_MS}:{}),read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal),fetchEspn:fetchFreshEspnFootballSummary}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
         if(requireReport)reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
       }
       let context:TennisMarket|undefined;

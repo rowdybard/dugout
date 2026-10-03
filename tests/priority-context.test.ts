@@ -70,3 +70,8 @@ test('legacy caches never invent a verified uncached provider check',async()=>{
   const f=fixture();await loadPriorityContext(f.market,f.deps);for(const value of f.values.values())delete value.successfulCheckAt;
   f.setTime(NOW+1000);assert.equal((await loadPriorityContext(f.market,f.deps)).successfulCheckAt,null);assert.equal(f.calls(),1);
 });
+test('a longer cache (games well before kickoff) reuses the saved report for up to a minute',async()=>{
+  const f=fixture();f.deps.ttlMs=60_000;await loadPriorityContext(f.market,f.deps);
+  f.setTime(NOW+45_000);const cached=await loadPriorityContext(f.market,f.deps);assert.equal(f.calls(),1);assert.equal(cached.cacheHit,true);
+  f.setTime(NOW+60_000);await loadPriorityContext(f.market,f.deps);assert.equal(f.calls(),2);
+});

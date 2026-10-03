@@ -179,7 +179,8 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
           }
         }
       }catch(error){
-        if(!(error instanceof RunnerError&&error.status===409))this.store.set('source',{updatedAt:Date.now(),state:'error',message:'A runner data check failed; retrying with existing limits.'});
+        // Name the failure: a generic message hid what was wrong (rate limits, timeouts, a rejected step).
+        if(!(error instanceof RunnerError&&error.status===409))this.store.set('source',{updatedAt:Date.now(),state:'error',message:`A runner data check failed (${(error instanceof Error?error.message:String(error)).slice(0,200)}); retrying with existing limits.`});
       }finally{await this.schedule();this.store.saveUsage();}
     };
     this.tickInFlight=run();try{await this.tickInFlight;}finally{this.tickInFlight=null;}
