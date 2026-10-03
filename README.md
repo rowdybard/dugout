@@ -1,6 +1,6 @@
 # Dugout
 
-Dugout is a private sports **paper-trading** dashboard for Polymarket US markets, currently focused on **college football**. Pick a game, choose Steady or Bold, and press Start. The bot trades with fake money only and places no real orders.
+Dugout is a private sports **paper-trading** dashboard for Polymarket US markets, currently focused on **college football**. Pick a game, choose Steady, Bold or Auto, and press Start. The bot trades with fake money only and places no real orders.
 
 It runs on Cloudflare:
 - **The site:** a Worker behind Cloudflare Access with Google sign-in, using a D1 database. Each invited person gets their own paper account.
@@ -26,7 +26,7 @@ Shared strategy and simulated execution code serve both. The word `tennis` remai
 The page shows only what's needed to run the bot:
 - **Search box:** live and upcoming college games.
 - **Bot card:**
-  - **Steady / Bold**, balance, and **Reset balance** ($5–$10,000, any time; open paper trades are dropped).
+  - **Steady / Bold / Auto**, balance, and **Reset balance** ($5–$10,000, any time; open paper trades are dropped).
   - **Start / Pause / Resume / End run / New run**.
   - A plain-English **status box** with a **Both sides** line per team.
   - **Open orders & shares:** every resting offer and holding, across the main game and the Octopus's arms.
@@ -38,7 +38,9 @@ The page shows only what's needed to run the bot:
 **How the bot trades:** it runs on the **evidence-gated decision engine** ([docs/DECISION-ENGINE.md](docs/DECISION-ENGINE.md)). Its main activity is paper market making: resting buy offers on both teams, with conservative fills and maker rebates. A completed pair pays $1 at settlement.
 - **Steady:** resting offers only, about 5% of the balance each. After a one-sided fill it tries to complete the pair, and sells the unpaired shares after 10 minutes.
 - **Bold:** offers at 12% of the balance (at most $50), plus the hold-to-final bets the evidence allows. After a one-sided fill it takes its profit at 5¢ up (completing the pair at that price, or selling). It buys once more on a 5¢ dip, capped at 2× the order size, and sells if the price then falls 10¢ below its average.
-- **The Octopus** (experimental, either mode): the same offers on up to 6 extra games. Games can be pinned, or picked automatically every 5 minutes (calm, liquid college games). All resting offers together stay within 50% of the balance, with the main game first. Each event is logged as one short JSON line, written to tiny log files.
+- **Auto:** the bot picks Bold while the research allows a bet on the game and the run is down less than 10%, and Steady otherwise.
+- **Comeback test (Bold and Auto):** `comeback-drive@1` is paper-traded to measure it: a team trailing by 3–24 driving inside the 30 with more than 5 minutes left.
+- **The Octopus** (experimental, any mode): the same offers on up to 6 extra games. Games can be pinned, or picked automatically every 5 minutes (calm, liquid college games). All resting offers together stay within 50% of the balance, with the main game first. Each event is logged as one short JSON line, written to tiny log files.
 - **When offers come down:** for 30 s after each live play, and whenever the game report is older than 45 s. The engine refuses losing or untested bets.
 - **Not AI:** these are deterministic calculations, not AI calls or a profit forecast. Real money is not connected (`lib/live/README.md`).
 

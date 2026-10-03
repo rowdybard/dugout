@@ -9,6 +9,7 @@ export const tennisRulesSchema=z.object({
   evidencePack:z.string().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/).optional(),
   maker:z.enum(['paper-v1','quiet-window-v1']).optional(),
   entries:z.enum(['steady','all']).optional(),
+  autoMode:z.boolean().optional(),
   chaosSlugs:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(6).optional(),
   octopusAuto:z.boolean().optional(),
   octopusSkip:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(30).optional(),
@@ -61,6 +62,7 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
   if((config.chaosSlugs?.length||config.octopusAuto)&&(!config.maker||config.evidenceGate!=='evidence-v1'))return 'The Octopus needs resting orders and the evidence gate: press Use decision engine first.';
   if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Octopus game can be added once.';
+  if(config.autoMode&&(config.entries==='steady'||config.evidenceGate!=='evidence-v1'))return 'Auto needs the decision engine (it picks Steady or Bold from its research) and Bold\'s rules.';
   if(config.explore?.length&&config.evidenceGate!=='evidence-v1')return 'Exploring needs the evidence gate: it stops once the research measures the strategy.';
   if(config.explore&&new Set(config.explore).size!==config.explore.length)return 'List each explored strategy once.';
   if(config.decisionEngine==='local-move-v1'&&config.strategy!=='auto')return 'Local move analysis uses Auto. Legacy entry patterns cannot override it.';

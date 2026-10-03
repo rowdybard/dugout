@@ -90,6 +90,11 @@ export type TennisConfig={
    */
   entries?:'steady'|'all';
   /**
+   * Auto: the bot picks Steady or Bold itself on every check (lib/tennis/engine.ts decideAuto). The config then holds
+   * Bold's rules (entries 'all', Bold order size); `session.autoMode` says which one it is trading in right now.
+   */
+  autoMode?:boolean;
+  /**
    * Octopus (experimental; called Chaos mode in code): extra games, "arms", where the bot ALSO rests offers at the same
    * time, each with its own quotes, fills and holdings, sharing the account's cash. `chaosSlugs` are the games you
    * pinned; with `octopusAuto` the bot fills the remaining arms itself (lib/tennis/octopus.ts). Up to 6 arms in total.
@@ -146,6 +151,8 @@ export type TennisSession={
   maker?:MakerState;
   /** Octopus: resting-order state for each extra game (the main game keeps `maker`). */
   chaos?:Record<string,MakerState>;
+  /** Auto's current pick, why, and when it last switched (config.autoMode only). */
+  autoMode?:{mode:'steady'|'bold';reason:string;since:number};
   /** Octopus auto picks, recorded on the check that chose them (so replays are exact). */
   octopus?:{slugs:string[];pickedAt:number};
   /** The football drive each market last entered, so one drive is traded once. Cleared when the drive ends. */

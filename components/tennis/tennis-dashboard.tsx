@@ -29,7 +29,7 @@ import {EngineCard} from './engine-card';
 import {OpenBook,SellEverything} from './open-book';
 import {OctopusPanel,downloadOctopusLog,type OctopusRules} from './octopus-panel';
 import {octopusSlugs} from '@/lib/tennis/octopus';
-import {modeOf,modeRules,type TradeMode} from '@/lib/tennis/modes';
+import {boldSize,choiceOf,modeRules,steadySize,tradeMode,type ModeChoice} from '@/lib/tennis/modes';
 
 import {describeTennisRules,MAX_BALANCE} from '@/lib/tennis/rules';
 import {focusedEntryRest} from '@/lib/tennis/entry-rest';
@@ -140,17 +140,16 @@ export function TennisDashboard() {
     await bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),
       rules:{focusSlug:slug,...(onlyVisible?{}:{leagues:[...VISIBLE_LEAGUES]}),...(session.config.chaosSlugs?.includes(slug)?{chaosSlugs:session.config.chaosSlugs.filter(item=>item!==slug)}:{})}});
   };
-  const steady=session?.config.entries==='steady';
-  // Steady: small resting orders only. Bold: bigger orders plus hold-to-final bets (lib/tennis/modes.ts).
+  // Steady: small resting orders only. Bold: bigger orders plus hold-to-final bets. Auto: the bot picks (lib/tennis/modes.ts).
   // The tapped button lights up at once; the change is built from the latest saved rules when it is sent.
-  const [modeTap,setModeTap]=useState<TradeMode|null>(null);
-  const shownMode=modeTap??(session?modeOf(session.config):null);
-  const setMode=async(mode:TradeMode)=>{
+  const [modeTap,setModeTap]=useState<ModeChoice|null>(null);
+  const shownMode=modeTap??(session?choiceOf(session.config):null);
+  const setMode=async(mode:ModeChoice)=>{
     if(!session||modeTap)return;
     setModeTap(mode);
     try{await bot.perform(latest=>{
       if(!latest)return null;const rules=modeRules(latest.config,mode);
-      if(modeOf(latest.config)===mode&&rules.entryBudget===latest.config.entryBudget)return null;
+      if(choiceOf(latest.config)===mode&&rules.entryBudget===latest.config.entryBudget&&(rules.explore??[]).join()===(latest.config.explore??[]).join())return null;
       return {action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules};
     });}finally{setModeTap(null);}
   };
@@ -185,7 +184,10 @@ export function TennisDashboard() {
             <div className="tennis-mode-choice" role="group" aria-label="How the bot trades">
               <button aria-pressed={shownMode==='steady'} disabled={!session||!!modeTap} onClick={()=>void setMode('steady')}>Steady</button>
               <button aria-pressed={shownMode==='bold'} disabled={!session||!!modeTap} onClick={()=>void setMode('bold')}>Bold</button>
-              <span>{modeTap?'Saving…':shownMode==='steady'?`Small resting orders (${money(entryBudget)} each): many small wins and losses.`:`Bigger orders (${money(entryBudget)} each) plus hold-to-final bets the research allows: bigger wins, bigger losses.`}</span>
+              <button aria-pressed={shownMode==='auto'} disabled={!session||!!modeTap||session.config.evidenceGate!=='evidence-v1'} onClick={()=>void setMode('auto')}>Auto</button>
+              <span>{modeTap?'Saving…':shownMode==='steady'?`Small resting orders (${money(entryBudget)} each): many small wins and losses.`
+                :shownMode==='auto'&&session?`${session.autoMode?`${tradeMode(session)==='bold'?'Bold':'Steady'} now: ${session.autoMode.reason}.`:'Steady until the first check.'} Auto picks Steady (${money(steadySize(session.config.startingCash))} orders) or Bold (${money(boldSize(session.config.startingCash))} orders, bets the research allows) on every check.`
+                :`Bigger orders (${money(entryBudget)} each) plus hold-to-final bets the research allows: bigger wins, bigger losses.`}</span>
             </div>
           </div>
           <div className="tennis-bot-money">

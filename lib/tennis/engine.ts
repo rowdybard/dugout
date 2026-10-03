@@ -9,7 +9,7 @@ const freshLive = (input:TennisInput,now:number) => input.market.live && input.m
 const keyFor = (slug: string, side: TradeSide) => `${slug}:${side}`;
 
 import {defaultTennisConfig,defaultLiveTennisConfig, MAX_BALANCE, normalizeTennisConfig, validateTennisConfig} from './rules.ts';
-import {modeOf,modeRules} from './modes.ts';
+import {choiceOf,modeRules,tradeBudget,tradeMode} from './modes.ts';
 import {analyzeOpportunity,type OpportunityAnalysis} from './opportunity.ts';
 import {createExitPlan,assessAdaptiveExit,measureExitMarket,type AdaptiveExitAssessment} from './exit-analysis.ts';
 import {adaptiveTennisRules} from './auto.ts';
@@ -294,6 +294,37 @@ function evaluateEngine(session: TennisSession, current: TennisInput[], now: num
   return out;
 }
 
+/** Auto: a run down this fraction of its starting balance trades Steady until it recovers. */
+export const AUTO_DRAWDOWN = 0.10;
+/** Auto: Bold stays on this long after the research last allowed a bet, so the mode doesn't flicker between checks. */
+export const AUTO_HOLD_MS = 5 * 60_000;
+
+/**
+ * Auto picks Steady or Bold on each check, from this check's plan for the main game:
+ *   Steady while the run is down AUTO_DRAWDOWN or more (held shares at what they'd sell for, or at cost while unpriced);
+ *   Bold when the research allows a hold-to-final or drive bet on the game right now (comeback-drive included);
+ *   back to Steady once no bet has been allowed for AUTO_HOLD_MS and nothing is held (holdings keep the rules they
+ *   were bought under). Otherwise the previous pick stands. Steady until the first plan.
+ */
+function decideAuto(session: TennisSession, now: number) {
+  if (!session.config.autoMode) { delete session.autoMode; return; }
+  const prior = session.autoMode, start = session.config.startingCash;
+  const worth = session.cash + session.positions.filter(p => p.status === 'open').reduce((sum, p) => sum + (p.netLiquidationValue ?? p.costBasis), 0);
+  const down = start - worth;
+  const set = (mode: 'steady' | 'bold', reason: string) => {
+    if (prior?.mode !== mode) record(session, now, session.config.focusSlug ?? '', 'YES', 'WAIT', 'AUTO_MODE', `Auto switched to ${mode === 'bold' ? 'Bold' : 'Steady'}: ${reason}.`);
+    session.autoMode = { mode, reason, since: now };
+  };
+  if (down >= AUTO_DRAWDOWN * start - EPSILON) return set('steady', `the run is down ${Math.round(down / start * 100)}% (Auto trades Steady while it's down ${AUTO_DRAWDOWN * 100}% or more)`);
+  const plan = session.enginePlan;
+  const bet = plan && plan.time === now && plan.slug === session.config.focusSlug ? plan.considered.find(item => item.style !== 'maker' && item.result === 'ACTION') : undefined;
+  if (bet) return set('bold', `the research allows a ${bet.style === 'taker-hold' ? 'hold-to-final' : 'drive'} bet here (${bet.strategy})`);
+  if (!prior) return set('steady', 'the research allows no bet on this game right now');
+  const held = session.positions.some(p => p.status === 'open') || !!session.pending;
+  if (prior.mode === 'bold' && !held && now - prior.since >= AUTO_HOLD_MS) set('steady', `no bet allowed for ${AUTO_HOLD_MS / 60_000} minutes`);
+  else if (prior.mode === 'steady' && prior.reason.startsWith('the run is down')) set('steady', 'the research allows no bet on this game right now');
+}
+
 /**
  * Stage the plan: the best taker-hold (or drive) action takes the position slot; otherwise, with market making on,
  * the selected maker strategy's permitted resting orders are quoted. Maker inventory also occupies the slot.
@@ -312,8 +343,8 @@ function stageEnginePlan(session: TennisSession, evaluated: Evaluated[], now: nu
       recordWhyNot(session, slug, quoting ? null : plan.why ?? { strategy: 'engine', code: 'PHASE', detail: 'The game phase is not confirmed.' }, now);
       continue;
     }
-    // Steady accounts only rest orders: no taker entries at all.
-    const action = makerPositions(session).length || session.config.entries === 'steady' ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
+    // Steady (chosen, or Auto's pick) only rests orders: no taker entries at all.
+    const action = makerPositions(session).length || tradeMode(session) === 'steady' ? undefined : plan.actions.find(item => (item.proposal.style === 'taker-hold' && item.proposal.exit.kind === 'hold-to-settlement')
       || (item.proposal.style === 'taker-scalp' && item.proposal.exit.kind === 'drive'));
     if (!action || !phase) {
       if (session.config.maker && session.config.focusSlug === slug)
@@ -447,12 +478,12 @@ function sellMakerShares(session: TennisSession, input: TennisInput, now: number
  */
 function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   const slug = input.market.slug, open = unpaired(session, slug);
-  if (!open || modeOf(session.config) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
+  if (!open || tradeMode(session) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
   if (session.maker?.slug === slug && now < session.maker.pulledUntil) return;
   if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
   const position = open.position, ask = quotes(input, position.side).ask;
   if (ask === undefined || ask > position.entryPrice - DIP_STEP + EPSILON) return;
-  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * session.config.entryBudget - position.costBasis, session.cash));
+  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * tradeBudget(session) - position.costBasis, session.cash));
   if (budget < ask * input.market.execution.minimumTradeQty) return;
   session.consumedBooks[slug] = input.receivedAt;
   const command = { ...freshCommand(session, input, position.side, 'BUY', now, ask), commandId: `${position.id}:dip:${now}`, budget };
@@ -480,7 +511,7 @@ function dipBuy(session: TennisSession, input: TennisInput, now: number) {
  */
 function boldStop(session: TennisSession, input: TennisInput, now: number) {
   const open = unpaired(session, input.market.slug);
-  if (!open || modeOf(session.config) !== 'bold') return;
+  if (!open || tradeMode(session) !== 'bold') return;
   if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
   // Take-profit: the unpaired shares are up BOLD_TAKE_PROFIT on their average price, so sell them now.
   const best = quotes(input, open.side).bid, takeAt = exact(open.position.entryPrice + BOLD_TAKE_PROFIT);
@@ -512,7 +543,7 @@ function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
  */
 function exitUnpaired(session: TennisSession, input: TennisInput, now: number) {
   const open = unpaired(session, input.market.slug);
-  if (!open || modeOf(session.config) === 'bold' || now - open.position.openedAt < PAIR_WINDOW_MS || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  if (!open || tradeMode(session) === 'bold' || now - open.position.openedAt < PAIR_WINDOW_MS || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
   const minimum = input.market.execution?.minimumTradeQty ?? 0;
   if (open.quantity + EPSILON < minimum) return;
   session.consumedBooks[input.market.slug] = input.receivedAt;
@@ -619,8 +650,10 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
     const side: TradeSide = action.proposal.side === 'yes' ? 'YES' : 'NO';
     const inventory = session.positions.find(p => p.status === 'open' && p.exitPolicy === 'maker' && p.slug === slug && p.side === side);
     if ((inventory?.costBasis ?? 0) >= action.stake * INVENTORY_MULTIPLE - EPSILON) continue;
-    const quantity = quoteQuantity(action.stake, action.proposal.price, execution.quantityIncrement, execution.minimumTradeQty);
-    if (quantity > 0) targets[side] = { price: action.proposal.price, quantity, stake: action.stake };
+    // Auto in Steady: the plan is sized for Bold (the config's size), the offers for Steady.
+    const stake = Math.min(action.stake, tradeBudget(session));
+    const quantity = quoteQuantity(stake, action.proposal.price, execution.quantityIncrement, execution.minimumTradeQty);
+    if (quantity > 0) targets[side] = { price: action.proposal.price, quantity, stake };
   }
   // One side filled alone: stop adding to it, and raise the other side's offer to complete the pair.
   const open = unpaired(session, slug);
@@ -629,7 +662,7 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
     const other: TradeSide = open.side === 'YES' ? 'NO' : 'YES', book = quotes(input, other), tick = execution.priceIncrement;
     // Steady completes the pair for any small profit; Bold only at its take-profit (the same 5¢ a sale would lock in,
     // but as a resting offer that earns the maker rebate instead of paying the taker fee).
-    const edge = modeOf(session.config) === 'bold' ? BOLD_TAKE_PROFIT : PAIR_MIN_EDGE;
+    const edge = tradeMode(session) === 'bold' ? BOLD_TAKE_PROFIT : PAIR_MIN_EDGE;
     const cap = exact(Math.floor((1 - open.position.entryPrice - edge + EPSILON) / tick) * tick);
     const price = book.ask === undefined ? cap : Math.min(cap, exact(book.ask - tick));
     const quantity = exact(Math.floor(open.quantity / execution.quantityIncrement + EPSILON) * execution.quantityIncrement);
@@ -642,7 +675,7 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   const resting = (other: MakerState | undefined) => other ? (['YES', 'NO'] as const).reduce((total, side) => total + (other.quotes[side] ? other.quotes[side]!.quantity * other.quotes[side]!.price : 0), 0) : 0;
   const isArm = swappedMain.has(session), main = isArm ? swappedMain.get(session) : undefined;
   const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + resting(other), 0);
-  const restingElsewhere = isArm ? arms + Math.max(resting(main), 2 * session.config.entryBudget) : arms;
+  const restingElsewhere = isArm ? arms + Math.max(resting(main), 2 * tradeBudget(session)) : arms;
   const octopus = octopusSlugs(session).length > 0;
   const available = Math.max(0, (octopus ? Math.min(session.cash, OCTOPUS_RESERVE_FRACTION * tennisEquity(session)) : session.cash) - restingElsewhere);
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);
@@ -1247,6 +1280,7 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
     if (session.status === 'stopping' && !inventory.length) session.status = 'stopped';
   }
   const evaluated = session.config.evidenceGate === 'evidence-v1' && session.status === 'running' && !processed ? evaluateEngine(session, current, now) : [];
+  if (session.status === 'running') decideAuto(session, now); else if (!session.config.autoMode) delete session.autoMode;
   if (evaluated.length && (holding(session) || session.pending)) for (const { input, plan } of evaluated)
     recordWhyNot(session, input.market.slug, plan.actions.length ? { strategy: 'bot', code: 'POSITION_OPEN', detail: 'One open position at a time.' } : plan.why, now);
   if (session.status === 'running' && !holding(session) && !session.pending && !processed) {
@@ -1353,7 +1387,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
     if (!action.abandon && (holding(session) || session.pending || makerPositions(session).length)) return reject('Close the paper position and let pending orders finish before resetting.');
     if (!Number.isFinite(action.bankroll) || action.bankroll < 5 || action.bankroll > MAX_BALANCE) return reject('Choose a fake starting balance between $5 and $10,000.');
     session = createTennisSession({...(session.config.decisionEngine?defaultLiveTennisConfig(action.bankroll):defaultTennisConfig(action.bankroll)),strategy:'auto',leagues:session.config.leagues,focusSlug:session.config.focusSlug,
-      ...(session.config.entries?modeRules({startingCash:action.bankroll},modeOf(session.config)):{})}, now);
+      ...(session.config.entries?modeRules({startingCash:action.bankroll,evidenceGate:session.config.decisionEngine?'evidence-v1':undefined},choiceOf(session.config)):{})}, now);
     session.commandIds = [action.commandId];
     return session;
   }

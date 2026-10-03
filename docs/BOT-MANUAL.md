@@ -31,7 +31,7 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
   - Accounts ran on background runners during live college games.
   - Resting offers were posted, a one-sided fill occurred (Penn State, 23.76 shares at 50.5¢), and the panels showed it.
   - Issues found in that use were fixed the same day: game-report staleness, write budgets, 503s and a status flicker ([RELEASE-STATUS.md](RELEASE-STATUS.md)).
-- **Automated tests:** the full suite (709 tests on October 3) covers the engine, resting-order fills, pairing and exits, Bold's dip buy and loss limit, the runner store and protocol, and sign-in verification.
+- **Automated tests:** the full suite (718 tests on October 3) covers the engine, resting-order fills, pairing and exits, Bold's dip buy and loss limit, the runner store and protocol, and sign-in verification.
 - **Not established:** that any strategy is profitable, or that real exchange fills would match paper fills. Paper results are evidence collection, not a forecast.
 
 ## Using the dashboard
@@ -41,7 +41,7 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 1. **Sign in:** Google, through Cloudflare Access. Each invited email gets its own paper account (new accounts start with $100).
 2. **College football:** if the account still lists other sports, press **Show college football games** once.
 3. **Pick a game:** search and choose a live or upcoming one. Choosing a game sets the bot's focus.
-4. **Choose a mode:** **Steady** or **Bold** (see [Trading modes](#trading-modes)), then press **Start bot**.
+4. **Choose a mode:** **Steady**, **Bold** or **Auto** (see [Trading modes](#trading-modes)), then press **Start bot**.
 5. **Optional, close the tab:** run in the background. With no open trades, open **Settings & history → Set up background bot → Finish background setup**. The account moves to its own runner, paused, and you press Start again.
 
 ### Layout
@@ -49,7 +49,7 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | Area | What it shows |
 | --- | --- |
 | Search box | Live and upcoming college games; the chosen game is the bot's game. |
-| Bot card | Game, Steady/Bold, the Octopus (red Experimental label), balance, Reset balance, the run controls, the status box, **Both sides**, and **Open orders & shares**. |
+| Bot card | Game, Steady/Bold/Auto, the Octopus (red Experimental label), balance, Reset balance, the run controls, the status box, **Both sides**, and **Open orders & shares**. |
 | Status box | One plain-English state and reason, e.g. "Buy offers posted: Offering to buy Liberty at 70¢ or Delaware at 29.5¢. It fills only if someone sells at that price." Chips show the ages of the last bot check, accepted quote and game report. |
 | Both sides | One line per team from that team's own state: what is held, its posted offer, or the engine's verdict. |
 | Open orders & shares | Every resting offer (team, price, shares, cash held) and every holding (shares, average price, cost, value if sold now), across the main game and Octopus arms. Holdings also show their plan: "paired", "waiting for a pair, sells at <time>", or Bold's state. |
@@ -62,13 +62,13 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | Control | Effect |
 | --- | --- |
 | Pick a game | Sets the bot's focus. Allowed while shares are held: they stay managed on their own game, and new offers go to the new game. |
-| Steady / Bold | Switches the trading mode and resizes the order. The button lights up at once; the change is saved from the latest rules. The Octopus keeps running at the new size. |
+| Steady / Bold / Auto | Switches the trading mode and resizes the order. Auto shows which mode it picked and why. The button lights up at once; the change is saved from the latest rules. The Octopus keeps running at the new size. |
 | Start bot / Resume | Starts an idle account or resumes a paused one. Needs a chosen game. |
 | Pause | No new entries; held shares stay managed. |
 | Sell everything now | Big button while anything is held: green when the holdings are up, red when down (neutral until priced). Pauses entries, pulls offers, and sells every held share at the best bid on the next fresh book (`exit-now`). Resume continues the run. |
 | End run | Cancels offers, sells what is held, and ends the run. |
 | New run | After a run ends: opens Reset balance. |
-| Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold, and drops open paper trades (fake money). |
+| Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold/Auto, and drops open paper trades (fake money). |
 | Octopus | Either mode: the same offers on up to 6 extra games ("arms") at the mode's size and with its one-sided rules. **Auto-pick** fills free arms with open college games that are live or start within 6 h, with a listed spread of 2¢ or less. It picks the narrowest spread first, keeps current picks while they stay eligible, and re-checks every 5 minutes. **Pin** a game with the search. × removes a pinned game or skips an auto one. All resting offers together use at most 50% of the balance, and room for the main game's two offers is always kept. Removing an arm pulls its offers; shares stay managed. |
 | Download Octopus log / saved history | JSONL of Octopus events built in the browser / the full account journal export. |
 
@@ -81,6 +81,14 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 | Offer size | about 5% of the balance (max $5) | 12% of the balance (max $50), so both offers fit the 25% exposure cap |
 | Hold-to-final bets the evidence allows | no | yes |
 | One side fills alone | Stops buying that side and raises its offer on the other side to complete the pair (pair cost ≤ 99.5¢). Sells the unpaired shares at the best bid after **10 minutes** if no pair forms. | Keeps the shares. **Take-profit:** its pairing offer only completes the pair at a 5¢ profit on the average (a resting offer, so it earns the rebate), and if the best bid jumps 5¢ above the average before that offer can fill, it sells the unpaired shares directly. **Dip buy:** once, if the price falls 5¢ below what it paid, it buys as many again at the ask (that side's cost capped at 2× the order size). **Loss limit:** after a dip buy, it sells the unpaired shares if the best bid falls 10¢ below their average. Otherwise it holds to the final. |
+
+**Comeback re-entry (Bold and Auto, on paper):** both turn on `comeback-drive@1` as a paper test (`config.explore`). When the team with the ball trails by 3–24, is inside the opponent's 30 on 1st–3rd down with **more than** 5 minutes left, the bot buys it and sells when the drive ends. It doesn't fire late in a game, when the trailing team is a longshot with nothing left to gain. The research leans against it (follow-through about 0.4–0.8¢ against a round trip of about 4¢), so it is measured, not trusted. Steady turns it off.
+
+**Auto** (`config.autoMode`) picks Steady or Bold on every check (`decideAuto` in `lib/tennis/engine.ts`):
+- **Steady** while the run is down 10% or more of its starting balance (held shares at their sale value, or at cost while unpriced).
+- **Bold** when this check's plan for the main game allows a hold-to-final or drive bet.
+- **Back to Steady** after 5 minutes with no such bet, once nothing is held. Otherwise the last pick stands; Steady until the first plan.
+- **Sizes:** offers are Steady-sized in Steady and Bold-sized in Bold. Each switch is a decision row ("AUTO_MODE").
 
 **When offers come down:**
 - for 30 s after each live play;

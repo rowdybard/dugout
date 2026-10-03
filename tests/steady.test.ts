@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizeTennisEvent} from '../lib/tennis/normalize.ts';
 import {applyTennisAction,createTennisSession,stepTennisSession} from '../lib/tennis/engine.ts';
 import {defaultLiveTennisConfig,validateTennisConfig} from '../lib/tennis/rules.ts';
+import {modeRules,tradeMode} from '../lib/tennis/modes.ts';
 import type {TennisInput} from '../lib/tennis/types';
 
 const START=Date.parse('2026-10-03T16:00:00Z'),SLUG='aec-cfb-syra-uconn-2026-10-03';
@@ -19,11 +20,13 @@ function input(at:number):TennisInput {
   return {receivedAt:at,source:'REST',sourceTime:at,market,
     book:{bids:[{price:0.74,quantity:800}],asks:[{price:0.75,quantity:800}],state:'MARKET_STATE_OPEN',time:new Date(at).toISOString()}};
 }
-function run(entries?:'steady'|'all'){
-  const config={...defaultLiveTennisConfig(100),leagues:['CFB' as const],focusSlug:SLUG,...(entries?{entries}:{})};
+function run(entries?:'steady'|'all'|'auto',cash?:number){
+  const base={...defaultLiveTennisConfig(100),leagues:['CFB' as const],focusSlug:SLUG};
+  const config={...base,...(entries==='auto'?modeRules(base,'auto'):entries?{entries}:{})};
   assert.equal(validateTennisConfig(config),null);
   let session=createTennisSession(config,START-3_600_000);
   session=applyTennisAction(session,{action:'start',commandId:'steady-start'},[],START-3_600_000);
+  if(cash!==undefined)session={...session,cash};
   const at=START-6*60_000;
   return stepTennisSession(session,[input(at)],at);
 }
@@ -36,6 +39,20 @@ test('steady accounts never take a hold-to-final entry; they only rest quotes',(
   assert.equal(steady.pending,null,steady.lastReason);
   assert.ok(steady.maker?.quotes.YES&&steady.maker.quotes.NO,steady.maker?.reason??steady.lastReason);
   assert.equal(steady.maker!.quotes.YES!.price,0.74);assert.equal(steady.maker!.quotes.NO!.price,0.25);
+});
+
+test('Auto trades Bold where the research allows a bet, and Steady (at Steady size) once the run is down 10%',()=>{
+  const bold=run('auto');
+  assert.equal(bold.autoMode?.mode,'bold',bold.autoMode?.reason);assert.match(bold.autoMode!.reason,/favourite-hold/);
+  assert.equal(bold.pending?.action,'BUY','Bold takes the hold-to-final bet');
+  assert.equal(bold.pending?.plan?.strategy,'favourite-hold');
+  const down=run('auto',89);
+  assert.equal(tradeMode(down),'steady');assert.match(down.autoMode!.reason,/down 11%/);
+  assert.equal(down.pending,null,'Steady takes no bets');
+  const quote=down.maker?.quotes.YES;
+  assert.ok(quote,down.maker?.reason??down.lastReason);
+  assert.ok(quote.price*quote.quantity<=5+1e-9,`Steady-sized offer, not Bold's $12 (${quote.quantity} at ${quote.price})`);
+  assert.ok(down.decisions.some(d=>d.code==='AUTO_MODE'&&/Steady/.test(d.reason)));
 });
 
 test('upcoming college games (no live flag, period "NS", as the feed sends them) are open for pregame trading',()=>{

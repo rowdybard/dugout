@@ -115,10 +115,12 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
-- **Steady and Bold** (`lib/tennis/modes.ts`), the two choices on the dashboard:
+- **Steady, Bold and Auto** (`lib/tennis/modes.ts`), the choices on the dashboard:
   - **Steady:** `config.entries: 'steady'` keeps only the resting orders above, with no taker or drive entries. Orders are about 5% of the balance ($5 on $100).
   - **Bold:** `entries: 'all'` adds the hold-to-final bets the evidence allows, and the orders are 12% of the balance ($12 on $100, at most $50). At that size both resting buys still fit the 25% open-exposure cap.
   - **Same rules, bigger money:** Bold doesn't change the edge per dollar, only how many dollars ride on each trade. Wins and losses both get bigger.
+  - **Comeback test:** Bold and Auto set `explore: ['comeback-drive']`, so `comeback-drive@1` is paper-traded (EXPLORE_PAPER) to measure it; Steady clears it.
+  - **Auto** (`autoMode: true`, with Bold's rules in the config): `decideAuto` picks the mode on each check and keeps it in `session.autoMode`. Steady while the run is down 10% (`AUTO_DRAWDOWN`); Bold when the main game's plan has a permitted hold-to-final or drive action; back to Steady after 5 minutes without one (`AUTO_HOLD_MS`) once nothing is held. `tradeMode(session)` and `tradeBudget(session)` give the mode and order size in force; the engine, open-orders view and Octopus use them.
   - **Reset** keeps the mode and resizes the orders to the new balance.
 - **The Octopus** (experimental; "Chaos mode" in code, `lib/tennis/octopus.ts`). The bot also rests offers on up to 6 extra games, its arms, in either mode, at that mode's size and with its one-sided rules.
   - **Arm state:** each arm has its own quote state (`session.chaos[slug]`), fills and holdings; the main game keeps `session.maker`.

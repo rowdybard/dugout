@@ -33,7 +33,7 @@ export function OctopusPanel({session,markets,busy,now,onChange}:{
   const on=arms.length>0||auto;
   return <section className="tennis-chaos" aria-label="Octopus">
     <div className="tennis-chaos-head">
-      <span>{arms.length?`${arms.length} arm${arms.length>1?'s':''} working · ${config.entries==='steady'?'Steady':'Bold'} size`:`Offers on up to ${OCTOPUS_ARMS} more games at once`}</span>
+      <span>{arms.length?`${arms.length} arm${arms.length>1?'s':''} working · ${config.autoMode?'Auto':config.entries==='steady'?'Steady':'Bold'} size`:`Offers on up to ${OCTOPUS_ARMS} more games at once`}</span>
     </div>
     <div className="tennis-mode-choice" role="group" aria-label="Octopus picks its own games">
       <button aria-pressed={auto} disabled={busy} onClick={()=>onChange(()=>({octopusAuto:true}))}>Auto-pick on</button>

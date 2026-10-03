@@ -14,7 +14,7 @@ Dugout runs a bot that practises trading college football games on Polymarket wi
 1. **Search box.** Type a team and pick a live or upcoming college game. That's the game the bot trades.
    - If it says the account is set to other sports, tap **Show college football games** once.
 2. **Bot card:**
-   - the game name, and **Steady** / **Bold** (see below);
+   - the game name, and **Steady** / **Bold** / **Auto** (see below);
    - your **balance**, and **Reset balance**;
    - the main button: **Start bot**, **Pause**, **Resume** or **New run**, and **End run** next to it while a run is going;
    - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
@@ -23,7 +23,7 @@ Dugout runs a bot that practises trading college football games on Polymarket wi
 4. **Trades & balance:** every fill, with price, fees and result, plus a balance chart.
 5. **Settings & history** (closed by default): rules, background running, your own price key, diagnostics and downloads. You don't need any of it to get started.
 
-## Steady or Bold
+## Steady, Bold or Auto
 
 The bot mostly trades by leaving **buy offers** on both teams, slightly below the current price, and waiting for someone to sell into them. If both offers fill, you hold both sides of the game. That pays exactly $1 at the end whoever wins, and you paid a bit less than $1, so the difference is profit.
 
@@ -35,6 +35,14 @@ The bot mostly trades by leaving **buy offers** on both teams, slightly below th
 | Feel | Many small wins and losses | Bigger wins and bigger losses |
 
 Bold doesn't make the bot smarter. It puts more money on each trade, so the bad days get bigger too.
+
+In Bold (and Auto when it's in Bold), the bot also tries one **comeback re-entry**, on paper, to measure it: when a team trails by 3 to 24 points and drives inside the opponent's 30 (1st to 3rd down, **more than 5 minutes left**), it buys that team and sells when the drive ends. It never fires in the last 5 minutes, when a trailing team is usually a 1–2¢ longshot. The research so far leans against it (the move after such drives is smaller than the cost of buying and selling), so treat its results as a test, not a strategy that wins back losses.
+
+**Auto** lets the bot pick Steady or Bold on every check:
+- **Bold** while the research allows a hold-to-final or comeback bet on your game;
+- **Steady** when it doesn't (after 5 minutes without one, and only when nothing is held), and **always Steady while the run is down 10% or more**, so it never chases losses with bigger bets.
+
+The line under the buttons says which one it's in and why. Switching never changes shares already held: they keep the plan they were bought under, except that dropping to Steady on a 10% loss also brings back Steady's "sell unpaired shares after 10 minutes".
 
 ## Starting, pausing, ending
 
