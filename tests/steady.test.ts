@@ -79,7 +79,7 @@ const A='aec-cfb-alpha-beta-2026-10-03',B='aec-cfb-gamma-delta-2026-10-03',C='ae
 test('Chaos mode rests Steady orders on several games at once, each with its own quotes and fills',()=>{
   const config={...defaultLiveTennisConfig(100),leagues:['CFB' as const],focusSlug:A,entries:'steady' as const,chaosSlugs:[B,C]};
   assert.equal(validateTennisConfig(config),null);
-  assert.match(validateTennisConfig({...config,entries:'all'})!,/Steady/,'Chaos is Steady only');
+  assert.equal(validateTennisConfig({...config,entries:'all'}),null,'the Octopus works in Bold too');
   let session=applyTennisAction(createTennisSession(config,START-3_600_000),{action:'start',commandId:'chaos-start'},[],START-3_600_000);
   let t=START-60*60_000;
   session=stepTennisSession(session,[game(A,t,0.6,0.61),game(B,t,0.3,0.31),game(C,t,0.5,0.51)],t);

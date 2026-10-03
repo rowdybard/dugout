@@ -20,9 +20,10 @@ test('Steady and Bold sizes stay inside the bot limits for every balance',()=>{
   }
 });
 
-test('Bold turns Chaos off, and a balance reset keeps the mode at the new size',()=>{
+test('Bold keeps the Octopus, and a balance reset keeps the mode at the new size',()=>{
   const base={...defaultLiveTennisConfig(100),entries:'steady' as const,chaosSlugs:['a']};
-  assert.deepEqual(modeRules(base,'bold'),{entries:'all',entryBudget:12,chaosSlugs:[]});
+  assert.deepEqual(modeRules(base,'bold'),{entries:'all',entryBudget:12},'the Octopus works in Bold too');
+  assert.equal(validateTennisConfig({...base,...modeRules(base,'bold')}),null);
   let session=createTennisSession({...defaultLiveTennisConfig(100),...modeRules(defaultLiveTennisConfig(100),'bold')},0);
   session=applyTennisAction(session,{action:'reset',bankroll:500,commandId:'reset-bold'},[],1000);
   assert.equal(modeOf(session.config),'bold');assert.equal(session.config.entryBudget,50);

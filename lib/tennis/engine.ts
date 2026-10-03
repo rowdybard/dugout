@@ -24,7 +24,8 @@ import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
-import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {applyOctopusPicks,octopusSlugs} from './octopus.ts';
+import {BOLD_STOP,DIP_CAP_MULTIPLE,DIP_STEP,HALFTIME_QUOTE_MS,isHalftimePeriod,OCTOPUS_RESERVE_FRACTION,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type MakerState,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -88,15 +89,18 @@ function dataIssue(session: TennisSession, input: TennisInput, now: number): str
 }
 
 /** The taker position slot. Market-making inventory (exitPolicy 'maker') is managed separately. */
-/** Chaos mode: an extra game the bot also quotes (Steady only). */
+/** Octopus ("Chaos mode" in code): an extra game, an arm, the bot also quotes. */
 function chaosGame(session: TennisSession, slug: string) {
-  return session.config.entries === 'steady' && !!session.config.maker && slug !== session.config.focusSlug && (session.config.chaosSlugs ?? []).includes(slug);
+  return !!session.config.maker && slug !== session.config.focusSlug && octopusSlugs(session).includes(slug);
 }
-/** Run maker code against one Chaos game's own resting-order state (the same rules as the main game's). */
+/** While an arm's state is swapped in, the main game's state is kept here so shared limits still count its offers. */
+const swappedMain = new WeakMap<TennisSession, TennisSession['maker']>();
+/** Run maker code against one Octopus arm's own resting-order state (the same rules as the main game's). */
 function withChaosMaker<T>(session: TennisSession, slug: string, run: () => T): T {
   const main = session.maker, store = session.chaos ??= {};
-  session.maker = store[slug];
+  session.maker = store[slug]; swappedMain.set(session, main);
   try { return run(); } finally {
+    swappedMain.delete(session);
     if (session.maker) store[slug] = session.maker; else delete store[slug];
     session.maker = main;
   }
@@ -619,12 +623,20 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
     if (price > 0 && price < 1 && quantity + EPSILON >= execution.minimumTradeQty) targets[other] = { price, quantity, stake: exact(price * quantity) };
     else delete targets[other];
   }
-  // Both resting buys must be payable at once.
+  // Both resting buys must be payable at once, alongside every other game's resting offers (Octopus arms share the
+  // account's cash): all resting offers together may tie up at most OCTOPUS_RESERVE_FRACTION of the balance.
+  // The main game comes first: while an arm is quoted, room for the main game's two full offers is kept back.
+  const resting = (other: MakerState | undefined) => other ? (['YES', 'NO'] as const).reduce((total, side) => total + (other.quotes[side] ? other.quotes[side]!.quantity * other.quotes[side]!.price : 0), 0) : 0;
+  const isArm = swappedMain.has(session), main = isArm ? swappedMain.get(session) : undefined;
+  const arms = Object.values(session.chaos ?? {}).filter(other => other !== state).reduce((sum, other) => sum + resting(other), 0);
+  const restingElsewhere = isArm ? arms + Math.max(resting(main), 2 * session.config.entryBudget) : arms;
+  const octopus = octopusSlugs(session).length > 0;
+  const available = Math.max(0, (octopus ? Math.min(session.cash, OCTOPUS_RESERVE_FRACTION * tennisEquity(session)) : session.cash) - restingElsewhere);
   const reserve = Object.values(targets).reduce((sum, target) => sum + target!.quantity * target!.price, 0);
-  if (reserve > session.cash + EPSILON) for (const side of ['YES', 'NO'] as const) {
+  if (reserve > available + EPSILON) for (const side of ['YES', 'NO'] as const) {
     const target = targets[side];
     if (!target) continue;
-    const quantity = quoteQuantity(target.quantity * target.price * session.cash / reserve, target.price, execution.quantityIncrement, execution.minimumTradeQty);
+    const quantity = quoteQuantity(target.quantity * target.price * available / reserve, target.price, execution.quantityIncrement, execution.minimumTradeQty);
     if (quantity > 0) target.quantity = quantity; else delete targets[side];
   }
   let changed = false;
@@ -1298,7 +1310,7 @@ export function applyTennisAction(previous: TennisSession, action: TennisAction,
   if (!Number.isFinite(now) || now < previous.lastTickAt) return previous;
   if ('sessionId' in action && action.sessionId && action.sessionId !== previous.id) return previous;
   if (action.commandId && previous.commandIds.includes(action.commandId)) return previous;
-  if (action.action === 'tick') return stepTennisSession(previous, inputs, now);
+  if (action.action === 'tick') return stepTennisSession(applyOctopusPicks(previous, action.octopus, now), inputs, now);
   let session = normalizePositionExitRules(structuredClone(previous));
   session.config = normalizeTennisConfig(session.config);
   session.revision++;

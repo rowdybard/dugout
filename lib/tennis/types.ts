@@ -90,10 +90,14 @@ export type TennisConfig={
    */
   entries?:'steady'|'all';
   /**
-   * Chaos mode (experimental): extra games where the bot ALSO rests Steady orders at the same time, each with its own
-   * quotes, inventory cap and stake (the entry budget), sharing the account's cash and loss limit. Up to 6. Steady only.
+   * Octopus (experimental; called Chaos mode in code): extra games, "arms", where the bot ALSO rests offers at the same
+   * time, each with its own quotes, fills and holdings, sharing the account's cash. `chaosSlugs` are the games you
+   * pinned; with `octopusAuto` the bot fills the remaining arms itself (lib/tennis/octopus.ts). Up to 6 arms in total.
    */
   chaosSlugs?:string[];
+  octopusAuto?:boolean;
+  /** Games removed from the Octopus's auto picks; it won't pick them again. */
+  octopusSkip?:string[];
   strategy:'auto'|'recovery'|'momentum';momentumPoints:number;momentumConfirmations:number;focusSlug:string|null;
   baselineWindowMs:number;minimumHistoryMs:number;minSamples:number;declinePoints:number;
   recoveryPoints:number;recoveryConfirmations:number;maxSpreadPoints:number;
@@ -140,8 +144,10 @@ export type TennisSession={
   enginePlan?:CompactPlan;
   /** Paper market-making quotes and pull state. Inventory lives in positions with exitPolicy 'maker'. */
   maker?:MakerState;
-  /** Chaos mode: resting-order state for each extra game (the main game keeps `maker`). */
+  /** Octopus: resting-order state for each extra game (the main game keeps `maker`). */
   chaos?:Record<string,MakerState>;
+  /** Octopus auto picks, recorded on the check that chose them (so replays are exact). */
+  octopus?:{slugs:string[];pickedAt:number};
   /** The football drive each market last entered, so one drive is traded once. Cleared when the drive ends. */
   drives?:Record<string,{possessionTeamId:string;score:string;period:string}>;
   /** Last setup each strategy entered per market (`slug|strategy` → setup key): one entry per setup. */
@@ -173,7 +179,9 @@ export type TennisSession={
 };
 export type TennisAction=
  |{action:'start';config?:Partial<TennisConfig>;runForMs?:number;commandId:string}
- |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string}
+ |{action:'pause'|'resume'|'stop'|'tick';runForMs?:number;commandId?:string;sessionId?:string;
+   /** tick only: Octopus auto picks chosen for this check, when due (recorded so replays are exact). */
+   octopus?:string[]}
  |{action:'exit-now';commandId:string}
  |{action:'reset';bankroll:number;commandId:string;
   /** Paper only: drop open paper positions, pending orders and resting quotes instead of refusing (fake money). */

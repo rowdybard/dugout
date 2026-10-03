@@ -8,6 +8,7 @@ import type {MigrationStart,MigrationChunk,RunnerCommand,RunnerState,SourceHealt
 import {tennisRulesPatchSchema} from '../../../lib/tennis/rules.ts';
 import {decryptFeedCredentials,encryptFeedCredentials,type EncryptedFeedCredentials} from './feed-credentials.ts';
 import {BookRecorder,type R2Put} from '../../../lib/datastore/recorder.ts';
+import {octopusSlugs} from '../../../lib/tennis/octopus.ts';
 import {ChaosFiles,chaosLines,chaosOn,type ChaosCursor} from '../../../lib/datastore/chaos-log.ts';
 import {createSweepSession,listInput,SWEEP_EVERY_MS,SWEEP_LEAGUES,sweepAwaiting,sweepStep,sweepSummary} from '../../../lib/tennis/sweep.ts';
 import type {TennisAction,TennisInput,TennisMarket,TennisSession} from '../../../lib/tennis/types';
@@ -113,7 +114,7 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
    * no watched game live) the runner checks every 10 s; once a game is live, or anything is held or pending, every 2.5 s.
    */
   private delay(session:TennisSession){
-    const watched=[session.config.focusSlug,...(session.config.entries==='steady'?session.config.chaosSlugs??[]:[])].filter((slug):slug is string=>!!slug);
+    const watched=[session.config.focusSlug,...octopusSlugs(session)].filter((slug):slug is string=>!!slug);
     const busy=session.status==='stopping'||!!session.pending||session.positions.some(position=>position.status==='open');
     const live=watched.some(slug=>this.store.get<TennisMarket>('focused-market:'+slug)?.live);
     return busy||live||!watched.length?2500:PREGAME_CHECK_MS;
@@ -145,12 +146,12 @@ export class OwnerPaperRunner extends DurableObject<RunnerEnv>{
       try{
         const current=this.store.session()!;
         if(!runnable(current)){await this.schedule();return;}
-        const {inputs,failures,endedMarket}=await this.adapter.gather(current);
+        const {inputs,failures,endedMarket,octopus}=await this.adapter.gather(current);
         this.setSource(this.adapter.health());
         // Read-only research capture of every accepted book; never delays or affects the paper step.
         const lake=(this.env as RunnerEnv&LakeBindings).LAKE;
         if(lake){this.recorder.add(inputs);this.ctx.waitUntil(this.recorder.flush(lake).catch(()=>[]));}
-        await this.store.advance({action:'tick',sessionId:current.id},inputs,Date.now(),failures,current.revision);
+        await this.store.advance({action:'tick',sessionId:current.id,...(octopus?{octopus}:{})},inputs,Date.now(),failures,current.revision);
         const after=this.store.session();
         if(after)await this.sweep(after,lake);
         // Chaos mode (experimental): every event as one short line, written to the lake as tiny files.

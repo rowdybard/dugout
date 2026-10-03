@@ -283,3 +283,7 @@ body:has(.tennis-app){background:#17191e}
 .tennis-app button.tennis-sell-all.is-up{background:#2f6b45;border-color:#3f8a5a;color:#eaf7ee}
 .tennis-app button.tennis-sell-all.is-down{background:#7a2e33;border-color:#9a3c43;color:#fbecee}
 .tennis-app button.tennis-sell-all:disabled{opacity:.7}
+
+/* Octopus: red Experimental label */
+.tennis-tag.tennis-experimental{color:#f3b7bb;border:1px solid #b5454d;background:#4a1f23}
+.tennis-chaos-games small .tennis-tag{font-size:10px;padding:1px 6px;margin-right:4px}

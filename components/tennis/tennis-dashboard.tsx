@@ -27,7 +27,8 @@ import {FeedKey} from './feed-key';
 import {DecisionCard} from './decision-card';
 import {EngineCard} from './engine-card';
 import {OpenBook,SellEverything} from './open-book';
-import {ChaosPanel,downloadChaosLog} from './chaos-panel';
+import {OctopusPanel,downloadOctopusLog,type OctopusRules} from './octopus-panel';
+import {octopusSlugs} from '@/lib/tennis/octopus';
 import {modeOf,modeRules,type TradeMode} from '@/lib/tennis/modes';
 
 import {describeTennisRules,MAX_BALANCE} from '@/lib/tennis/rules';
@@ -153,7 +154,11 @@ export function TennisDashboard() {
       return {action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules};
     });}finally{setModeTap(null);}
   };
-  const setChaos=(chaosSlugs:string[])=>{if(session)void bot.perform({action:'update-rules',sessionId:session.id,expectedRulesRevision:session.rulesRevision??0,commandId:tennisCommandId(),rules:{chaosSlugs}});};
+  // Octopus rule changes are built from the latest saved rules when sent (like the mode buttons).
+  const setOctopus=(build:(config:NonNullable<typeof session>['config'])=>Partial<OctopusRules>)=>{if(session)void bot.perform(latest=>{
+    if(!latest)return null;const rules=build(latest.config);if(!Object.keys(rules).length)return null;
+    return {action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules};});};
+  const arms=session?octopusSlugs(session).length:0;
   const botGame=focusedMarket??null;
   // "Still loading more games" is not a problem worth a banner; the search box says it is checking.
   const feedErrors=(catalog?.errors??[]).filter(error=>!/still loading/i.test(error));
@@ -180,7 +185,7 @@ export function TennisDashboard() {
             <div className="tennis-mode-choice" role="group" aria-label="How the bot trades">
               <button aria-pressed={shownMode==='steady'} disabled={!session||!!modeTap} onClick={()=>void setMode('steady')}>Steady</button>
               <button aria-pressed={shownMode==='bold'} disabled={!session||!!modeTap} onClick={()=>void setMode('bold')}>Bold</button>
-              <span>{modeTap?'Saving…':shownMode==='steady'?`Small resting orders (${money(entryBudget)} each): many small wins and losses.`:`Bigger orders (${money(entryBudget)} each) plus hold-to-final bets the research allows: bigger wins, bigger losses.`}{session?.config.chaosSlugs?.length?' Bold turns Chaos off.':''}</span>
+              <span>{modeTap?'Saving…':shownMode==='steady'?`Small resting orders (${money(entryBudget)} each): many small wins and losses.`:`Bigger orders (${money(entryBudget)} each) plus hold-to-final bets the research allows: bigger wins, bigger losses.`}</span>
             </div>
           </div>
           <div className="tennis-bot-money">
@@ -202,8 +207,8 @@ export function TennisDashboard() {
           <span className="tennis-runtime"><Clock3 size={13}/>{background?'Keeps running with this page closed':migrating?'Moving to the cloud · entries paused':'Runs while this page is open'}{isPaused&&open.length>0?' · exits still managed':''}</span>
         </div>
 
-        {session&&steady&&<details className="tennis-chaos-details" open={!!session.config.chaosSlugs?.length}><summary>Chaos mode · {session.config.chaosSlugs?.length?`${session.config.chaosSlugs.length} extra game${session.config.chaosSlugs.length>1?'s':''}`:'off'}</summary>
-          <ChaosPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setChaos}/></details>}
+        {session&&<details className="tennis-chaos-details" open={arms>0||!!session.config.octopusAuto}><summary>Octopus <span className="tennis-tag tennis-experimental">Experimental</span> · {arms?`${arms} arm${arms>1?'s':''}`:session.config.octopusAuto?'looking for games':'off'}</summary>
+          <OctopusPanel session={session} markets={availableMarkets} busy={bot.busy||migrating} now={now} onChange={setOctopus}/></details>}
         {session?<DecisionCard session={session} market={availableMarkets.find(m=>m.slug===(open[0]?.slug??session.config.focusSlug))} runtime={bot.runtime} now={now}/>:<p className="tennis-reason" role="status">{reason}</p>}
         {session&&<SellEverything session={session} markets={availableMarkets} now={now} busy={bot.busy||migrating} onSell={()=>void bot.perform({action:'exit-now',commandId:tennisCommandId()})}/>}
         {session&&<OpenBook session={session} markets={availableMarkets} now={now}/>}
@@ -236,7 +241,7 @@ export function TennisDashboard() {
         <FeedKey runtime={bot.runtime} onChange={bot.reloadAccount}/>
         <section className="tennis-rule-summary" aria-label="Connection diagnostics"><b>Connection &amp; checks</b><p>{bot.runtime?.description||'Connecting to the saved paper account.'}</p>{background&&<p className="tennis-order-help">Last successful check: {bot.runtime?.lastSuccessfulCheck?age(bot.runtime.lastSuccessfulCheck,now):'waiting'}. {bot.runtime?.usage&&`${bot.runtime.usage.estimatedRowsWritten.toLocaleString()} estimated storage writes today.`}</p>}<small>{session?.evaluated??0} price checks · Rules revision {session?.rulesRevision??0} · Entry {session?money(isIdle?entryBudget:session.config.entryBudget):'—'} · Cash {session?money(session.cash):'—'}</small></section>
         {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':`${Math.round((session.testRun.endsAt-session.testRun.startedAt)/60000)}-minute paper watch`}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/></section>}
-        <section className="tennis-activity" aria-label="Bot activity"><div className="tennis-activity-head"><h2>Bot activity</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a>{session&&<button className="tennis-link" onClick={()=>downloadChaosLog(session)}>Download Chaos log</button>}</div>
+        <section className="tennis-activity" aria-label="Bot activity"><div className="tennis-activity-head"><h2>Bot activity</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a>{session&&<button className="tennis-link" onClick={()=>downloadOctopusLog(session)}>Download Octopus log</button>}</div>
           <div className="tennis-rule-summary"><b>What is happening now</b><p>{reason}</p></div>
           {unique.length?<div className="tennis-activity-list">{unique.map(decision=><div className="tennis-activity-row" key={decision.id}><span className={`tennis-action-badge ${decision.action==='BUY'?'is-buy':decision.action==='SELL'?'is-sell':''}`}>{decision.action}</span><div><strong>{labelFor(decision.slug,decision.side)}</strong><p>{decision.reason}</p></div><time>{time(decision.time)}</time></div>)}</div>:<div className="tennis-empty-activity">Nothing yet.</div>}</section>
         <div className="tennis-rule-summary"><b>Your current rules</b><p>{session?describeTennisRules(session.config):'Loading saved rules…'}</p></div>

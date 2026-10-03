@@ -119,12 +119,18 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
   - **Bold:** `entries: 'all'` adds the hold-to-final bets the evidence allows, and the orders are 12% of the balance ($12 on $100, at most $50). At that size both resting buys still fit the 25% open-exposure cap.
   - **Same rules, bigger money:** Bold doesn't change the edge per dollar, only how many dollars ride on each trade. Wins and losses both get bigger.
   - **Reset** keeps the mode and resizes the orders to the new balance.
-- **Chaos mode.**
-  - **Chaos mode** (experimental, off by default) is Steady on up to six more games at once (`config.chaosSlugs`). Each extra game gets its own quote state (`session.chaos[slug]`, `lib/tennis/engine.ts`), its own fills and its own inventory cap. The main game keeps `session.maker`.
-  - **Taking a game out of Chaos** cancels its quotes, and so do Stop and stale data. Inventory held on it is still sold or settled.
-  - **Logs:** every decision on a Chaos game, every fill, and the balance once a minute are written as one JSON line each (`lib/datastore/chaos-log.ts`).
-    - **Background runner:** with the `LAKE` R2 binding, it writes tiny files to `<prefix>/chaos/<YYYY-MM-DD>/<account>/<HHMMSS>-<n>.jsonl`. A file is written at 200 lines or after a minute, whichever comes first.
-    - **Download:** "Download Chaos log" in Settings & history builds the same lines from the saved session, and works without the lake.
+- **The Octopus** (experimental; "Chaos mode" in code, `lib/tennis/octopus.ts`). The bot also rests offers on up to 6 extra games, its arms, in either mode, at that mode's size and with its one-sided rules.
+  - **Arm state:** each arm has its own quote state (`session.chaos[slug]`), fills and holdings; the main game keeps `session.maker`.
+  - **Pinned and auto arms:** pinned arms are `config.chaosSlugs`. With `config.octopusAuto`, free arms are filled by `pickOctopusGames`:
+    - **eligible:** open, visible-league games that are live or start within 6 h, with a listed spread of 2¢ or less;
+    - **ranking:** narrowest spread first; current picks stay while they remain eligible;
+    - **re-checks:** every 5 minutes, or at once when a pick is pinned, skipped (`config.octopusSkip`) or made the main game.
+  - **Exact replays:** picks travel on the check that chose them (`{action:'tick', octopus}`) and are stored in `session.octopus`.
+  - **Shared cap:** all resting offers (main game and arms) may tie up at most 50% of the balance (`OCTOPUS_RESERVE_FRACTION`). While an arm is quoted, room for the main game's two full offers is kept back.
+  - **Taking a game out** cancels its offers, and so do Stop and stale data. Shares held on it are still sold or settled.
+  - **Logs:** every decision on an arm or the main game, every fill, and the balance once a minute, as one JSON line each (`lib/datastore/chaos-log.ts`).
+    - **Background runner:** with the `LAKE` R2 binding, it writes tiny files to `<prefix>/octopus/<YYYY-MM-DD>/<account>/<HHMMSS>-<n>.jsonl`, at 200 lines or after a minute.
+    - **Download:** "Download Octopus log" in Settings & history builds the same lines from the saved session.
 - **The all-games sweep** (runner only, `lib/tennis/sweep.ts`): every open college game is evaluated every 30 s from the games list and measured in a separate shadow session. It never trades. See [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md#14-college-football-first-the-rule-miner-and-the-all-games-sweep).
 - **The dashboard.** The Decision engine card shows the latest plan, every proposal with its result and reason, the maker quotes, fills and rebates, and any planned holds. The game picker lists upcoming games, so pregame strategies can be focused.
 - **The bet checker (for people).** The default mode is `real`. With `--slug` it reads the live book, gives a verdict per side, and prints the full engine plan: every strategy's proposal and why it was taken or refused.

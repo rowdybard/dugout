@@ -14,8 +14,8 @@ export const steadySize=(startingCash:number)=>Math.round(Math.min(5,startingCas
 export const boldSize=(startingCash:number)=>Math.max(steadySize(startingCash),Math.min(50,cents(startingCash*.12)));
 export const modeOf=(config:Pick<TennisConfig,'entries'>):TradeMode=>config.entries==='steady'?'steady':'bold';
 
-/** The rule change that switches mode. Bold is not Steady, so Chaos mode (Steady only) turns off. */
-export function modeRules(config:Pick<TennisConfig,'startingCash'|'chaosSlugs'>,mode:TradeMode):Partial<TennisConfig> {
+/** The rule change that switches mode. The Octopus works in both modes, at that mode's order size. */
+export function modeRules(config:Pick<TennisConfig,'startingCash'>,mode:TradeMode):Partial<TennisConfig> {
   return mode==='steady'?{entries:'steady',entryBudget:steadySize(config.startingCash)}
-    :{entries:'all',entryBudget:boldSize(config.startingCash),...(config.chaosSlugs?.length?{chaosSlugs:[]}:{})};
+    :{entries:'all',entryBudget:boldSize(config.startingCash)};
 }

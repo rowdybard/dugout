@@ -72,9 +72,12 @@ Don't reset or change rules just to make it trade. If something looks wrong, not
 
 ## Extras (optional)
 
-- **Chaos mode** (experimental, Steady only): the same small offers on up to 6 extra games at once. Turn it on under Steady on the bot card.
+- **The Octopus** (red **Experimental** label, on the bot card): the bot works up to 6 extra games ("arms") at once, with the same offers and rules as your main game, at your Steady or Bold size.
+  - **Auto-pick on:** it chooses calm, liquid college games itself and re-checks every 5 minutes.
+  - **Your own picks:** use the search box to pin games. × removes a pinned game, or skips an auto one so it won't be picked again.
+  - **Spending limit:** all offers together use at most half your balance, and your main game always gets its offers first.
 - **Your own Polymarket key** (Settings & history → Live prices): gives your bot instant price updates instead of a check every few seconds. Make a separate read-only key for it; it's stored encrypted and never shown again.
-- **Download Chaos log / saved history:** a full record of what the bot did, under Settings & history.
+- **Download Octopus log / saved history:** a full record of what the bot did, under Settings & history.
 
 ## Limits worth knowing
 

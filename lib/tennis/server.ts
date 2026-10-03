@@ -6,6 +6,7 @@ import {siteOwnerEnabled,type SiteOwnerBindings} from '../server/owner-access';
 import {createTennisSession,stepTennisSession,applyTennisAction} from './engine';
 import {defaultLiveTennisConfig,normalizeTennisConfig} from './rules';
 import {normalizePositionExitRules} from './football-context';
+import {applyOctopusPicks,octopusPickDue,octopusSlugs,pickOctopusGames} from './octopus.ts';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
 
@@ -39,7 +40,7 @@ async function withDeadline<T>(promise:Promise<T>,ms:number,message='Tennis disc
 export async function gatherTennisInputs(session:TennisSession,action:TennisAction){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Tennis data deadline','TimeoutError')),9500);
   const chosen=new Map<string,{market:TennisMarket;allowRest:boolean;lastContext?:TennisMarket}>(),failures:string[]=[];
-  let cursor=session.scanCursor??0;
+  let cursor=session.scanCursor??0,octopus:string[]|undefined;
   try{
     for(const p of session.positions.filter(p=>p.status==='open'))chosen.set(p.slug,{market:p.market,lastContext:p.lastContext,allowRest:true});
     if(session.pending?.market){
@@ -53,8 +54,13 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     }
     // Existing positions and pending orders get the entire data budget. A slow
     // discovery request must never delay a possible exit on a known market.
-    // Chaos mode: the main game and every Chaos game get books each tick, even while one of them holds inventory.
-    const wanted=new Set([session.config.focusSlug,...(session.config.entries==='steady'?session.config.chaosSlugs??[]:[])].filter((slug):slug is string=>!!slug));
+    // Octopus auto picks, when due, from the game list; returned so the check applies them.
+    if(action.action==='tick'&&session.status==='running'&&octopusPickDue(session,Date.now())){
+      const listed=await withDeadline(getTennisCatalog({includeHistory:false,leagues:session.config.leagues,signal:controller.signal}),7000).catch(e=>{failures.push(reason(e));return {markets:[] as TennisMarket[]};});
+      octopus=pickOctopusGames(listed.markets,session,Date.now())??undefined;
+    }
+    // The main game and every Octopus arm get books each check, even while one of them holds shares.
+    const wanted=new Set([session.config.focusSlug,...octopusSlugs(octopus?applyOctopusPicks(session,octopus,Date.now()):session)].filter((slug):slug is string=>!!slug));
     const chaosOn=wanted.size>1;
     // The bot's game (and Chaos games) get books even while shares are held on another game.
     if(action.action==='tick'&&session.status==='running'&&(!chosen.size||[...wanted].some(slug=>!chosen.has(slug)))){
@@ -82,7 +88,7 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     finally{clearTimeout(bookTimer);}
     const inputs:TennisInput[]=[];
     responses.forEach((r,i)=>{if(r.status==='fulfilled')inputs.push(r.value);else if([...chosen.values()][i].allowRest)failures.push(reason(r.reason));});
-    return {inputs,failures,cursor};
+    return {inputs,failures,cursor,octopus};
   }finally{clearTimeout(timer);}
 }
 
@@ -126,8 +132,8 @@ export async function updateTennisSession(req:Request,action:TennisAction){
   if('sessionId' in action&&action.sessionId&&action.sessionId!==s.id)throw new Error('The paper session changed. Refresh before sending that action.');
   if(action.action==='tick'&&now-s.lastTickAt<2000)return s;
   const needsInputs=action.action==='tick';
-  const {inputs,failures,cursor}=needsInputs?await gatherTennisInputs(s,action):{inputs:[] as TennisInput[],failures:[] as string[],cursor:s.scanCursor??0};
-  const next=action.action==='tick'?stepTennisSession(s,inputs,Date.now()):applyTennisAction(s,action,inputs,Date.now());
+  const {inputs,failures,cursor,octopus}=needsInputs?await gatherTennisInputs(s,action):{inputs:[] as TennisInput[],failures:[] as string[],cursor:s.scanCursor??0,octopus:undefined};
+  const next=action.action==='tick'?stepTennisSession(applyOctopusPicks(s,octopus,Date.now()),inputs,Date.now()):applyTennisAction(s,action,inputs,Date.now());
   next.scanCursor=cursor;
   if(failures.length){
     const time=Date.now(),message=failures[0];

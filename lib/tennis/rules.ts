@@ -10,6 +10,8 @@ export const tennisRulesSchema=z.object({
   maker:z.enum(['paper-v1','quiet-window-v1']).optional(),
   entries:z.enum(['steady','all']).optional(),
   chaosSlugs:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(6).optional(),
+  octopusAuto:z.boolean().optional(),
+  octopusSkip:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(30).optional(),
   explore:z.array(z.enum(['comeback-drive'])).max(5).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
@@ -57,8 +59,8 @@ export function validateTennisConfig(config:TennisConfig):string|null {
   const parsed=tennisRulesSchema.safeParse(rules);
   if(!parsed.success)return `Check ${parsed.error.issues[0].path.join(' ')}: ${parsed.error.issues[0].message}`;
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
-  if(config.chaosSlugs?.length&&(config.entries!=='steady'||!config.maker||config.evidenceGate!=='evidence-v1'))return 'Chaos mode runs Steady resting orders only: turn on Steady first.';
-  if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Chaos game can be added once.';
+  if((config.chaosSlugs?.length||config.octopusAuto)&&(!config.maker||config.evidenceGate!=='evidence-v1'))return 'The Octopus needs resting orders and the evidence gate: press Use decision engine first.';
+  if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Octopus game can be added once.';
   if(config.explore?.length&&config.evidenceGate!=='evidence-v1')return 'Exploring needs the evidence gate: it stops once the research measures the strategy.';
   if(config.explore&&new Set(config.explore).size!==config.explore.length)return 'List each explored strategy once.';
   if(config.decisionEngine==='local-move-v1'&&config.strategy!=='auto')return 'Local move analysis uses Auto. Legacy entry patterns cannot override it.';

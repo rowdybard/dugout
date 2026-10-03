@@ -8,6 +8,7 @@ import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normal
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
 import {advanceLeagueDiscovery,visibleLeagueMarkets,type LeagueDiscoveryState} from '../../../lib/tennis/catalog-discovery.ts';
 import {gameCopyDue} from '../../../lib/tennis/catalog-loader.ts';
+import {applyOctopusPicks,octopusPickDue,octopusSlugs,pickOctopusGames} from '../../../lib/tennis/octopus.ts';
 import {loadPriorityContext,joinBookWithPriorityContext,type PriorityContextRecord,type PriorityContextResult} from '../../../lib/tennis/priority-context.ts';
 import type {TennisInput,TennisLeague,TennisMarket,TennisSession} from '../../../lib/tennis/types';
 import type {SourceHealth} from '../../../lib/runner/contracts';
@@ -172,10 +173,15 @@ export class PolymarketInputAdapter implements InputAdapter {
         markets.push(...catalog.filter(m=>m.slug===focus).slice(0,1));
       }
     }
-    // Chaos mode: the extra games' books are fetched every tick too (each resting-order game needs a fresh book).
-    // In Chaos mode inventory on one game must not stop the others (main game included) from being fetched.
-    const chaosOn=session.status==='running'&&session.config.entries==='steady'&&!!session.config.chaosSlugs?.length;
-    const chaos=chaosOn?[session.config.focusSlug,...(session.config.chaosSlugs??[])].filter((slug):slug is string=>!!slug&&!markets.some(m=>m.slug===slug)):[];
+    // Octopus auto picks, when due, from the cached game list; returned so the check records them (exact replays).
+    let octopus:string[]|undefined;
+    if(session.status==='running'&&octopusPickDue(session,now())){
+      try{octopus=pickOctopusGames(await this.catalog(session,AbortSignal.timeout(3500)),session,now())??undefined;}catch(error){failures.push(errorText(error));}
+    }
+    // Octopus: every arm's book is fetched every check too (each resting-order game needs a fresh book), and shares
+    // held on one game never stop the others (main game included) from being fetched.
+    const arms=session.status==='running'?octopusSlugs(octopus?applyOctopusPicks(session,octopus,now()):session):[];
+    const chaos=arms.length?[session.config.focusSlug,...arms].filter((slug):slug is string=>!!slug&&!markets.some(m=>m.slug===slug)):[];
     if(chaos.length){
       const missing=chaos.filter(slug=>!this.store.get<TennisMarket>('focused-market:'+slug));
       let catalog:TennisMarket[]=[];
@@ -206,6 +212,6 @@ export class PolymarketInputAdapter implements InputAdapter {
       const key='focused-market:'+r.value.market.slug;if(gameCopyDue(this.store.get<TennisMarket>(key),r.value.market,60_000))this.store.set(key,r.value.market);}else failures.push(errorText(r.reason));
     if(!inputs.length)this.setHealth('error',failures[0]??'Current market data is unavailable.');
     const endedMarket=markets.map(m=>latest.get(m.slug)??m).find(m=>m.slug===session.config.focusSlug&&m.ended&&m.observedAt<=now()&&now()-m.observedAt<=45000);
-    return {inputs,failures:[...failures],...(endedMarket?{endedMarket}:{})};
+    return {inputs,failures:[...failures],...(endedMarket?{endedMarket}:{}),...(octopus?{octopus}:{})};
   }
 }

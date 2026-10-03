@@ -8,21 +8,21 @@ GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Clou
 
 - **UI:** `app/page.tsx` renders `components/tennis/tennis-dashboard.tsx`. The view shows college football only (`lib/tennis/leagues.ts`, `VISIBLE_LEAGUES`). The engine and data paths still support ATP/WTA, NFL and MLB.
 - **Layout:** game search, the bot card, game tracker, Trades & balance, and a closed Settings & history section.
-  - **Bot card:** Steady/Bold, Chaos, balance and reset, Pause/Resume/End run/New run, the status box, Both sides, and Open orders & shares.
+  - **Bot card:** Steady/Bold, the Octopus, balance and reset, Pause/Resume/End run/New run, the status box, Both sides, and Open orders & shares.
 - **Hosting:** the site is a Cloudflare Worker behind Cloudflare Access with Google sign-in; [CLOUDFLARE-HOSTING.md](CLOUDFLARE-HOSTING.md) has setup.
   - Each invited email gets its own D1 paper account.
   - Background runners are one SQLite Durable Object per account, allowed by `DUGOUT_RUNNER_USERS` / `RUNNER_OWNERS`.
 - **Strategy:** the evidence-gated decision engine, mainly paper market making ([DECISION-ENGINE.md](DECISION-ENGINE.md)).
   - **Steady:** resting offers only. After a one-sided fill it pairs or exits within 10 minutes.
   - **Bold:** bigger offers plus hold-to-final bets the evidence allows; after a one-sided fill it pairs, buys once on a 5¢ dip, and has a 10¢ loss limit after that.
-  - **Chaos:** Steady on up to 6 extra games, logged as tiny JSONL files.
+  - **Octopus** (experimental, `lib/tennis/octopus.ts`): up to 6 extra games in either mode, pinned or auto-picked every 5 minutes, all offers within 50% of the balance with the main game first, logged as tiny JSONL files.
 - **Paper only:** real money is not connected (`lib/live/README.md`). Connecting it is the owner's decision.
 
 ## Components and authority
 
 | Component | Source |
 | --- | --- |
-| Dashboard and panels | `components/tennis/` (dashboard, `open-book.tsx`, `chaos-panel.tsx`, `decision-card.tsx`, `use-tennis.ts`) |
+| Dashboard and panels | `components/tennis/` (dashboard, `open-book.tsx`, `octopus-panel.tsx`, `decision-card.tsx`, `use-tennis.ts`) |
 | Session engine, resting orders, pairing/exit, Bold rules | `lib/tennis/engine.ts`, `lib/tennis/maker.ts`, `lib/tennis/modes.ts` |
 | Decision engine, strategies, evidence | `lib/decision/` |
 | Status text, open orders view | `lib/tennis/decision-view.ts`, `lib/tennis/open-book.ts` |
@@ -53,7 +53,7 @@ On October 2–3, 2026 the owner's account and invited accounts ran on Cloudflar
 
 ## Evidence still needed
 
-- A weekend of resting-order results per mode (Steady, Bold, Chaos), reconciled from exports, before any claim about returns.
+- A weekend of resting-order results per mode (Steady, Bold, Octopus), reconciled from exports, before any claim about returns.
 - Whether Bold's dip buys and loss-limit exits help or hurt: compare the "Bold dip buy" and "Bold loss limit" ledger rows.
 - Behaviour on the Workers Paid plan, if adopted (CPU, writes).
 - The PC research items in [STRATEGY-LAB-HANDOFF.md](STRATEGY-LAB-HANDOFF.md) and [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md).

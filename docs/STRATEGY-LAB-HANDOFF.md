@@ -7,9 +7,9 @@ Last updated: 2026-10-03.
 **Status, Oct 3 (live paper market making):**
 - **Running live:** the market-making pilot recommended below is running on paper. Site and per-account background runners are on Cloudflare with Google sign-in, college football only in the view ([`MAINTAINER-HANDOFF.md`](MAINTAINER-HANDOFF.md)).
 - **Modes:** Steady (resting offers only; one-sided fills pair or exit within 10 min) and Bold (bigger offers, hold-to-final bets the evidence allows, one dip buy, 10¢ loss limit after it) ([`DECISION-ENGINE.md`](DECISION-ENGINE.md)).
-- **Chaos mode:** experimental, Steady on up to 6 extra games, logged as tiny JSONL files.
+- **Octopus** (was Chaos mode): experimental, up to 6 extra games in either mode, pinned or auto-picked, logged as tiny JSONL files.
 - **Research tools on the PC:** the rule miner, the all-games sweep (owner's runner), ESPN college play-by-play fetch/align, and the Dugout Lab GUI ([`STRATEGY-ARCHITECTURE.md`](STRATEGY-ARCHITECTURE.md)).
-- **Next evidence:** reconcile a weekend of Steady/Bold/Chaos results from exports, and compare the "Bold dip buy" and "Bold loss limit" rows. Real money stays unwired.
+- **Next evidence:** reconcile a weekend of Steady/Bold/Octopus results from exports, and compare the "Bold dip buy" and "Bold loss limit" rows. Real money stays unwired.
 
 Earlier (2026-09-27): **resumed as a decision engine** after the owner's pause: the research now drives an evidence-gated engine ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)). The Cloudflare paper runner stays paused and undeployed. The only scheduled job is the paper-only forward test (`.github/workflows/forward-test.yml`), which runs once merged to `main`.
 

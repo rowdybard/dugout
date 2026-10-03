@@ -5,7 +5,7 @@ import type {TennisSession} from '../lib/tennis/types';
 
 const T=Date.parse('2026-10-03T16:04:05Z');
 const session=(over:Record<string,unknown>={})=>({
-  config:{focusSlug:'a',chaosSlugs:['b'],entries:'steady'},cash:97.5,equity:[{time:T,price:100.25}],
+  config:{focusSlug:'a',chaosSlugs:['b'],entries:'steady',maker:'paper-v1'},cash:97.5,equity:[{time:T,price:100.25}],
   decisions:[{time:T+1,slug:'a',side:'YES',action:'quote',code:'maker-quote',reason:'x'.repeat(300)},
     {time:T+2,slug:'z',side:'NO',action:'skip',code:'other',reason:'not a Chaos game'},
     {time:T+3,slug:'b',side:'NO',action:'quote',code:'maker-quote',reason:'rest at 69¢'}],
@@ -15,7 +15,8 @@ const session=(over:Record<string,unknown>={})=>({
 
 test('Chaos lines: decisions on Chaos games, every fill, balance once a minute, cursor moves forward',()=>{
   assert.equal(chaosOn(session()),true);
-  assert.equal(chaosOn(session({config:{focusSlug:'a',chaosSlugs:['b'],entries:'all'}})),false,'Steady only');
+  assert.equal(chaosOn(session({config:{focusSlug:'a',chaosSlugs:['b'],entries:'all',maker:'paper-v1'}})),true,'Bold too');
+  assert.equal(chaosOn(session({config:{focusSlug:'a',chaosSlugs:['b'],entries:'steady'}})),false,'needs resting orders');
   const first=chaosLines(session(),{decisions:0,ledger:0,balance:0},T+10);
   assert.deepEqual(first.lines.map(line=>`${line.kind}:${line.slug??''}`),['decision:a','decision:b','fill:b','balance:']);
   assert.ok(first.lines[0].note!.length<=160,'long reasons are cut short');
@@ -32,7 +33,7 @@ test('Chaos files are tiny: written at 200 lines or after a minute, named by day
   files.add([{t:T,kind:'balance',cash:100}]);
   assert.equal(await files.flush(bucket,'u_chad/../x'),null,'waits for more lines');
   clock+=60_000;
-  assert.equal(await files.flush(bucket,'u_chad/../x'),'lake/chaos/2026-10-03/u_chadx/160405-0.jsonl');
+  assert.equal(await files.flush(bucket,'u_chad/../x'),'lake/octopus/2026-10-03/u_chadx/160405-0.jsonl');
   assert.equal(puts[0].value,'{"t":'+T+',"kind":"balance","cash":100}\n');
   files.add(Array.from({length:200},(_,i)=>({t:T+i,kind:'decision' as const})));
   assert.match((await files.flush(bucket,'u_chad'))!,/-1\.jsonl$/,'200 lines write at once');

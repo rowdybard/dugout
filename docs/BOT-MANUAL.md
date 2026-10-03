@@ -49,28 +49,28 @@ Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The vi
 | Area | What it shows |
 | --- | --- |
 | Search box | Live and upcoming college games; the chosen game is the bot's game. |
-| Bot card | Game, Steady/Bold (and Chaos under Steady), balance, Reset balance, the run controls, the status box, **Both sides**, and **Open orders & shares**. |
+| Bot card | Game, Steady/Bold, the Octopus (red Experimental label), balance, Reset balance, the run controls, the status box, **Both sides**, and **Open orders & shares**. |
 | Status box | One plain-English state and reason, e.g. "Buy offers posted: Offering to buy Liberty at 70¢ or Delaware at 29.5¢. It fills only if someone sells at that price." Chips show the ages of the last bot check, accepted quote and game report. |
 | Both sides | One line per team from that team's own state: what is held, its posted offer, or the engine's verdict. |
-| Open orders & shares | Every resting offer (team, price, shares, cash held) and every holding (shares, average price, cost, value if sold now), across the main and Chaos games. Holdings also show their plan: "paired", "waiting for a pair, sells at <time>", or Bold's state. |
+| Open orders & shares | Every resting offer (team, price, shares, cash held) and every holding (shares, average price, cost, value if sold now), across the main game and Octopus arms. Holdings also show their plan: "paired", "waiting for a pair, sells at <time>", or Bold's state. |
 | Game tracker | Score, clock and a field drawing from Polymarket game reports, with the report and check ages; a failed check shows its reason. |
 | Trades & balance | Every fill with price, quantity, fees and result, and the balance chart. |
-| Settings & history | Rules, Ask Claude (owner), the Decision engine card, background setup, your own Polymarket key ("Live prices"), diagnostics, saved-history download and Chaos log download. |
+| Settings & history | Rules, Ask Claude (owner), the Decision engine card, background setup, your own Polymarket key ("Live prices"), diagnostics, saved-history download and Octopus log download. |
 
 ### Controls
 
 | Control | Effect |
 | --- | --- |
 | Pick a game | Sets the bot's focus. Allowed while shares are held: they stay managed on their own game, and new offers go to the new game. |
-| Steady / Bold | Switches the trading mode and resizes the order. The button lights up at once; the change is saved from the latest rules. Bold turns Chaos off. |
+| Steady / Bold | Switches the trading mode and resizes the order. The button lights up at once; the change is saved from the latest rules. The Octopus keeps running at the new size. |
 | Start bot / Resume | Starts an idle account or resumes a paused one. Needs a chosen game. |
 | Pause | No new entries; held shares stay managed. |
 | Sell everything now | Big button while anything is held: green when the holdings are up, red when down (neutral until priced). Pauses entries, pulls offers, and sells every held share at the best bid on the next fresh book (`exit-now`). Resume continues the run. |
 | End run | Cancels offers, sells what is held, and ends the run. |
 | New run | After a run ends: opens Reset balance. |
 | Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold, and drops open paper trades (fake money). |
-| Chaos mode | Steady only: the same offers on up to 6 extra games. Removing a game pulls its offers. |
-| Download Chaos log / saved history | JSONL of Chaos events built in the browser / the full account journal export. |
+| Octopus | Either mode: the same offers on up to 6 extra games ("arms") at the mode's size and with its one-sided rules. **Auto-pick** fills free arms with open college games that are live or start within 6 h, with a listed spread of 2¢ or less. It picks the narrowest spread first, keeps current picks while they stay eligible, and re-checks every 5 minutes. **Pin** a game with the search. × removes a pinned game or skips an auto one. All resting offers together use at most 50% of the balance, and room for the main game's two offers is always kept. Removing an arm pulls its offers; shares stay managed. |
+| Download Octopus log / saved history | JSONL of Octopus events built in the browser / the full account journal export. |
 
 ### Trading modes
 
@@ -362,7 +362,7 @@ Every invited identity gets its own D1 paper account. Background runners are sep
 | `RUNNER_HMAC_SECRET` | Runner secret: signature verification and credential-key derivation. |
 | `RUNNER_OWNER_ID`, `RUNNER_OWNERS` | Runner variables: the owner, and `*` or a comma list of other allowed accounts. |
 | `RUNNER_ENGINE_VERSION` | Runner variable: the build's commit, for replay provenance. |
-| `LAKE`, `LAKE_PREFIX` | Optional runner R2 binding for research recording and Chaos logs. |
+| `LAKE`, `LAKE_PREFIX` | Optional runner R2 binding for research recording and Octopus logs. |
 | `POLYMARKET_KEY_ID`, `POLYMARKET_SECRET_KEY` | Owner's server-only feed credentials. |
 | `ANTHROPIC_API_KEY` | Optional site secret for the owner's adviser. |
 

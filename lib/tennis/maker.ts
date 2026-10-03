@@ -34,6 +34,9 @@ export const BOLD_STOP=0.10;
  * is slow to report the second half starting).
  */
 export const HALFTIME_QUOTE_MS=20*60_000;
+/** Across the main game and every Octopus arm, resting offers may tie up at most this share of the balance. */
+export const OCTOPUS_RESERVE_FRACTION=0.5;
+export const OCTOPUS_ARMS=6;
 export const isHalftimePeriod=(period:string|null|undefined)=>!!period&&/^(HT|HALF|HALFTIME)$/i.test(period.trim());
 
 export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};
