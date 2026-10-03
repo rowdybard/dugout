@@ -1,4 +1,5 @@
-import {detectFootballEvents,endsDrive,EVENT_TAPE_LIMIT,latestScore,PRE_EVENT_LOOKBACK_MS,type FootballState} from '../decision/events.ts';
+import {detectFootballEvents,endsDrive,EVENT_TAPE_LIMIT,latestScore,PRE_EVENT_LOOKBACK_MS,type FootballState,type GameEvent} from '../decision/events.ts';
+import {footballDriveVersion,verifiedFootballScoreboard} from './football-context.ts';
 import {advanceShadow,compactShadow,openShadow,settleResult,settleShadow,shadowReadyToCompact} from '../decision/shadow.ts';
 import {specOf} from '../decision/catalog.ts';
 import {NO_TRADE,type NoTradeCode} from '../decision/why.ts';
@@ -35,8 +36,42 @@ function footballState(state:FootballReportState|undefined):FootballState|undefi
   return base?{reportTime:base.reportTime,score:base.score,period:base.period,possessionTeamId:report?.possessionTeamId??null,deadBall:dead}:undefined;
 }
 
+/** Score events use PM's source clock; drive events use the source that actually supplied the play. */
+function recordSourcedGameEvents(session:TennisSession,input:TennisInput,next:FootballReportState,now:number){
+  const slug=input.market.slug,identity=input.market.footballIdentity,verified=verifiedFootballScoreboard(input.market,now);
+  const scoreboard=next.scoreboard??verified;
+  if(!identity||!scoreboard||!verified||scoreboard.reportTime!==verified.reportTime||scoreboard.score!==verified.score||scoreboard.period!==verified.period)return;
+  const previous=session.tapeState?.[slug],stored=session.quotes?.[slug],known=session.gameTape?.[slug]??[];
+  const price=stored&&stored.bid!==null&&stored.ask!==null?round((stored.bid+stored.ask)/2):null;
+  const scoreState:FootballState={reportTime:scoreboard.reportTime,score:scoreboard.score,period:scoreboard.period,possessionTeamId:null,deadBall:false};
+  const events=detectFootballEvents({previous:previous?{...previous,reportTime:previous.scoreboardTime??previous.reportTime,possessionTeamId:null,deadBall:false}:undefined,
+    next:scoreState,receivedAt:scoreboard.receiptTime,yesOrdering:input.market.yesOrdering,teams:{yes:identity.yesTeamId,no:identity.noTeamId},
+    preYesMid:yesMidAt(session,slug,scoreboard.reportTime-PRE_EVENT_LOOKBACK_MS),atReportYesMid:price})
+    .map(event=>({...event,id:`POLYMARKET:${scoreboard.eventId}:${event.id}`}));
+  const base=next.assessment.status==='transition'?next.transition:next.assessment.status==='fresh'?next.report:undefined;
+  const source=base?.sources?.drive??(base?{provider:'POLYMARKET' as const,eventId:base.eventId,reportTime:base.reportTime,receiptTime:base.receiptTime}:undefined);
+  const driveVersion=source?footballDriveVersion(source):previous?.driveVersion,deadBall=!!base&&'phase' in base;
+  const possession=base&&!('phase' in base)?base.possessionTeamId:previous?.possessionTeamId??null;
+  if(source&&previous?.driveProvider===source.provider&&previous.driveVersion!==driveVersion){
+    const side=(team:string|null)=>team===identity.yesTeamId?'yes' as const:team===identity.noTeamId?'no' as const:null;
+    const was=side(previous.possessionTeamId),is=side(possession);
+    const eventBase={reportTime:source.reportTime,receivedAt:source.receiptTime,score:scoreboard.score,period:scoreboard.period,
+      preYesMid:yesMidAt(session,slug,source.reportTime-PRE_EVENT_LOOKBACK_MS),atReportYesMid:price,points:0};
+    if(was&&is&&was!==is&&!events.some(event=>event.type==='score'))events.push({...eventBase,id:`${source.provider}:${source.eventId}:${driveVersion}:possession`,type:'possession',side:is});
+    if(deadBall&&!previous.deadBall)events.push({...eventBase,id:`${source.provider}:${source.eventId}:${driveVersion}:dead-ball`,type:'dead-ball',side:null});
+  }
+  let drives=previous?.drives??known.filter(endsDrive).length;
+  const fresh:GameEvent[]=events.filter(event=>!known.some(item=>item.id===event.id)).map(event=>{if(endsDrive(event))drives++;return {...event,drive:drives};});
+  (session.tapeState??={})[slug]={...scoreState,reportTime:base?.reportTime??scoreboard.reportTime,possessionTeamId:possession,deadBall:base?deadBall:previous?.deadBall??false,drives,
+    scoreboardTime:scoreboard.reportTime,scoreboardReceiptTime:scoreboard.receiptTime,
+    ...(source?{driveTime:source.reportTime,driveReceiptTime:source.receiptTime,driveVersion,driveProvider:source.provider}:previous?.driveProvider?{
+      driveTime:previous.driveTime,driveReceiptTime:previous.driveReceiptTime,driveVersion:previous.driveVersion,driveProvider:previous.driveProvider}:{})};
+  if(fresh.length)(session.gameTape??={})[slug]=[...known,...fresh].slice(-EVENT_TAPE_LIMIT);
+}
+
 /** Call with the new football assessment, BEFORE this step's quote is stored (so the stored quote is pre-report). */
 export function recordGameEvents(session:TennisSession,input:TennisInput,next:FootballReportState,now:number){
+  if(input.market.footballSources||input.market.footballSourceIssue||session.tapeState?.[input.market.slug]?.driveProvider){recordSourcedGameEvents(session,input,next,now);return;}
   const slug=input.market.slug,identity=input.market.footballIdentity,current=footballState(next);
   if(!current||!identity)return;
   const previous=session.tapeState?.[slug];

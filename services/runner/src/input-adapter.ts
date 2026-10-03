@@ -3,6 +3,7 @@ import {streamBookForDisplay} from '../../../lib/trading/stream-types.ts';
 import {marketSocketHeaders} from '../../../lib/trading/us-signature.ts';
 import {fetchFreshMarketBook} from '../../../lib/trading/fresh-book.ts';
 import {fetchFreshFootballEvent} from '../../../lib/trading/fresh-event.ts';
+import {fetchFreshEspnFootballSummary} from '../../../lib/trading/fresh-espn-football.ts';
 import {publicRetryAfterMs} from '../../../lib/bot/public-source-budget.ts';
 import {normalizeTennisBook,normalizeTennisEvent,normalizeTennisExecution,normalizeTennisSettlement} from '../../../lib/tennis/normalize.ts';
 import {currentTennisContext} from '../../../lib/tennis/market-context.ts';
@@ -193,20 +194,21 @@ export class PolymarketInputAdapter implements InputAdapter {
     // Reports and handshake run alongside books. Held exits wait only for books.
     const connection=this.ensureSocket(markets).catch(()=>{});
     this.keepAlive(connection);
-    const requireReport=!held.length||session.pending?.action==='BUY',reportTasks:Promise<unknown>[]=[];
+    const reportTasks:Promise<unknown>[]=[];
     const latest=new Map<string,TennisMarket>();
     const results=await Promise.allSettled(markets.map(m=>{
+      const requireReport=!held.some(position=>position.slug===m.slug)||session.pending?.action==='BUY'&&session.pending.slug===m.slug;
       if(m.league==='NFL'||m.league==='CFB'){
-        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal)}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
-        reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
+        const report=loadPriorityContext(m,{now,read:async key=>this.store.get<PriorityContextRecord>(key),write:async(key,value)=>{this.store.set(key,value);if(!requireReport)this.store.saveUsage();},fetchEvent:(_path,signal)=>this.footballEvent(m.eventId,signal),fetchEspn:fetchFreshEspnFootballSummary}).then((r:PriorityContextResult)=>{latest.set(m.slug,r.reportMarket);if(r.error)failures.push(r.error);return r;});
+        if(requireReport)reportTasks.push(report);this.keepAlive(report);return joinBookWithPriorityContext(this.load(m,AbortSignal.timeout(4000)),report,now,requireReport);
       }
       let context:TennisMarket|undefined;
       const report=this.focused(m).then(value=>{context=value;latest.set(m.slug,value);},error=>{failures.push(errorText(error));});
-      reportTasks.push(report);this.keepAlive(report);
+      if(requireReport)reportTasks.push(report);this.keepAlive(report);
       return this.load(m,AbortSignal.timeout(4000)).then(async value=>{if(requireReport)await report;return context?{...value,market:currentTennisContext(value.market,context,now(),value.market.active)}:value;});
     }));
     // A failed post-game book must not hide a confirmed final game report.
-    if(requireReport)await Promise.allSettled(reportTasks);
+    await Promise.allSettled(reportTasks);
     const inputs:TennisInput[]=[];for(const r of results)if(r.status==='fulfilled'){inputs.push(r.value);
       // The saved copy only seeds the next pass; rewrite it when the game changes or once a minute (each save is a write).
       const key='focused-market:'+r.value.market.slug;if(gameCopyDue(this.store.get<TennisMarket>(key),r.value.market,60_000))this.store.set(key,r.value.market);}else failures.push(errorText(r.reason));

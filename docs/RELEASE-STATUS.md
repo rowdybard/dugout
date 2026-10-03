@@ -2,6 +2,14 @@
 
 This records dated observations and test results; it is not a live account-status feed. Newest first.
 
+## October 3, 2026: Montana drive fallback
+
+- Polymarket's Montana State–Idaho event repeatedly returned a working scoreboard and clock with no drive state. A reviewed ESPN mapping supplies missing drive details while Polymarket retains all scoreboard and market authority.
+- The two sources must agree on teams, game, score and quarter. Both report and receipt ages stay within 45 seconds, with a maximum 15-second report-time difference. ESPN's clock is not used. Transitions and incomplete end-of-play states wait for the next complete report.
+- Source ages appear separately; last-known drive details stay labeled. New buys wait on unusable context, while book exits and fresh Polymarket score/half exit triggers continue.
+- Verification: 787 tests passed, including native Penn State/Pitt fixtures, independent source clocks, stale/conflicting reports, field direction, turnovers, source handoffs, maker/dip buy guards and score-triggered exits. Main TypeScript, runner TypeScript, site build and runner dry-run build passed. Changed-file lint passed after its final constant-binding correction.
+- A read-only paired check at 03:30:16 UTC matched Montana correctly but found ESPN's play 54 seconds old; the combined drive was rejected. No automatic live fill is claimed. No account controls, cash or positions were changed during verification. Deployment evidence is recorded separately from these local checks.
+
 ## October 2–3, 2026: Cloudflare hosting and live college football
 
 **Hosting**

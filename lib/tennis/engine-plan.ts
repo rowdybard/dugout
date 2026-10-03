@@ -149,7 +149,7 @@ export function decisionContext(session:TennisSession,input:TennisInput,now:numb
       yes:{name:market.yesName,ask:ask?.price??null,bid:bid?.price??null,askSize:ask?.quantity??null,bidSize:bid?.quantity??null,...depth.yes},
       no:{name:market.noName,ask:bid?round(1-bid.price):null,bid:ask?round(1-ask.price):null,askSize:bid?.quantity??null,bidSize:ask?.quantity??null,...depth.no},
       pregameYesMid:session.pregame?.[market.slug]?.mid??null,yesOrdering:market.yesOrdering??null},
-    game:{status:market.ended?'final':phase==='live'?'live':'scheduled',period:periodNumber(market.period),observedAt:market.contextUpdatedAt,
+    game:{status:market.ended?'final':phase==='live'?'live':'scheduled',period:periodNumber(market.period),observedAt:market.footballSources?session.footballReports?.[market.slug]?.assessment.reportTime??null:market.contextUpdatedAt,
       ...(phase==='live'&&(market.league==='NFL'||market.league==='CFB')?footballGame(session,market,now)??{}:{}),
       ...(phase==='live'&&market.league==='MLB'?baseballGame(market,now)??{}:{})},
     history,events:session.gameTape?.[market.slug]??[]};

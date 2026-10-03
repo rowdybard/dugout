@@ -1,4 +1,4 @@
-import {env} from 'cloudflare:workers';
+import {env,waitUntil} from 'cloudflare:workers';
 import {readRunnerOwnedSession,type RunnerBindings} from '../runner/sites-proxy';
 import {db,profile} from '../server/storage';
 import {polymarketSecrets} from '../trading/credentials';
@@ -8,6 +8,8 @@ import {defaultLiveTennisConfig,normalizeTennisConfig} from './rules';
 import {normalizePositionExitRules} from './football-context';
 import {applyOctopusPicks,octopusPickDue,octopusSlugs,pickOctopusGames} from './octopus.ts';
 import {getTennisCatalog,getTennisMarket,loadTennisInput} from './data';
+import {loadServerPriorityContext} from './server-priority-context';
+import {joinBookWithPriorityContext} from './priority-context';
 import type {TennisAction,TennisInput,TennisMarket,TennisRuntime,TennisSession} from './types';
 
 /** Browser-mode runtime. The signed live stream is offered only to the pinned site owner. */
@@ -84,7 +86,16 @@ export async function gatherTennisInputs(session:TennisSession,action:TennisActi
     // A slow second book must not age a usable first book past the five-second gate.
     const bookTimer=setTimeout(()=>controller.abort(new DOMException('Book collection deadline','TimeoutError')),4500);
     let responses:PromiseSettledResult<TennisInput>[];
-    try{responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest,lastContext})=>withDeadline(loadTennisInput(market,controller.signal,{allowRest,lastContext}),4500,'A book check took too long. Waiting for a fresh quote.')));}
+    try{responses=await Promise.allSettled([...chosen.values()].map(({market,allowRest,lastContext})=>{
+      const book=loadTennisInput(market,controller.signal,{allowRest,lastContext});
+      if(!['CFB','NFL'].includes(market.league))return withDeadline(book,4500,'A book check took too long. Waiting for a fresh quote.');
+      const held=session.positions.some(position=>position.status==='open'&&position.slug===market.slug);
+      const requireReport=!held||session.pending?.action==='BUY'&&session.pending.slug===market.slug;
+      const report=loadServerPriorityContext(market,controller.signal);
+      // Background completion records evidence for the next check; held-position books never wait for it.
+      if(!requireReport)waitUntil(report.then(()=>{},()=>{}));
+      return withDeadline(joinBookWithPriorityContext(book,report,Date.now,requireReport),4500,'A book check took too long. Waiting for a fresh quote.');
+    }));}
     finally{clearTimeout(bookTimer);}
     const inputs:TennisInput[]=[];
     responses.forEach((r,i)=>{if(r.status==='fulfilled')inputs.push(r.value);else if([...chosen.values()][i].allowRest)failures.push(reason(r.reason));});

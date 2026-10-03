@@ -104,13 +104,63 @@ test('successful websocket upgrade cancels its handshake deadline and requests u
 });
 test('held football exits use their book before a slow direct game report, then use the persisted fresh report',async(t)=>{
   const {store}=await active();let now=NOW+2000;t.mock.method(Date,'now',()=>now);const session=store.session()!,market={...input(NOW).market,eventId:'112943',league:'CFB' as const,score:'7-0',period:'Q1',clock:'10:30',contextUpdatedAt:NOW,footballIdentity:{yesTeamId:'1',noTeamId:'2'},football:{possessionTeam:'Synthetic A',possessionTeamId:'1',down:2,yardsToGo:7,fieldPosition:{team:'Synthetic B',teamId:'2',yard:30},timeouts:[]},execution:{...input(NOW).market.execution!,league:'CFB' as const}};
-  session.positions=[{status:'open',market,lastContext:market} as unknown as typeof session.positions[number]];
+  session.positions=[{slug:market.slug,status:'open',market,lastContext:market} as unknown as typeof session.positions[number]];
   let release!:(r:Response)=>void,requested=false;const delayed=new Promise<Response>(r=>{release=r;});
   const rawMarket={...marketRaw(),sportsMarketType:'football_team_full_game_winner',marketSides:[{long:true,teamId:'1',team:{id:'1',name:'Synthetic A',league:'CFB'}},{long:false,teamId:'2',team:{id:'2',name:'Synthetic B',league:'CFB'}}]};
   t.mock.method(globalThis,'fetch',async(url:string)=>{if(url.includes('/v1/events?')){requested=true;return delayed;}if(url.includes('/market/slug/'))return Response.json({market:rawMarket});return fresh(now);});
   const tasks:Promise<unknown>[]=[];const adapter=new PolymarketInputAdapter(store,async()=>null,p=>{tasks.push(p);});const first=await adapter.gather(session);assert.equal(requested,true);assert.equal(first.inputs.length,1);assert.equal(first.inputs[0].receivedAt,now);assert.equal(first.inputs[0].market.football?.down,2);
   now+=1000;release(Response.json({events:[{...eventRaw(),id:'112943',score:'7-0',period:'Q1',eventState:{type:'football',live:true,period:'Q1',elapsed:'10:20',updatedAt:new Date(now-500).toISOString(),footballState:{driveState:{possessionTeamId:'1',down:4,yfd:7,fieldPosition:{teamId:'2',yard:30}}}},markets:[rawMarket]}]},{headers:{'CF-Cache-Status':'DYNAMIC'}}));await Promise.all(tasks);
   const second=await adapter.gather(session);assert.equal(second.inputs[0].market.football?.down,4);assert.equal(second.inputs[0].market.contextUpdatedAt,now-500);assert.equal(second.inputs[0].restReceipt?.requestedAt,now);
+});
+
+test('a pending football buy waits for its own fresh report without waiting for another held game',async(t)=>{
+  const {store}=await active(),now=NOW+2000;t.mock.method(Date,'now',()=>now);
+  const session=store.session()!;session.status='running';session.config.leagues=['CFB'];
+  const footballMarket=(slug:string,eventId:string,yesId:string,noId:string):TennisMarket=>({...input(NOW).market,slug,eventId,eventSlug:'event-'+eventId,
+    league:'CFB',score:'7-0',period:'Q1',clock:'10:30',contextUpdatedAt:NOW,footballIdentity:{yesTeamId:yesId,noTeamId:noId},
+    football:{possessionTeam:'Synthetic A',possessionTeamId:yesId,down:2,yardsToGo:7,fieldPosition:{team:'Synthetic B',teamId:noId,yard:30},timeouts:[]},
+    execution:{...input(NOW).market.execution!,slug,league:'CFB'}});
+  const held=footballMarket('synthetic-tennis','112943','1','2'),pending=footballMarket('synthetic-football-pending','112944','3','4');
+  session.positions=[{slug:held.slug,status:'open',market:held,lastContext:held} as unknown as typeof session.positions[number]];
+  session.pending={slug:pending.slug,action:'BUY',market:pending} as NonNullable<typeof session.pending>;
+  const rawMarket=(market:TennisMarket)=>({...marketRaw(market.slug),sportsMarketType:'football_team_full_game_winner',marketSides:[
+    {long:true,teamId:market.footballIdentity!.yesTeamId,team:{id:market.footballIdentity!.yesTeamId,name:market.yesName,league:'CFB'}},
+    {long:false,teamId:market.footballIdentity!.noTeamId,team:{id:market.footballIdentity!.noTeamId,name:market.noName,league:'CFB'}}]});
+  const report=(market:TennisMarket,down:number)=>Response.json({events:[{...eventRaw(market.slug),id:market.eventId,slug:market.eventSlug,score:'7-0',period:'Q1',
+    eventState:{type:'football',live:true,period:'Q1',elapsed:'10:20',updatedAt:new Date(now-500).toISOString(),footballState:{driveState:{
+      possessionTeamId:market.footballIdentity!.yesTeamId,down,yfd:7,fieldPosition:{teamId:market.footballIdentity!.noTeamId,yard:30}}}},markets:[rawMarket(market)]}]},
+    {headers:{'CF-Cache-Status':'DYNAMIC'}});
+  let releaseHeld!:(response:Response)=>void;
+  const delayedHeld=new Promise<Response>(resolve=>{releaseHeld=resolve;}),requestedReports:string[]=[];
+  t.mock.method(globalThis,'fetch',async(url:string)=>{
+    const source=new URL(url);
+    if(source.pathname==='/v1/events'){
+      const eventId=source.searchParams.get('id')!;requestedReports.push(eventId);
+      if(eventId===held.eventId)return delayedHeld;
+      if(eventId===pending.eventId)return report(pending,4);
+    }
+    const market=source.pathname.includes(pending.slug)?pending:held;
+    if(source.pathname.startsWith('/v1/market/slug/'))return Response.json({market:rawMarket(market)});
+    if(source.pathname.endsWith('/book'))return Response.json({...bookRaw(now),marketData:{...bookRaw(now).marketData,marketSlug:market.slug}},
+      {headers:{'CF-Cache-Status':'DYNAMIC'}});
+    throw new Error('Unexpected source route: '+source.pathname);
+  });
+  const tasks:Promise<unknown>[]=[];const adapter=new PolymarketInputAdapter(store,async()=>null,task=>tasks.push(task));
+  let completed:Awaited<ReturnType<typeof adapter.gather>>|undefined;
+  const gathering=adapter.gather(session).then(result=>{completed=result;return result;});
+  try{
+    // Flush immediate transports; the held report remains explicitly unresolved.
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.ok(completed,'A pending buy on B must not make the held A book wait for A\'s report.');
+    assert.deepEqual(requestedReports.sort(),[held.eventId,pending.eventId]);
+    assert.deepEqual(completed.failures,[]);assert.equal(completed.inputs.length,2);
+    const heldInput=completed.inputs.find(value=>value.market.slug===held.slug)!,pendingInput=completed.inputs.find(value=>value.market.slug===pending.slug)!;
+    assert.equal(heldInput.receivedAt,now);assert.equal(heldInput.market.football?.down,2);
+    assert.equal(pendingInput.market.football?.down,4,'The pending B input must include its completed current report.');
+    assert.equal(pendingInput.market.contextUpdatedAt,now-500);assert.equal(pendingInput.market.observedAt,now);
+  }finally{
+    releaseHeld(report(held,3));await Promise.all(tasks);await gathering;adapter.close();
+  }
 });
 
 test('large event detail accepts a realistic 195-market payload without lifting metadata or book limits',async(t)=>{

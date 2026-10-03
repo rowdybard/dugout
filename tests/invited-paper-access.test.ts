@@ -29,6 +29,9 @@ function fixture(pin:string|undefined=OWNER){
     filename=resolve(filename);const cached=modules.get(filename);if(cached)return cached.exports;
     const normalized=filename.replaceAll('\\','/');
     if(normalized.endsWith('/lib/market/scanner.ts'))return {DEFAULT_CONFIG:{}};
+    if(normalized.endsWith('/lib/tennis/server-priority-context.ts'))return {
+      async loadServerPriorityContext(){providerCalls++;throw new Error('No fixture game report');},
+    };
     if(normalized.endsWith('/lib/tennis/data.ts'))return {
       async getTennisCatalog(){providerCalls++;return {markets:[],updatedAt:Date.now(),errors:[]};},
       async getTennisMarket(){providerCalls++;throw new Error('No fixture market');},
@@ -37,7 +40,7 @@ function fixture(pin:string|undefined=OWNER){
     const moduleObject={exports:{}};modules.set(filename,moduleObject);
     const source=ts.transpileModule(readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
     new Function('require','module','exports',source)((specifier:string)=>{
-      if(specifier==='cloudflare:workers')return {env};
+      if(specifier==='cloudflare:workers')return {env,waitUntil:(task:Promise<unknown>)=>{void task.catch(()=>{});}};
       if(specifier.startsWith('@/')||specifier.startsWith('.')){
         let child=specifier.startsWith('@/')?resolve(root,specifier.slice(2)):resolve(dirname(filename),specifier);
         if(!existsSync(child))child+='.ts';return load(child);

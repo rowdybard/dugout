@@ -1,10 +1,12 @@
 import {normalizeTennisEvent} from './normalize.ts';
 import {assessFootballContext,isFootballMarket} from './football-context.ts';
+import {loadEspnContext,withEspnFootballFallback,type EspnContextCache,type EspnSummaryFetcher} from './football-fallback.ts';
+import {espnFootballMapping} from './espn-football.ts';
 import type {FootballAssessment,FootballReportState,TennisMarket} from './types';
 
 export const PRIORITY_CONTEXT_TTL_MS=3000;
 export const PRIORITY_CONTEXT_TIMEOUT_MS=3000;
-export type PriorityContextRecord={fetchedAt:number;successfulCheckAt?:number|null;market:TennisMarket;reportMarket:TennisMarket;state:FootballReportState;error:string|null};
+export type PriorityContextRecord={fetchedAt:number;successfulCheckAt?:number|null;market:TennisMarket;reportMarket:TennisMarket;state:FootballReportState;error:string|null;espn?:EspnContextCache};
 export type PriorityContextResult=PriorityContextRecord&{successfulCheckAt:number|null;assessment:FootballAssessment;cacheHit:boolean};
 export type PriorityContextDependencies={
   now:()=>number;
@@ -12,6 +14,7 @@ export type PriorityContextDependencies={
   write:(key:string,value:PriorityContextRecord)=>Promise<void>;
   /** Inject the existing provider budget/backoff client. This is a public GET, never an order. */
   fetchEvent:(path:string,signal:AbortSignal)=>Promise<unknown>;
+  fetchEspn?:EspnSummaryFetcher;
   timeoutMs?:number;
 };
 const message=(e:unknown)=>e instanceof Error?e.message:'The current game report is unavailable.';
@@ -30,7 +33,7 @@ const unavailable=(market:TennisMarket,previous:PriorityContextRecord|null,now:n
   const accepted=previous?.market??market;
   // Unknown context blocks context-based entries without touching quotes or ordinary risk exits.
   const reportMarket={...accepted,football:null};
-  return {fetchedAt:now,successfulCheckAt:lastSuccessfulCheck(previous,now),market:accepted,reportMarket,state:assessFootballContext(reportMarket,now,previous?.state),error};
+  return {fetchedAt:now,successfulCheckAt:lastSuccessfulCheck(previous,now),market:accepted,reportMarket,state:assessFootballContext(reportMarket,now,previous?.state),error,...(previous?.espn?{espn:previous.espn}:{})};
 };
 
 /** Official get-events filters select one event and its full-game winner market.
@@ -44,6 +47,7 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
   }
   const key=`tennis:priority-context:v1:${market.eventId}:${market.slug}`;
   let previous:PriorityContextRecord|null=null;
+  let latestEspn:EspnContextCache|undefined;
   try{
     const saved=await deps.read(key);
     if(saved&&sameGame(market,saved.market)&&sameGame(market,saved.reportMarket))previous=saved;
@@ -60,30 +64,44 @@ export async function loadPriorityContext(market:TennisMarket,deps:PriorityConte
       cancel=()=>stop(signal?.reason??new Error('Game report request cancelled.'));
       signal?.addEventListener('abort',cancel,{once:true});
     });
-    let raw:unknown;
-    try{raw=await Promise.race([deps.fetchEvent('/v1/events?id='+encodeURIComponent(market.eventId)+'&sportsMarketTypes=football_team_full_game_winner',controller.signal),deadline]);}
+    let raw:unknown,receivedAt:number,espn:EspnContextCache|undefined;
+    try{
+      const backup=deps.fetchEspn?loadEspnContext(market,previous?.espn,deps.fetchEspn,deps.now,AbortSignal.any([controller.signal,AbortSignal.timeout(Math.max(1,timeoutMs-100))])).then(value=>{latestEspn=value;return value;}):Promise.resolve(undefined);
+      const primary=deps.fetchEvent('/v1/events?id='+encodeURIComponent(market.eventId)+'&sportsMarketTypes=football_team_full_game_winner',controller.signal)
+        .then(data=>({data,receivedAt:deps.now()}),error=>({error,receivedAt:deps.now()}));
+      const [response,alternative]=await Promise.race([Promise.all([primary,backup]),deadline]);
+      if('error' in response)throw response.error;
+      raw=response.data;receivedAt=response.receivedAt;espn=alternative;
+    }
     finally{if(timer)clearTimeout(timer);if(cancel)signal?.removeEventListener('abort',cancel);}
     signal?.throwIfAborted();
-    const receivedAt=deps.now(),events=raw&&typeof raw==='object'&&'events' in raw?(raw as {events:unknown}).events:null;
+    const events=raw&&typeof raw==='object'&&'events' in raw?(raw as {events:unknown}).events:null;
     if(!Array.isArray(events)||events.length!==1)throw new Error('The current report did not return exactly one verified event.');
     const event=events[0];
     const candidates=normalizeTennisEvent(event,market.league,receivedAt).filter(candidate=>sameGame(market,candidate));
     if(candidates.length!==1||!candidates[0].footballIdentity?.yesTeamId||!candidates[0].footballIdentity.noTeamId||candidates[0].footballIdentity.yesTeamId===candidates[0].footballIdentity.noTeamId)throw new Error('The current report did not match this game and its explicit team identities.');
-    const reportMarket=candidates[0];
+    const checkedAt=deps.now();
+    const reportMarket=deps.fetchEspn?withEspnFootballFallback(candidates[0],espn,checkedAt):candidates[0];
     // Another caller may have accepted a newer provider report while this request was in flight.
     const latest=await deps.read(key);
     if(latest&&sameGame(market,latest.market)&&sameGame(market,latest.reportMarket)&&(!previous||latest.fetchedAt>previous.fetchedAt))previous=latest;
-    const state=assessFootballContext(reportMarket,receivedAt,previous?.state??assessFootballContext(market,receivedAt));
+    const state=assessFootballContext(reportMarket,checkedAt,previous?.state??assessFootballContext(market,checkedAt));
     const oldMarket=previous?.market??market;
     const ordered=reportMarket.contextUpdatedAt!==null&&Number.isFinite(reportMarket.contextUpdatedAt)&&reportMarket.contextUpdatedAt<=receivedAt&&
       (oldMarket.contextUpdatedAt===null||reportMarket.contextUpdatedAt>=oldMarket.contextUpdatedAt)&&reportMarket.observedAt>=oldMarket.observedAt;
     // Conflicts remain visible to the engine through reportMarket; the field display keeps its last consistent facts.
-    const accepted=ordered&&state.assessment.status!=='conflicting'?reportMarket:oldMarket;
-    const record:PriorityContextRecord={fetchedAt:receivedAt,successfulCheckAt:receivedAt,market:accepted,reportMarket,state,error:state.assessment.status==='conflicting'?state.assessment.reason:null};
+    let accepted=ordered&&state.assessment.status!=='conflicting'?reportMarket:oldMarket;
+    const acceptedScoreboard=state.scoreboard?.reportTime===reportMarket.contextUpdatedAt&&state.scoreboard?.receiptTime===reportMarket.observedAt;
+    if(ordered&&acceptedScoreboard&&(reportMarket.footballSourceIssue||state.assessment.status==='conflicting')&&oldMarket.football&&oldMarket.footballSources){
+      // Display last-known drive details with their original evidence; engine receives reportMarket, never this retained view.
+      accepted={...reportMarket,football:oldMarket.football,footballSourceIssue:reportMarket.footballSourceIssue??state.assessment.reason,footballSources:{...oldMarket.footballSources,
+        scoreboard:{provider:'POLYMARKET',eventId:reportMarket.eventId,reportTime:reportMarket.contextUpdatedAt!,receiptTime:reportMarket.observedAt}}};
+    }
+    const record:PriorityContextRecord={fetchedAt:checkedAt,successfulCheckAt:receivedAt,market:accepted,reportMarket,state,error:reportMarket.footballSourceIssue??(state.assessment.status==='conflicting'?state.assessment.reason:null),...(espn?{espn}:{})};
     await deps.write(key,record);
     return {...record,successfulCheckAt:receivedAt,assessment:state.assessment,cacheHit:false};
   }catch(error){
-    const record=unavailable(market,previous,deps.now(),message(error));
+    const record={...unavailable(market,previous,deps.now(),message(error)),...(latestEspn?{espn:latestEspn}:{})};
     if(!signal?.aborted)await deps.write(key,record).catch(()=>{});
     return {...record,successfulCheckAt:lastSuccessfulCheck(record,deps.now()),assessment:record.state.assessment,cacheHit:false};
   }
@@ -94,6 +112,7 @@ export function marketWithPriorityReport(stored:TennisMarket,report:PriorityCont
   const latest=report.reportMarket;if(!sameGame(stored,latest))return stored;
   return {...stored,live:latest.live,ended:latest.ended,active:stored.active&&latest.active,
     score:latest.score,period:latest.period,clock:latest.clock,football:latest.football,footballIdentity:latest.footballIdentity,tournament:latest.tournament,
+    footballSources:latest.footballSources,footballSourceIssue:latest.footballSourceIssue,
     observedAt:latest.observedAt,contextUpdatedAt:latest.contextUpdatedAt};
 }
 
@@ -107,5 +126,7 @@ export async function joinBookWithPriorityContext<T extends {market:TennisMarket
   const report=reportPromise.then(value=>{ready=value;return value;},()=>undefined);
   const book=await bookPromise;
   if(requireReport)await report;
-  return ready?{...book,market:marketWithPriorityReport(book.market,ready)}:requireReport&&isFootballMarket(book.market)?{...book,market:{...book.market,football:null}}:book;
+  if(ready)return {...book,market:marketWithPriorityReport(book.market,ready)};
+  if(espnFootballMapping(book.market))return {...book,market:{...book.market,football:null,footballSourceIssue:'Waiting for the current Polymarket and ESPN game reports. Exits continue.'}};
+  return requireReport&&isFootballMarket(book.market)?{...book,market:{...book.market,football:null}}:book;
 }

@@ -13,6 +13,12 @@ import type {NoTradeCode} from '../decision/why';
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
 export type ExplorableStrategy='comeback-drive';
+/** Original evidence clocks. Fetching one source never refreshes the other. */
+export type FootballSources={
+  scoreboard:{provider:'POLYMARKET';eventId:string;reportTime:number;receiptTime:number};
+  drive:{provider:'POLYMARKET'|'ESPN';eventId:string;playId?:string;sequence?:number;reportTime:number;receiptTime:number;score?:string;period?:string};
+  mapping?:{yesPolymarketTeamId:string;noPolymarketTeamId:string;yesEspnTeamId:string;noEspnTeamId:string};
+};
 export type FootballContext={
   possessionTeam:string|null;down:number|null;yardsToGo:number|null;
   possessionTeamId?:string|null;
@@ -24,10 +30,18 @@ export type FootballReport={
   eventId:string;yesTeamId:string;noTeamId:string;reportTime:number;receiptTime:number;
   score:string;period:string;clock:string;possessionTeamId:string;down:number;yardsToGo:number;
   fieldPosition:{teamId:string;yard:number};
+  sources?:FootballSources;
 };
 export type FootballAssessment={status:'fresh'|'stale'|'unknown'|'conflicting'|'transition';reason:string;reportTime:number|null;receiptTime:number;reportAgeMs:number|null;receiptAgeMs:number};
-export type FootballTransition=Pick<FootballReport,'eventId'|'yesTeamId'|'noTeamId'|'reportTime'|'receiptTime'|'score'|'period'|'clock'>&{phase:'between-plays'};
-export type FootballReportState={report?:FootballReport;transition?:FootballTransition;assessment:FootballAssessment;conflictedAt?:number};
+export type FootballScoreboard=Pick<FootballReport,'eventId'|'yesTeamId'|'noTeamId'|'reportTime'|'receiptTime'|'score'|'period'|'clock'>;
+export type FootballTransition=FootballScoreboard&{phase:'between-plays';sources?:FootballSources};
+export type FootballReportState={report?:FootballReport;transition?:FootballTransition;assessment:FootballAssessment;conflictedAt?:number;
+  /** Verified Polymarket facts still end a drive when its fallback details are unavailable. */
+  scoreboard?:FootballScoreboard;
+  /** Same component versions cannot recover from conflicting facts by fetching again. */
+  sourceChangedAt?:number;
+  sourceConflict?:{scoreboardTime:number;driveTime:number;driveProvider:'POLYMARKET'|'ESPN';playId?:string;sequence?:number;component?:'scoreboard'|'drive'};
+};
 export type PositionExitRules={targetReturn:number;stopReturn:number;maxHoldMs:number;source:'entry'|'legacy-snapshot'};
 export type ShadowExit={
   positionId:string;slug:string;side:TradeSide;reason:'POSSESSION_LOST'|'FOURTH_DOWN';
@@ -49,6 +63,8 @@ export type TennisMarket={
   yesName:string;noName:string;startTime:string;
   live:boolean;ended:boolean;score:string|null;period:string|null;tournament:string|null;clock?:string|null;
   football?:FootballContext|null;
+  footballSources?:FootballSources;
+  footballSourceIssue?:string;
   footballIdentity?:{yesTeamId:string;noTeamId:string};
   /** MLB live state (lib/tennis/normalize.ts baseballContext); null when the report is incomplete. */
   baseball?:BaseballContext|null;
@@ -161,7 +177,8 @@ export type TennisSession={
   setups?:Record<string,string>;
   /** Game events per market (lib/decision/events.ts), and the last game state they were detected from. */
   gameTape?:Record<string,GameEvent[]>;
-  tapeState?:Record<string,{reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean;drives?:number}>;
+  tapeState?:Record<string,{reportTime:number;score:string;period:string;possessionTeamId:string|null;deadBall:boolean;drives?:number;
+    scoreboardTime?:number;driveTime?:number;driveVersion?:string;driveProvider?:'POLYMARKET'|'ESPN';scoreboardReceiptTime?:number;driveReceiptTime?:number}>;
   /** YES midpoint at the last pregame book seen, per market. */
   pregame?:Record<string,{mid:number;time:number}>;
   /** Shadow and counterfactual trades (lib/decision/shadow.ts): candidates never traded, and alternatives to real paper trades. */

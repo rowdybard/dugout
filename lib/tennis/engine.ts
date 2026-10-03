@@ -17,7 +17,7 @@ import {adaptiveTennisRules} from './auto.ts';
 import {quoteAvailabilityIssue} from './quote-status.ts';
 import {currentTennisContext} from './market-context.ts';
 import {bookOrderIssue} from './book-order.ts';
-import {assessFootballContext,footballBoundaryChanged,isFootballMarket,normalizePositionExitRules} from './football-context.ts';
+import {assessFootballContext,footballBoundaryChanged,footballSourceChanged,isFootballMarket,normalizePositionExitRules,FOOTBALL_CONTEXT_MAX_AGE_MS} from './football-context.ts';
 import {advanceShadowExits} from './shadow-exits.ts';
 import {isSupportedLeague,isTeamLeague} from './leagues.ts';
 import {compactPlan,decisionContext,marketPhase,sessionEngine,sessionRisk,type PlanEntry} from './engine-plan.ts';
@@ -122,9 +122,20 @@ function freshCommand(session: TennisSession, input: TennisInput, side: TradeSid
     limitPrice, createdAt: now, strategyVersion: (action==='SELL'?holding(session)?.entryAnalysis?.version:undefined)??session.config.decisionEngine??session.config.version };
 }
 
+/** Composite drive evidence must still be valid before any buy can execute, including already resting quotes. */
+function fallbackFootballIssue(session:TennisSession,input:TennisInput,now:number):string|null {
+  const state=session.footballReports?.[input.market.slug];
+  if(!isFootballMarket(input.market))return null;
+  if(state?.sourceChangedAt===now)return 'The drive source changed. Confirming a new setup.';
+  if(input.market.footballSources?.drive.provider!=='ESPN'&&!input.market.footballSourceIssue)return null;
+  return state?.assessment.status==='fresh'?null:state?.assessment.reason??'Waiting for coherent scoreboard and drive sources.';
+}
+
 function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number) {
   const issue = dataIssue(session, input, now);
   if (issue) return { code: 'DATA', reason: issue };
+  const fallback=fallbackFootballIssue(session,input,now);
+  if(fallback)return {code:'CONTEXT_UNKNOWN',reason:fallback};
   if (!input.market.live) return { code: 'NOT_LIVE', reason: 'Waiting for the match to start. The bot only enters live matches.' };
   if (!Number.isFinite(input.market.observedAt) || input.market.observedAt > now || now - input.market.observedAt > 45_000) return { code: 'MATCH_STALE', reason: 'Live match status needs a fresh update.' };
   if(session.config.decisionPolicy==='football-context-v1'&&isFootballMarket(input.market)){
@@ -164,6 +175,8 @@ function entryIssue(session: TennisSession, input: TennisInput, side: TradeSide,
 function planEntryIssue(session: TennisSession, input: TennisInput, side: TradeSide, budget: number, now: number, phase: Phase, exit: PlanEntry['exit'] = 'hold-to-settlement') {
   const issue = dataIssue(session, input, now);
   if (issue) return { code: 'DATA', reason: issue };
+  const fallback=fallbackFootballIssue(session,input,now);
+  if(fallback)return {code:'CONTEXT_UNKNOWN',reason:fallback};
   if (!session.config.leagues.includes(input.market.league)) return { code: 'LEAGUE', reason: 'This league is not selected for the bot.' };
   if (session.config.focusSlug && session.config.focusSlug !== input.market.slug) return { code: 'FOCUS', reason: 'New entries are restricted to the focused game.' };
   if (!input.market.active || !input.market.execution?.active || input.market.ended || input.book.state !== 'MARKET_STATE_OPEN') return { code: 'CLOSED', reason: 'This market is ended, suspended, or not open for a new entry.' };
@@ -196,6 +209,12 @@ function driveExit(session: TennisSession, position: TennisPosition, now: number
   const rule = position.plan?.drive, entry = position.entryContext;
   if (!rule || !entry) return { code: 'DRIVE_UNKNOWN', reason: 'This drive trade has no entry report. Selling.' };
   const state = session.footballReports?.[position.slug];
+  const scoreboard=state?.scoreboard,entryScoreboardTime=entry.sources?.scoreboard.reportTime??entry.reportTime;
+  if(scoreboard&&scoreboard.eventId===entry.eventId&&scoreboard.yesTeamId===entry.yesTeamId&&scoreboard.noTeamId===entry.noTeamId
+    &&scoreboard.reportTime>=entryScoreboardTime&&now-scoreboard.reportTime<=FOOTBALL_CONTEXT_MAX_AGE_MS&&now-scoreboard.receiptTime<=FOOTBALL_CONTEXT_MAX_AGE_MS){
+    if(scoreboard.score!==entry.score)return {code:'DRIVE_SCORE',reason:`Score changed from ${entry.score} to ${scoreboard.score}. Drive over.`};
+    if(scoreboard.period!==entry.period&&(entry.period==='Q2'||entry.period==='Q4'))return {code:'DRIVE_HALF',reason:`${entry.period==='Q2'?'The half':'Regulation'} ended. Drive over.`};
+  }
   const report = state?.report && state.report.reportTime >= entry.reportTime ? state.report : undefined;
   const transition = state?.transition && state.transition.reportTime >= entry.reportTime ? state.transition : undefined;
   const latest = transition && (!report || transition.reportTime >= report.reportTime) ? transition : report;
@@ -480,6 +499,7 @@ function sellMakerShares(session: TennisSession, input: TennisInput, now: number
 function dipBuy(session: TennisSession, input: TennisInput, now: number) {
   const slug = input.market.slug, open = unpaired(session, slug);
   if (!open || tradeMode(session) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
+  if(fallbackFootballIssue(session,input,now))return;
   if (session.maker?.slug === slug && now < session.maker.pulledUntil) return;
   if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
   const position = open.position, ask = quotes(input, position.side).ask;
@@ -557,6 +577,8 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
   const state = session.maker;
   if (state && (state.quotes.YES || state.quotes.NO)) {
     const input = current.find(item => item.market.slug === state.slug);
+    const fallback=input?fallbackFootballIssue(session,input,now):null;
+    if(fallback)cancelMakerQuotes(session,fallback,now);
     if (input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
       for (const side of ['YES', 'NO'] as const) {
         const quote = state.quotes[side];
@@ -602,6 +624,8 @@ function advanceChaos(session: TennisSession, current: TennisInput[], now: numbe
   for (const slug of Object.keys(session.chaos ?? {})) withChaosMaker(session, slug, () => {
     const state = session.maker!;
     const input = current.find(item => item.market.slug === slug);
+    const fallback=input?fallbackFootballIssue(session,input,now):null;
+    if(fallback)cancelMakerQuotes(session,fallback,now);
     if ((state.quotes.YES || state.quotes.NO) && input && !dataIssue(session, input, now) && input.receivedAt > state.lastBookTime) {
       for (const side of ['YES', 'NO'] as const) {
         const quote = state.quotes[side];
@@ -625,6 +649,8 @@ function updateMakerQuotes(session: TennisSession, input: TennisInput, plan: Pla
   if (session.maker?.slug !== slug) session.maker = { slug, quotes: {}, pulledUntil: 0, eventKey: null, lastBookTime: input.receivedAt, reason: '', fills: 0, rebates: 0 };
   const state = session.maker!;
   const cancel = (reason: string) => cancelMakerQuotes(session, reason, now);
+  const fallback=fallbackFootballIssue(session,input,now);
+  if(fallback)return cancel(fallback);
   if (!phase) return cancel('The game phase is not confirmed.');
   const yes = quotes(input, 'YES');
   if (yes.bid === undefined || yes.ask === undefined || yes.ask - yes.bid > MAX_QUOTE_SPREAD + EPSILON) return cancel('The book is too thin or too wide to quote.');
@@ -1161,12 +1187,21 @@ export function stepTennisSession(previous: TennisSession, inputs: TennisInput[]
   for(const input of current){
     if(!isFootballMarket(input.market)||input.source==='REPLAY')continue;
     const prior=session.footballReports[input.market.slug],next=assessFootballContext(input.market,now,prior);
+    const sourceChanged=['fresh','transition'].includes(next.assessment.status)&&footballSourceChanged(prior?.transition??prior?.report,next.transition??next.report);
+    if(sourceChanged){
+      next.sourceChangedAt=now;
+      resetFootballSetup(session,input.market.slug,'The drive source changed. Confirming a new setup.');
+      if(session.pending?.action==='BUY'&&session.pending.slug===input.market.slug){
+        record(session,now,input.market.slug,session.pending.side,'SKIP','CONTEXT_CHANGED','The drive source changed. Confirming a new setup.',input);
+        session.pending=null;
+      }
+    }
     session.footballReports[input.market.slug]=next;
     // Research bookkeeping is for evidence-engine accounts only: legacy sessions must replay byte for byte.
     if(session.config.evidenceGate==='evidence-v1')recordGameEvents(session,input,next,now);
     // A traded drive is over once possession or the score changes; the next drive may be traded.
     const traded=session.drives?.[input.market.slug];
-    if(traded&&((next.report&&(next.report.possessionTeamId!==traded.possessionTeamId||next.report.score!==traded.score))||(next.transition&&next.transition.score!==traded.score)))
+    if(traded&&((next.report&&(next.report.possessionTeamId!==traded.possessionTeamId||next.report.score!==traded.score))||(next.transition&&next.transition.score!==traded.score)||(next.scoreboard&&next.scoreboard.score!==traded.score)))
       delete session.drives![input.market.slug];
     if(session.config.decisionPolicy==='football-context-v1'&&prior?.report&&next.report&&footballBoundaryChanged(prior.report,next.report))
       resetFootballSetup(session,input.market.slug,'Score, possession or quarter changed. Confirming a new setup.');

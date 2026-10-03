@@ -90,3 +90,40 @@ test('an earlier fresh assessment cannot keep markers fresh after their report e
   assert.equal(footballFieldView(market(),now+60_000,assessment).freshness,'stale');
   assert.equal(footballFieldView(market({contextUpdatedAt:null}),now,assessment).freshness,'unknown');
 });
+
+function mixed(clockTime=now-8000,driveTime=now-20000):FootballFieldMarket{return market({
+  contextUpdatedAt:clockTime,observedAt:now-500,
+  footballSources:{scoreboard:{provider:'POLYMARKET',eventId:'117784',reportTime:clockTime,receiptTime:now-500},
+    drive:{provider:'ESPN',eventId:'401868094',playId:'161',reportTime:driveTime,receiptTime:now-1000}},
+});}
+test('a mixed field names each source and displays its own report and receipt ages',()=>{
+  const v=footballFieldView(mixed(),now);
+  assert.equal(v.sources.label,'Clock: Polymarket · Drive: ESPN');
+  assert.equal(v.sources.clock.reportAgeMs,8000);assert.equal(v.sources.clock.receiptAgeMs,500);
+  assert.equal(v.sources.drive.reportAgeMs,20000);assert.equal(v.sources.drive.receiptAgeMs,1000);
+  assert.equal(v.sources.drive.label,'Drive: reported 20s ago · received 1s ago');
+  assert.equal(v.reportAgeMs,20000);assert.equal(v.ageLabel,'Reported 20s ago');assert.equal(v.freshness,'fresh');
+});
+test('fresh clock and receipts cannot freshen a retained ESPN field',()=>{
+  const m=mixed(now-8000,now-87000),before=structuredClone(m);
+  const assessment:FootballAssessment={status:'fresh',reason:'Earlier fresh assessment.',reportTime:now-20000,receiptTime:now-1000,reportAgeMs:20000,receiptAgeMs:1000};
+  const v=footballFieldView(m,now,assessment);
+  assert.equal(v.sources.clock.freshness,'fresh');assert.equal(v.sources.drive.freshness,'stale');
+  assert.equal(v.freshness,'stale');assert.equal(v.reportAgeMs,87000);
+  assert.equal(v.possessionLabel,'Last reported possession: Clemson');assert.equal(v.lineOfScrimmage,35);
+  assert.deepEqual(m,before);
+});
+test('unverified component times and a rejected alignment never display a fresh field',()=>{
+  const invalid=mixed();invalid.footballSources!.drive.reportTime=NaN;
+  const v=footballFieldView(invalid,now);
+  assert.equal(v.freshness,'unknown');assert.equal(v.sources.drive.reportAgeMs,null);
+  assert.match(v.sources.drive.label,/report time unverified/);
+  const rejected=footballFieldView({...mixed(),footballSourceIssue:'Clock and drive reports are more than 15 seconds apart.'},now);
+  assert.equal(rejected.freshness,'unknown');assert.match(rejected.issue!,/15 seconds apart/);
+});
+test('a recent clock report cannot label missing drive facts fresh',()=>{
+  const v=footballFieldView(market({football:null}),now);
+  assert.equal(v.freshness,'unknown');assert.equal(v.sources.clock.freshness,'fresh');
+  assert.equal(v.sources.drive.provider,'Not supplied');assert.equal(v.sources.drive.freshness,'unknown');
+  assert.match(v.issue!,/field report/);
+});
