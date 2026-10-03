@@ -1,77 +1,85 @@
 # Chad's guide to Dugout
 
-Dugout lets you watch a bot practise trading sports markets with **fake money**. It does not place real bets or real-money orders. A paper gain is not money you can withdraw, and a successful demo would not prove that the bot can make money in real trading.
+Updated October 3, 2026.
 
-## Access status
+Dugout runs a bot that practises trading college football games on Polymarket with **fake money**. It never places real bets. A paper profit isn't money you can withdraw, and a good weekend on paper doesn't prove the bot would make money for real.
 
-Your private invitation has not been issued yet. The owner needs the email address you will sign in with. The source ZIP does not grant access to the hosted app or include anyone's credentials. Use your own invited login, never the owner's login.
+## Getting in
 
-The current background runner is configured for the owner's account. A separate signed-in visitor can have a separate paper account, but customer login and a complete paper run have not yet been verified end to end. Follow the runtime notice in the app: if it says checks run while the page is open, keep the tab open and visible. Do not assume the bot keeps working after you close it.
+- Open the Dugout link the owner sent you and **sign in with Google**. Your email has to be on the invite list; ask the owner if it isn't.
+- You get **your own paper account**, starting at $100 of fake money. Nobody else can see or change it, and you can't see theirs.
 
-## The basic idea
+## The screen, top to bottom
 
-The bot watches the buy and sell prices for both sides of the game you choose. It measures whether a drop is unusual for that market, whether buyer prices are recovering, and whether enough room remains after fees, the buy/sell gap and a movement allowance. A possible entry still has to pass the normal safety checks. These are local calculations; the bot is not watching the TV broadcast or using AI to predict who will win.
+1. **Search box.** Type a team and pick a live or upcoming college game. That's the game the bot trades.
+   - If it says the account is set to other sports, tap **Show college football games** once.
+2. **Bot card:**
+   - the game name, and **Steady** / **Bold** (see below);
+   - your **balance**, and **Reset balance**;
+   - the main button: **Start bot**, **Pause**, **Resume** or **New run**, and **End run** next to it while a run is going;
+   - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
+   - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now.
+3. **Game tracker:** score, clock and a drawing of the field from Polymarket's game reports. It's not live video and can lag.
+4. **Trades & balance:** every fill, with price, fees and result, plus a balance chart.
+5. **Settings & history** (closed by default): rules, background running, your own price key, diagnostics and downloads. You don't need any of it to get started.
 
-The bot often waits. An old quote, a large gap between buying and selling prices, an old game report, or a setup that has not formed can all prevent an entry. It explains that decision on the screen. A quiet bot is not proof of a fault, and it should not be pushed to trade just to produce activity.
+## Steady or Bold
 
-## Your first session, once access is ready
+The bot mostly trades by leaving **buy offers** on both teams, slightly below the current price, and waiting for someone to sell into them. If both offers fill, you hold both sides of the game. That pays exactly $1 at the end whoever wins, and you paid a bit less than $1, so the difference is profit.
 
-1. Open the private Dugout link and use your invited login.
-2. Check that the displayed paper balance is your own. A new account starts with $100 fake cash in the current code; an existing account keeps its saved balance.
-3. Choose Football or Tennis, then select a live game to view its chart. The available list depends on the market provider.
-4. Press **Focus bot on this game**. The named bot focus tells you which game it can enter; simply viewing a different chart does not change its focus.
-5. Press **Start paper bot**. An older account first saves the current decision-engine policy without resetting cash or history. Watch the current decision, quotes, chart and any position that opens. Read the runtime notice about whether the tab must stay open.
-6. Use **Pause** to prevent new entries while the bot continues managing an existing position. **Stop bot** also asks it to exit a held position; that exit still needs an executable quote and is not instant or guaranteed.
+| | Steady | Bold |
+|---|---|---|
+| Offer size (on $100) | $5 | $12 (12% of the balance, at most $50) |
+| Hold-to-final bets the research allows | No | Yes |
+| Only one team's offer filled | Tries to complete the pair; **sells after 10 minutes** if it can't | Tries to complete the pair; **buys once more** if the price drops 5¢; **sells if it then drops another 10¢** below its average |
+| Feel | Many small wins and losses | Bigger wins and bigger losses |
 
-You do not need to edit the advanced rules for a first demonstration. This guide does not recommend changing them to chase a loss or force a trade.
+Bold doesn't make the bot smarter. It puts more money on each trade, so the bad days get bigger too.
 
-**You choose the game, not the team.** The bot checks both teams and can buy either one if its setup qualifies. Switching the team shown on the chart only changes your view. Open **Compare both teams** to see the latest reason for each side. It can hold only one position at a time.
+## Starting, pausing, ending
 
-## What the screen means
+- **Start bot:** pick a game first, then press it.
+- **Pause:** no new trades. Anything already held stays managed. **Resume** carries on.
+- **End run:** sells what it holds and closes the run. **New run** then starts fresh.
+- **Reset balance:** starts over at any amount from $5 to $10,000, any time. Open paper trades are dropped, which is fine because it's fake money.
+- **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game.
 
-| Screen item | Meaning |
-| --- | --- |
-| Paper balance | Simulated account value, with estimates for held positions; see the account details |
-| Available cash | Fake cash currently available |
-| Bot focus | The game allowed for future entries |
-| Compare both teams | Each team's latest saved decision; your chart selection does not lock a team |
-| Accepted bot quote | Age of the book the bot actually accepted; rejected arrivals cannot refresh it |
-| Runner update | Age of a saved check/control update, not proof that the quote passed |
-| Bot game report | Age of the saved football report, independent of prices |
-| Buy / sell quote | Current prices to enter or exit; the gap matters |
-| Book checked | Age of the market quote check, separate from the game report |
-| Report age | Age of the provider's game information |
-| Last checked | When the app last successfully checked that game feed; it can still return an old report |
-| Blue field line | Reported ball position / line of scrimmage |
-| Yellow field line | Reported first-down target when the required facts are available |
-| Current decision | What the bot is doing or why it is waiting |
-| Decision details | Optional measurements behind that decision, including costs and the age of its evidence |
-| More details | Detailed history, diagnostics and the saved-history download |
+## Leaving it running
 
-The field is a drawing of provider reports, not live video. It can lag, and faded or missing markers indicate old or unverified information. Fresh market prices do not mean the field report is fresh.
+- **Set up the background runner once:** with no open trades, open **Settings & history**, press **Set up background bot**, then **Finish background setup**. Your balance and history move over, and the bot stays paused until you press Start. After that it keeps trading with the tab closed, in your own private runner.
+- **Until you do that:** the bot only runs while the Dugout tab is open. On a phone it may pause when the screen locks.
 
-## If it is not buying
+## Reading the status box
 
-Read the current decision before changing anything:
+| It says | Meaning |
+|---|---|
+| **Buy offers posted** | Offers are waiting, e.g. "Offering to buy Liberty at 70¢ or Delaware at 29.5¢". Nothing happens until someone sells at that price. Most checks change nothing. |
+| **Watching** | It's checking, but the research doesn't allow a trade right now. |
+| **Bot is behind** | No check from the bot for 30–45 seconds. If it lasts more than a minute, reload the page. |
+| **Paused / Ready / Stopped** | Not trading. Press Resume, Start or New run. |
+| **Managing position** | It holds shares and is handling them (see Open orders & shares). |
 
-- **Paused / Ready / Stopped:** it is not starting new trades. Use Start when you want a paper run.
-- **Collecting executable history:** both the quote count and elapsed history must qualify. For example, 35/20 quotes and 87/90 seconds still needs more usable history.
-- **Drop is not distinct from volatility:** the move is too small compared with recent price noise. It is checking but has no qualifying setup.
-- **Football report older than 45 seconds:** prices may be live, but game facts are too old for entry. The app cannot invent a newer play.
-- **Older provider book:** a newly delivered response contains older prices than the bot already saw. It waits for a current book.
-- **Between scrimmage plays:** the provider explicitly reports no active down, as can happen around scoring or kicks. The score stays visible, field lines are hidden, and entries wait for the next verified down. The feed does not identify every kick or touchdown, so the app does not invent a play label.
+## Why it isn't trading
 
-Do not reset the balance or loosen rules to make a trade appear. If **Runner update** stops advancing while running, use Reconnect and tell the owner the game, time and message. A different chart does not change the named **Bot game**.
+These are all normal. It's the bot being careful, not broken:
+- **After every play:** it pulls its offers for 30 seconds, because prices jump right after plays.
+- **Old game report:** during a live game it only posts offers while Polymarket's game report is less than 45 seconds old. If the game tracker says the report is stale, it waits, and the tracker shows the reason the last check failed.
+- **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
+- **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.
 
-## A few useful limits
+Don't reset or change rules just to make it trade. If something looks wrong, note the game, the time and what the status box says, and tell the owner.
 
-- All trading in this product is simulated.
-- One open position is allowed per paper account.
-- A simulated purchase includes fees and can be delayed, partially filled or rejected.
-- The current engine adjusts profit-taking to price movement and available buyers. It keeps the original loss threshold and time limit for each position; these are exit rules, not guaranteed prices or maximum losses.
-- The current background experiment has not completed its full 60-minute live acceptance test. No profitability claim is supported.
-- Claude, where enabled, is an optional adviser chat. It cannot place a trade or apply rule changes. It is not the automatic decision engine.
+## Extras (optional)
 
-If something looks wrong, note the game, time, on-screen status and whether the tab was open. Avoid resetting the balance while investigating; history is useful evidence.
+- **Chaos mode** (experimental, Steady only): the same small offers on up to 6 extra games at once. Turn it on under Steady on the bot card.
+- **Your own Polymarket key** (Settings & history → Live prices): gives your bot instant price updates instead of a check every few seconds. Make a separate read-only key for it; it's stored encrypted and never shown again.
+- **Download Chaos log / saved history:** a full record of what the bot did, under Settings & history.
 
-For full behavior and technical details, see [the bot manual](docs/BOT-MANUAL.md). For the current verification record, see [release status](docs/RELEASE-STATUS.md).
+## Limits worth knowing
+
+- Everything is simulated: the fills, the fees, the $1 payouts.
+- Real fills on Polymarket can be worse, for example waiting in line behind other offers.
+- No strategy here is proven yet; the bot is collecting the evidence. Expect quiet stretches and small results.
+- Ask Claude, if you see it, is an optional chat for the owner. It can't place trades or change rules.
+
+For the technical details, see [the bot manual](docs/BOT-MANUAL.md) and [the decision engine](docs/DECISION-ENGINE.md).

@@ -31,6 +31,29 @@ Use this when the Worker is connected to the GitHub repo, so every push to `main
 4. **Retry the build** (Deployments → the failed build → Retry, or push any commit).
 5. **Runtime secrets:** add them once under Worker → Settings → Variables and Secrets (`DUGOUT_OWNER_ID` and the extras in step 5 of the next section). They survive redeploys.
 
+**The background runner from GitHub too.** This is how it is set up as of Oct 3, 2026.
+1. Connect the `dugout-paper-runner` Worker to the same repo.
+2. Leave the **build command empty**, and the **root directory** at the repo root.
+3. **Deploy command:** `npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_ID:<your u_... id> --var "RUNNER_OWNERS:*" --var RUNNER_ENGINE_VERSION:$WORKERS_CI_COMMIT_SHA`
+4. **Secrets**, once, all as type **Secret** (plain-text variables are wiped by the next deploy):
+
+| Worker | Secret | Value |
+|---|---|---|
+| `dugout-paper-runner` | `RUNNER_HMAC_SECRET` | one random 40+ character password |
+| `dugout` | `DUGOUT_RUNNER_SECRET` | the same password |
+| `dugout` | `DUGOUT_OWNER_ID` | your `u_...` account id (`node scripts/cloudflare-hosting.mjs owner-id you@gmail.com`) |
+| `dugout` | `DUGOUT_RUNNER_URL` | `https://dugout-paper-runner.<subdomain>.workers.dev` |
+| `dugout` | `DUGOUT_RUNNER_USERS` | `*` (every invited account may use a runner), or a comma list of `u_...` ids |
+
+To set the shared password from PowerShell without ever displaying it:
+```powershell
+$s = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 48 | % {[char]$_})
+$s | npx wrangler secret put RUNNER_HMAC_SECRET --name dugout-paper-runner
+$s | npx wrangler secret put DUGOUT_RUNNER_SECRET --name dugout
+Remove-Variable s
+```
+Then each person presses **Set up background bot** and **Finish background setup** once, in Settings & history.
+
 ## Do it yourself from your PC (Windows PowerShell)
 
 Checked Oct 2, 2026: the Cloudflare build is configured correctly and applies all database migrations to a fresh database. Locally, a visitor with no sign-in gets the invite-only page (401), a faked identity header is refused (401), and a forged sign-in token is rejected (403).
@@ -96,7 +119,12 @@ npx wrangler deploy --config services/runner/wrangler.jsonc --var RUNNER_OWNER_I
 ```
 Finally, sign in to the new site and press the background setup button (Settings & history).
 
-**6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. With `DUGOUT_RUNNER_USERS=*` and `RUNNER_OWNERS:*`, each person presses the background setup button once (Settings & history) and their bot keeps running with the tab closed, in their own runner instance: nobody can see or touch another's. Ask Claude and the live price stream stay yours (they use your paid keys); friends' runners check prices over REST. The all-games research sweep runs only in your runner. Cost: each running bot wakes every 2.5 s (about 1,400 wake-ups an hour), fine for a few friends on the Workers Paid plan ($5/month).
+**6. Invite someone later:** add their email to the application's policy. They sign in with Google (or an emailed code) and get their own paper account. With `DUGOUT_RUNNER_USERS=*` and `RUNNER_OWNERS:*`, each person presses the background setup button once (Settings & history) and their bot keeps running with the tab closed, in their own runner instance: nobody can see or touch another's. Ask Claude and the live price stream stay yours (they use your paid keys); friends' runners check prices over REST. The all-games research sweep runs only in your runner. Cost: each running bot checks every 10 s before kickoff and every 2.5 s once its game is live (or while it holds anything).
+- **Storage:** about 6 rows per check, so very roughly 2,000 rows an hour before kickoff and 8,000 an hour live.
+- **Free plan:**
+  - Each runner pauses new entries at 90,000 rows a day.
+  - Each site request gets 10 ms of CPU; over that, a request returns a plain 503.
+- **Paid plan:** the Workers Paid plan ($5/month) is comfortable for a few friends.
 
 ## The short version (Google sign-in)
 

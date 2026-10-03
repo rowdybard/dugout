@@ -1,8 +1,12 @@
 # Dugout
 
-Dugout is a private sports **paper-trading** dashboard for listed Polymarket US ATP, WTA, NFL, and college-football winner markets. Choose a game to view, focus the bot on one game, and explicitly press Start. The shared engine evaluates both outcomes and allows at most one open position. It does not place real orders.
+Dugout is a private sports **paper-trading** dashboard for Polymarket US markets, currently focused on **college football**. Pick a game, choose Steady or Bold, and press Start. The bot trades with fake money only and places no real orders.
 
-This project contains the React frontend, Sites-hosted HTTP backend and D1 schema/migrations, shared strategy and simulated execution code, and a separate Cloudflare Worker with a SQLite Durable Object for background operation. The word `tennis` remains in shared paths and types used by football too.
+It runs on Cloudflare:
+- **The site:** a Worker behind Cloudflare Access with Google sign-in, using a D1 database. Each invited person gets their own paper account.
+- **The background runner:** a separate Worker with one SQLite Durable Object per person, so a bot keeps running with the tab closed.
+
+Shared strategy and simulated execution code serve both. The word `tennis` remains in shared paths and types, which also serve football.
 
 ## Start here
 
@@ -10,7 +14,8 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 - [Decision engine](docs/DECISION-ENGINE.md): what the research permits, how the bot consults it, the plugs for new research, the bet checker, and the CFB favourite forward test.
 - [Data platform](docs/DATA-PLATFORM.md): where the research data lives (R2 plus DuckDB), how to search it, and how research streams into the engine.
 - [Full bot and developer manual](docs/BOT-MANUAL.md): operation, actual rules, editing, troubleshooting, configuration and limitations.
-- [Chad's getting-started guide](chad.md): plain-English customer instructions and access status.
+- [Chad's getting-started guide](chad.md): plain-English instructions for invited users.
+- [Cloudflare hosting](docs/CLOUDFLARE-HOSTING.md): deploying the site and runner, Google sign-in, secrets.
 - [Maintainer handoff](docs/MAINTAINER-HANDOFF.md): where things stand and what remains unverified.
 - [Architecture](docs/ARCHITECTURE.md), [runner setup](services/runner/README.md), and [release evidence](docs/RELEASE-STATUS.md).
 - [ZIP contents and restore notes](docs/DISTRIBUTION.md).
@@ -18,21 +23,24 @@ This project contains the React frontend, Sites-hosted HTTP backend and D1 schem
 
 ## Current interface
 
-Beginner mode is disabled in the active dashboard. A saved browser preference cannot re-enable it. The main view keeps bot controls, current decision, game selection/focus, live field/chart, quotes, balance and active-order/position information visible. Technical details and detailed history are expandable.
+The page shows only what's needed to run the bot:
+- **Search box:** live and upcoming college games.
+- **Bot card:**
+  - **Steady / Bold**, balance, and **Reset balance** ($5–$10,000, any time; open paper trades are dropped).
+  - **Start / Pause / Resume / End run / New run**.
+  - A plain-English **status box** with a **Both sides** line per team.
+  - **Open orders & shares:** every resting offer and holding, across the main and Chaos games.
+- **Game tracker:** score, clock and field drawing from Polymarket game reports.
+- **Trades & balance:** the ledger and balance chart.
 
-New accounts run on the **evidence-gated decision engine** ([docs/DECISION-ENGINE.md](docs/DECISION-ENGINE.md)).
-- **What it does:** the bot asks the engine for a plan for the focused game, whether pregame or live, in ATP, WTA, NFL, CFB or MLB. It buys only what the research permits and holds planned bets to the final result. Where resting orders are permitted, it paper-makes markets with conservative fills and maker rebates.
-- **What it refuses:** losing or untested bets. The older local scalping analysis still runs on live games, and the engine refuses it, because scalping measured about −10% per trade.
-- **Where to see it:** the Decision engine card shows every proposal and why it was taken or refused. **Decision details** exposes the measurements.
-- **Limits:** these are deterministic calculations, not AI calls or a profit forecast. Real money isn't connected (`lib/live/README.md`).
+**Settings & history** holds the rules, background runner setup, the optional personal Polymarket key, the Decision engine card, diagnostics and downloads.
 
-Start/Resume explicitly saves the new policy for an older account before starting. It preserves stake, cash, journal, rest and loss/time settings, while requiring at least 30 seconds/10 quotes and retaining the 2¢/5-second entry limits. Historical configurations without the new version field keep their legacy reducer behavior for replay; existing positions retain their entry-time exit policy.
-
-Selecting a game changes the chart. **Focus bot on this game** changes future entry eligibility. **Pause** prevents entries and continues exits; **Stop** requests an exit and waits for executable conditions. A simulated order is not guaranteed to fill. The full manual describes these distinctions.
-
-The bot focuses on the whole game, never a user-selected team. **Compare both teams** shows each side's latest saved decision. Chart-side selection affects viewing only. **Accepted bot quote**, **Bot game report**, and **Runner update** have separate clocks; chart refreshes and rejected book arrivals cannot make the bot's accepted book appear fresh.
-
-Football field reports and executable books have separate timestamps. A successful check can return an old play report. New football entries under the context policy need verified context within 45 seconds. Runner entries enforce a spread no wider than 2 cents and book age no older than 5 seconds. These are eligibility checks, not a profit guarantee.
+**How the bot trades:** it runs on the **evidence-gated decision engine** ([docs/DECISION-ENGINE.md](docs/DECISION-ENGINE.md)). Its main activity is paper market making: resting buy offers on both teams, with conservative fills and maker rebates. A completed pair pays $1 at settlement.
+- **Steady:** resting offers only, about 5% of the balance each. After a one-sided fill it tries to complete the pair, and sells the unpaired shares after 10 minutes.
+- **Bold:** offers at 12% of the balance (at most $50), plus the hold-to-final bets the evidence allows. After a one-sided fill it keeps trying to pair. It buys once more on a 5¢ dip, capped at 2× the order size, and sells if the price then falls 10¢ below its average.
+- **Chaos mode** (experimental, Steady only): the same offers on up to 6 extra games, logged as tiny JSONL files.
+- **When offers come down:** for 30 s after each live play, and whenever the game report is older than 45 s. The engine refuses losing or untested bets.
+- **Not AI:** these are deterministic calculations, not AI calls or a profit forecast. Real money is not connected (`lib/live/README.md`).
 
 ## Local development
 
@@ -78,18 +86,26 @@ No checkout-local execution profile is included in a source ZIP. `scripts/execut
 
 ## Hosting and credentials
 
-The current dashboard is [owner-private on Sites](https://dugout-signals.rowdybard.chatgpt.site/). To move it to your own Cloudflare account with invite-only Cloudflare Access (emailed code or Google sign-in, remembered devices), see [docs/CLOUDFLARE-HOSTING.md](docs/CLOUDFLARE-HOSTING.md). `.openai/hosting.json` records that existing project's binding names and project ID; it does not grant access. The background runner has its own `services/runner/wrangler.jsonc`.
+The site and the runner are deployed from GitHub with Cloudflare Workers Builds; every push to `main` redeploys both. [docs/CLOUDFLARE-HOSTING.md](docs/CLOUDFLARE-HOSTING.md) has the build variables, deploy commands and secrets, and [services/runner/README.md](services/runner/README.md) covers the runner.
 
-The Sites backend signs commands to the runner. The browser receives neither the signing secret nor a choice of runner owner. Migrated accounts are fenced against the old database writer; a runner outage does not turn browser trading back on. Preserve the existing Durable Object namespace and journal when updating a deployment.
+**Sign-in:** Cloudflare Access with Google sign-in and an invite list. The site verifies the Access token on every request and derives a stable account ID from the email. The build refuses to produce an unprotected site on Workers Builds.
 
-Private invited visitors use their own hosting identity and separate paper balance/history. Their browser bot requires the tab to remain open and visible. Background setup and the paid Claude adviser are restricted to the server-configured `DUGOUT_OWNER_ID`, which must match the Worker's `RUNNER_OWNER_ID`. A missing pin disables new setup and adviser access; existing runner fences and exit management remain intact. A customer invitation and complete customer run still need end-to-end verification.
+**Background runners:**
+- **Who may use one:** `DUGOUT_RUNNER_USERS` (site) and `RUNNER_OWNERS` (runner) say which accounts may have one (`*` for all invited accounts). Each gets its own Durable Object instance.
+- **Signed commands:** the site signs every command with `DUGOUT_RUNNER_SECRET`, which equals the runner's `RUNNER_HMAC_SECRET`. The browser never sees the secret.
+- **Owner extras:** `DUGOUT_OWNER_ID` marks the owner, who gets the Claude adviser, the owner's Polymarket keys and the all-games research sweep.
+- **Personal key:** anyone can add their own read-only Polymarket key for live prices. It is checked, stored encrypted in their runner, and never returned.
 
-`.env.example` lists configuration names with blank secret values. Configure actual secrets in the appropriate runtime/secret manager. Copying the source does not copy Cloudflare databases, grant login access, or restore an account. See the manual before setting up a different owner/deployment.
+`.env.example` lists configuration names with blank values. Put real values in the Cloudflare dashboard (as Secrets) or `wrangler secret put`, never in the repository.
 
-Claude is an optional chat adviser. Model requests occur only through an explicit chat Send; Claude does not make automatic bot decisions, change rules or place orders. Model availability and provider billing must not be inferred from the hardcoded model string or the application's cost estimate.
+Claude is an optional chat adviser for the owner. It makes no automatic decisions, changes no rules and places no orders.
 
 ## Verified limits
 
-The Cloudflare runner was deployed and the existing account migrated while paused. Recorded journal reconciliation retained cash **93.93805**, 19 historical fills and 4.11 in execution fees on September 26, 2026. Those are dated evidence, not a promise of the current account balance.
-
-Report-refresh changes were checked against live read-only data. **A 60-minute run of the new Cloudflare runner with the dashboard closed, and a genuine automatic entry/exit under that runner, remain unverified.** Older paper fills and synthetic tests do not establish that milestone or a profitable strategy. No paid plan was enabled for the runner. Its quota estimates are not exact Cloudflare billing counters.
+- **Tested:** the strategy code has a full automated test suite. The site and runner were exercised locally in a browser and run live on Cloudflare during October 2–3, 2026.
+- **Not proven:** no strategy is proven profitable. Paper fills are conservative simulations and do not establish real execution or queue position.
+- **Free-plan limits:**
+  - Each request gets 10 ms of CPU, and requests over it return a plain 503. The site avoids re-parsing large runner state to stay under it.
+  - D1 allows 100,000 rows written a day. Game-list caching was cut about 20×.
+  - Durable Objects also have a daily write allowance. The runner checks every 10 s before kickoff and every 2.5 s live, and pauses new entries at 90,000 rows a day.
+  - The Workers Paid plan ($5/month) removes these as practical concerns.

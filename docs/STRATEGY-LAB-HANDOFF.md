@@ -2,7 +2,16 @@
 
 Started September 27, 2026. **Read this first** if you are picking the project up cold (a new Claude session, Astra, or a human engineer). It records the goal, what the audit found, the decisions already made, the verified data sources, and a live checklist. Update the checklist and the "Last updated" line whenever a step changes status.
 
-Last updated: 2026-09-27. **Resumed as a decision engine** after the owner's pause: the research now drives an evidence-gated engine ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)). The Cloudflare paper runner stays paused and undeployed. The only scheduled job is the paper-only forward test (`.github/workflows/forward-test.yml`), which runs once merged to `main`.
+Last updated: 2026-10-03.
+
+**Status, Oct 3 (live paper market making):**
+- **Running live:** the market-making pilot recommended below is running on paper. Site and per-account background runners are on Cloudflare with Google sign-in, college football only in the view ([`MAINTAINER-HANDOFF.md`](MAINTAINER-HANDOFF.md)).
+- **Modes:** Steady (resting offers only; one-sided fills pair or exit within 10 min) and Bold (bigger offers, hold-to-final bets the evidence allows, one dip buy, 10¢ loss limit after it) ([`DECISION-ENGINE.md`](DECISION-ENGINE.md)).
+- **Chaos mode:** experimental, Steady on up to 6 extra games, logged as tiny JSONL files.
+- **Research tools on the PC:** the rule miner, the all-games sweep (owner's runner), ESPN college play-by-play fetch/align, and the Dugout Lab GUI ([`STRATEGY-ARCHITECTURE.md`](STRATEGY-ARCHITECTURE.md)).
+- **Next evidence:** reconcile a weekend of Steady/Bold/Chaos results from exports, and compare the "Bold dip buy" and "Bold loss limit" rows. Real money stays unwired.
+
+Earlier (2026-09-27): **resumed as a decision engine** after the owner's pause: the research now drives an evidence-gated engine ([`docs/DECISION-ENGINE.md`](DECISION-ENGINE.md)). The Cloudflare paper runner stays paused and undeployed. The only scheduled job is the paper-only forward test (`.github/workflows/forward-test.yml`), which runs once merged to `main`.
 
 **Research on hold (owner, Sep 27):** no data fetching or studies from cloud sessions until the owner is at the PC to store the data. Engine and data-platform code only.
 

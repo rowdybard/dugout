@@ -1,6 +1,40 @@
 # Release evidence and known gaps
 
-Evidence date: September 26, 2026. This records observations and test results; it is not a live account-status feed.
+This records dated observations and test results; it is not a live account-status feed. Newest first.
+
+## October 2–3, 2026: Cloudflare hosting and live college football
+
+**Hosting**
+- The site moved to the owner's Cloudflare account, behind Cloudflare Access with Google sign-in (Access token verified on every request).
+- **Deploys:** both Workers deploy from GitHub with Workers Builds.
+  - **Build guard:** on Workers Builds, the build refuses to produce an unprotected site.
+  - **Sign-in fix:** the Access signing keys are fetched with `redirect: 'manual'`. Workers reject `'error'`, which had broken every sign-in.
+- **Runners:** background runners for invited accounts (allow-lists), and an optional personal Polymarket key, encrypted in the account's runner.
+
+**Product**
+- **Layout:** game search, the bot card, game tracker, and Trades & balance.
+- **Modes:** Steady and Bold.
+- **Controls:** Pause/Resume/End run/New run, and Reset balance up to $10,000 at any time.
+- **Panels:** the plain-English status box, per-team Both sides, and Open orders & shares.
+- **Switching games:** allowed while holding.
+- **Chaos mode:** experimental, Steady only, up to 6 extra games, logged as tiny JSONL files.
+- **One-sided fills:**
+  - Steady pairs or exits within 10 minutes.
+  - Bold pairs, buys once on a 5¢ dip (capped at 2× the order size), and sells at 10¢ below its average after a dip buy.
+
+**Found in live use and fixed the same day**
+- **Database writes:** the game-list cache rewrote one D1 row per game every 30 s, about 27,000 rows an hour. It now writes about 20× fewer, only when a game changes or every 10 minutes.
+- **Runner writes:** about 9 rows per 2.5 s check. Now about 6 per check, and every 10 s before kickoff.
+- **Plain 503s:** caused by the site re-parsing large runner state, over the Free plan's 10 ms CPU. It now passes the state through as text.
+- **Flickering status box:** a device clock slightly behind the server read fresh checks as stale. Small skew now reads as "just now".
+- **Stale game reports for minutes:** reports shared one queue and one 429 pause (2 min on the site) with prices and the game list. Reports now have their own lane, a 15 s pause, a 3 s limit, and the panel shows why a check failed.
+- **Second team looked unchecked:** "Both sides" showed the second team as "not checked". Each team now gets its own line.
+- **Mode switch lag:** Steady/Bold needed a second tap because it waited on an in-flight check. It now updates instantly.
+
+**Tests:** 709 passing on October 3, plus both TypeScript checks and the build. The page was checked in a browser locally, including at phone width.
+
+**Not established:** profitability, or real-exchange fill quality.
+
 
 ## Accepted-feed status correction
 

@@ -1,8 +1,10 @@
 # Dugout: user and developer manual
 
-This manual describes the paper bot source, including the versioned `local-move-v1` decision engine, adaptive exits, interface and invited-account access guards. The original infrastructure audit used commit `5ac6e98f89755381d9164980ab8556b18efd7ede` on September 26, 2026. Publication and test status of later changes is recorded separately in [RELEASE-STATUS.md](RELEASE-STATUS.md). Implemented behavior and dated production observations are distinct. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for current balance, rules, focus, and status.
+This manual describes the paper bot as of **October 3, 2026**. A saved account can have different settings from the defaults listed here. Its loaded configuration and exported journal are authoritative for its balance, rules, focus and status. [RELEASE-STATUS.md](RELEASE-STATUS.md) records dated test and deployment evidence.
 
-Dugout's home page is a tennis and American football **paper-trading dashboard**. Its local decision engine uses deterministic market calculations, not Claude. It evaluates quotes and simulates purchases and exits. The private dashboard and its API are hosted on ChatGPT Sites. The migrated owner's background engine and journal live in a separate Cloudflare Worker with a SQLite Durable Object. Closing the dashboard does not stop an already-running native runner; a paused flat account does not start itself.
+Dugout is a **paper-trading dashboard** for Polymarket US sports markets. The view currently shows college football only. Its decision engine uses deterministic calculations from research evidence, not Claude, and it simulates every fill.
+- **The site:** a Cloudflare Worker behind Cloudflare Access with Google sign-in, using a D1 database.
+- **The runner:** each person's background bot is a separate Cloudflare Worker with a per-account SQLite Durable Object. Closing the page does not stop a running background bot, and a paused account does not start itself.
 
 ## Contents
 
@@ -24,76 +26,83 @@ Dugout's home page is a tennis and American football **paper-trading dashboard**
 
 ## Verified status
 
-The hosted dashboard is [Dugout](https://dugout-signals.rowdybard.chatgpt.site/), using the site's existing authentication. There is no implemented independent Gmail or Cloudflare Access login flow for this dashboard.
-
-[RELEASE-STATUS.md](RELEASE-STATUS.md) summarizes these **dated observations** from the local `outputs/background-runner-rollout.md` record. Private exports and the ignored `outputs/` folder are not included in the source package.
-
-- The native Worker and private Sites application were published from `5ac6e98` on September 26, 2026, at approximately 23:26 and 23:30 UTC respectively.
-- The existing account was migrated **paused**. No production Start command was issued during that rollout or the subsequent feed verification.
-- Reconciled cash was exactly **$93.93805**, displayed as **$93.94**, from $100 starting cash. There were 19 ledger fills and $4.11 in recorded execution fees. These are historical account totals, not a current balance guarantee or evidence of new-runner profit.
-- All 13,103 records and 4,373 observations in the pre-migration export were preserved with matching canonical hashes. Later decisions, a pause, and the checkpoint brought the export to 13,130 records. Ledger and positions agreed; no missing observations or truncation were reported.
-- Visible verification showed fresh selected-game books and independently updating football reports. Selecting Wisconsin–Penn State changed the chart, not the saved bot focus, and did not start trading.
-- A read-only native adapter smoke check obtained a football input in 191 ms, with an 18.161-second-old provider report and an 80 ms REST receipt. It used a synthetic in-memory account and did not advance the engine or write the production account.
-- The recorded full suite passed 495 tests before the final backoff patch. That patch added three regressions; 23 relevant adapter/transport tests passed afterward. Both TypeScript projects and builds passed. These counts describe that verification, not an assertion that every later edit has been tested.
-
-**A continuous 60-minute run with the browser closed, followed by a genuine native bot-initiated entry and exit, is still unverified in that record.** A feed check, synthetic test, imported historical fill, or run containing only valid rejections does not establish that milestone. None establishes profitability.
-
-The subsequent interface/account-access source release passed 503 full tests, both TypeScript checks, scoped changed-file lint, the Sites build, and runner dry build. See [RELEASE-STATUS.md](RELEASE-STATUS.md) for its publication status and any later results; these checks do not replace the outstanding live validation.
+- **Hosting:** the site and runner are deployed from GitHub to the owner's Cloudflare account with Workers Builds ([CLOUDFLARE-HOSTING.md](CLOUDFLARE-HOSTING.md)). Sign-in is Cloudflare Access with Google and an invite list.
+- **Live use, October 2–3, 2026:**
+  - Accounts ran on background runners during live college games.
+  - Resting offers were posted, a one-sided fill occurred (Penn State, 23.76 shares at 50.5¢), and the panels showed it.
+  - Issues found in that use were fixed the same day: game-report staleness, write budgets, 503s and a status flicker ([RELEASE-STATUS.md](RELEASE-STATUS.md)).
+- **Automated tests:** the full suite (709 tests on October 3) covers the engine, resting-order fills, pairing and exits, Bold's dip buy and loss limit, the runner store and protocol, and sign-in verification.
+- **Not established:** that any strategy is profitable, or that real exchange fills would match paper fills. Paper results are evidence collection, not a forecast.
 
 ## Using the dashboard
 
-### Start with the saved account
+### First run
 
-1. Open the site and load the saved account. Check cash, session state, any open position, and any pending order.
-2. Choose Tennis, Football, or Both. This changes allowed leagues and clears the saved focus through a rules update. Tennis infrastructure remains available when football is selected.
-3. Choose a game to inspect. Read its buy/sell quotes, game status, and report age. Selecting a chart does **not** authorize that game as the bot focus.
-4. Use the explicit focus control to save that game as the bot focus. Native Start/Resume requires one focus. It never silently switches to another game when the focused game ends or becomes unavailable.
-5. Inspect Bot rules: dollars per trade, loss-exit threshold, maximum hold, spread and rest. Saved values can differ from factory defaults. The local model evaluates setups and adjusts profit exits; it does not choose your stake or widen your saved risk limits.
-6. Press Start when you want paper checks to begin/resume. For an older account, the UI first records a rules update selecting the local engine and football quality policy. It preserves money, stake, rest and loss/time settings, while requiring at least 30 seconds/10 quotes and at most 2¢ spread/5-second book age. A failed policy save prevents Start. A waiting reason, rejected setup, pending intent, and completed fill are different states.
-7. Use **More details → History → Download complete saved history** to review results. The chart/recent activity are useful views, but the export is the accounting record.
-
-An already-migrated account does not need migration again. Do not create a new run to refresh a feed: that creates a new simulated bankroll and changes which session is being measured.
+1. **Sign in:** Google, through Cloudflare Access. Each invited email gets its own paper account (new accounts start with $100).
+2. **College football:** if the account still lists other sports, press **Show college football games** once.
+3. **Pick a game:** search and choose a live or upcoming one. Choosing a game sets the bot's focus.
+4. **Choose a mode:** **Steady** or **Bold** (see [Trading modes](#trading-modes)), then press **Start bot**.
+5. **Optional, close the tab:** run in the background. With no open trades, open **Settings & history → Set up background bot → Finish background setup**. The account moves to its own runner, paused, and you press Start again.
 
 ### Layout
 
-The primary view keeps Start/Pause/Stop, Bot rules, sport selection, decision/freshness, runtime status, balance/cash, entry amount, reset, focus, game picker, field, quotes/chart, team/player selection, pending/open positions, and the paper-balance chart available. Ask Claude appears only for the configured site owner. **More details**, closed initially, contains diagnostics, observation progress, History, additional market cards/filters, and the full rules summary. **Chart details** contains extra football facts/timeouts, history bounds, detailed signals/triggers, fill metadata, and explanatory text.
-
-**Decision details** is an optional closed panel below the plain decision reason. It shows the evidence time, warm-up, measured drop/noise, recovery drift, depth, spread, costs, scenario headroom and risk ratio. While held, it distinguishes the saved entry scenario from the latest exit assessment and frozen risk limits. Chart details uses that chart's exact game and outcome. Missing measurements say Not available; an older receipt is not relabeled as a current calculation.
-
-**Compare both teams** lists each side's latest saved reason and age, using verified team names when available. Focus selects a whole game; chart-side selection cannot restrict the engine to a team. The card identifies its own bot game, which can differ from the chart.
-
-**Accepted bot quote** uses the saved accepted book for the held, pending or focused game, in that priority order. **Bot game report** is independent football evidence. **Runner update** is a saved check/control timestamp, not proof that a book passed validation. Missing evidence remains unknown. Older session responses are rejected as a whole, including runtime and chart projections.
-
-Errors, stale-data indicators, chart legend, and missing-quote warnings remain visible. The old Beginner mode state, toggle, and localStorage preference were removed in the reviewed interface change. A previously saved `true` value no longer controls the interface. Plain wording does not mean the engine has fewer checks.
+| Area | What it shows |
+| --- | --- |
+| Search box | Live and upcoming college games; the chosen game is the bot's game. |
+| Bot card | Game, Steady/Bold (and Chaos under Steady), balance, Reset balance, the run controls, the status box, **Both sides**, and **Open orders & shares**. |
+| Status box | One plain-English state and reason, e.g. "Buy offers posted: Offering to buy Liberty at 70¢ or Delaware at 29.5¢. It fills only if someone sells at that price." Chips show the ages of the last bot check, accepted quote and game report. |
+| Both sides | One line per team from that team's own state: what is held, its posted offer, or the engine's verdict. |
+| Open orders & shares | Every resting offer (team, price, shares, cash held) and every holding (shares, average price, cost, value if sold now), across the main and Chaos games. Holdings also show their plan: "paired", "waiting for a pair, sells at <time>", or Bold's state. |
+| Game tracker | Score, clock and a field drawing from Polymarket game reports, with the report and check ages; a failed check shows its reason. |
+| Trades & balance | Every fill with price, quantity, fees and result, and the balance chart. |
+| Settings & history | Rules, Ask Claude (owner), the Decision engine card, background setup, your own Polymarket key ("Live prices"), diagnostics, saved-history download and Chaos log download. |
 
 ### Controls
 
-| Control | Actual effect |
+| Control | Effect |
 | --- | --- |
-| Choose chart/game | Changes inspection and priority display refresh. Does not change saved focus or trade. |
-| Switch chart team/player | Displays YES or NO quotes. Does not limit which outcome the engine may buy. |
-| Set focus | Saves one market slug through a rules update. A held position still receives exit checks. |
-| Start | Saves the current local policy when required, then starts an idle account or resumes a paused one. Native operation requires focus and available daily write budget. |
-| Pause | Blocks entries and cancels a pending buy. Held positions continue ordinary exit management while their runtime operates. |
-| Stop | Blocks entries; with a position it enters `stopping` and tries a normal delayed liquidation. Flat accounts become `stopped`. |
-| New paper run | Only available without an open position/pending order. Archives the previous run and creates a simulated bankroll; it is not a deposit or recovery of losses. |
-| Apply rules | Validates/saves a rules revision, cancels pending buy, and rebuilds entry history. Retains cash, journal, and held exit snapshots. |
-| Restore defaults | Changes the dialog draft; Apply is still needed. Keeps the draft leagues/focus. |
-| Reconnect/refresh | Retries account/data loading. Does not start a paused bot or create newer provider facts. |
-| Ask Claude | Opens saved chat/status. Only Send invokes Anthropic. |
-| Download complete saved history | Exports account, journal, and available evidence. This is private account history. |
+| Pick a game | Sets the bot's focus. Allowed while shares are held: they stay managed on their own game, and new offers go to the new game. |
+| Steady / Bold | Switches the trading mode and resizes the order. The button lights up at once; the change is saved from the latest rules. Bold turns Chaos off. |
+| Start bot / Resume | Starts an idle account or resumes a paused one. Needs a chosen game. |
+| Pause | No new entries; held shares stay managed. |
+| End run | Cancels offers, sells what is held, and ends the run. |
+| New run | After a run ends: opens Reset balance. |
+| Reset balance | Any time, $5–$10,000. Starts a fresh run, keeps Steady/Bold, and drops open paper trades (fake money). |
+| Chaos mode | Steady only: the same offers on up to 6 extra games. Removing a game pulls its offers. |
+| Download Chaos log / saved history | JSONL of Chaos events built in the browser / the full account journal export. |
 
-The account has **one open strategy position globally**, not one per side or per game. It can buy either explicitly mapped outcome if that side passes all checks. Showing California on the chart does not prevent it from considering Clemson, and vice versa.
+### Trading modes
+
+The bot mostly makes markets: it rests a buy offer at each team's best bid. Both filling is a **pair**, which pays exactly $1 at settlement whoever wins; the pair cost less than $1. Fills are conservative: an offer fills only when the price trades through it.
+
+| | Steady | Bold |
+| --- | --- | --- |
+| Offer size | about 5% of the balance (max $5) | 12% of the balance (max $50), so both offers fit the 25% exposure cap |
+| Hold-to-final bets the evidence allows | no | yes |
+| One side fills alone | Stops buying that side and raises its offer on the other side to complete the pair (pair cost ≤ 99.5¢). Sells the unpaired shares at the best bid after **10 minutes** if no pair forms. | Same pairing offer, but keeps the shares. **Dip buy:** once, if the price falls 5¢ below what it paid, it buys as many again at the ask (that side's cost capped at 2× the order size). **Loss limit:** after a dip buy, it sells the unpaired shares if the best bid falls 10¢ below their average. Otherwise it holds to the final. |
+
+**When offers come down:**
+- for 30 s after each live play;
+- whenever the live game report is older than 45 s;
+- when the book is wider than 5¢;
+- on stale data, pause, End run, or a rule change.
+
+The engine only posts where the evidence permits resting orders ([DECISION-ENGINE.md](DECISION-ENGINE.md)).
 
 ### Session states and runtimes
 
 - `idle`: account exists but has not started.
-- `running`: can build setups, stage buys, and manage positions.
-- `paused`: no new entries; held positions still need managed exits.
-- `stopping`: trying to close held quantity before stopping.
-- `stopped`: terminal for this run; create a new run when flat to begin another.
+- `running`: posts offers, stages entries, manages holdings.
+- `paused`: no new entries; holdings still managed.
+- `stopping`: selling held quantity before stopping.
+- `stopped`: the run is over; New run starts another.
 
-Browser mode requires the page to stay open and visible. Service mode uses native alarms; browser visibility affects its display polling, not runner authority. Old browser ticks after migration only read native state and cannot become a second engine writer. A runtime label saying background is connected is not proof that a paused bot is actively checking or has completed a live trade.
+**Browser mode:** the page must stay open and visible.
+
+**Background mode (runner):**
+- **Check cadence:** every **10 s before kickoff** with nothing held or pending, and every **2.5 s** once a watched game is live or anything is held or pending.
+- **Page updates:** the page polls the runner's state every 2.5 s. A small difference between the phone's clock and Cloudflare's clock is treated as "just now", not as stale.
+- **"Bot is behind":** shows only if the last check is older than 45 s (background) or 30 s (browser).
 
 ## Prices, charts, and game reports
 
@@ -276,20 +285,20 @@ Store `ANTHROPIC_API_KEY` only in private server secrets. Never paste it into th
 ## Architecture and interfaces
 
 ```text
-Authenticated browser
+Browser (signed in through Cloudflare Access with Google)
   └─ React dashboard → same-origin /api/tennis/*
           ↓
-ChatGPT Sites backend
-  ├─ owner identity from Sites authentication
-  ├─ D1: caches, adviser data, browser accounts, old journal, migration fence
-  ├─ read-only quote/context fetches for visible charts
-  └─ signed server-to-server proxy for a migrated owner
+Site Worker "dugout" (worker/cloudflare-entry.ts)
+  ├─ verifies the Access token on every request; account id = u_ + hash(email)
+  ├─ D1 "dugout": caches, adviser data, browser accounts, journals, runner fences
+  ├─ read-only quote/game-report fetches for visible charts (separate report lane)
+  └─ signed server-to-server proxy to the account's runner (state passed through as text)
           ↓ HMAC + owner + epoch + timestamp + nonce
-Cloudflare Worker → owner-named SQLite Durable Object
-  ├─ authoritative native paper session, commands, journal, inputs
+Runner Worker "dugout-paper-runner" → one SQLite Durable Object per account
+  ├─ authoritative paper session, commands, journal, inputs
   ├─ shared deterministic engine and execution simulator
-  ├─ native read-only WebSocket + bounded REST
-  └─ persistent alarms for checks without the dashboard
+  ├─ read-only WebSocket (with the account's own key) + bounded REST
+  └─ persistent alarms: 10 s before kickoff, 2.5 s live or while holding
 ```
 
 [app/page.tsx](../app/page.tsx) renders the active `TennisDashboard`. Shared `tennis` folder/type/route names now also carry NFL/CFB behavior. They are not evidence that football lacks support, and renaming/removing them is not needed to enable football.
@@ -322,37 +331,39 @@ Older MLB/NFL scanners, autopilot experiments, replay fixtures, manual-order typ
 
 ## Authentication and secrets
 
-Sites supplies `oai-authenticated-user-id` at the private hosting boundary. The runner proxy requires a valid owner ID and never guesses one. The Worker accepts signed requests only for its configured owner; the Durable Object checks owner and epoch again. An email address is not a replacement for that owner ID.
+The site Worker (`worker/cloudflare-entry.ts`, `lib/server/cloudflare-access.ts`) verifies the Cloudflare Access JWT on every request:
+- **Checks:** the RS256 signature against the team's published keys, the audience, the issuer and the expiry.
+- **Identity:** it derives the account id from the verified email and sets the internal identity header itself. A client-supplied identity header is refused.
+- **Fails closed:** without `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`, everyone is refused. On Cloudflare Workers Builds the build refuses to produce an unprotected site.
+- **Runner checks:** the runner proxy requires a valid account id and never guesses one. The runner accepts signed requests only for accounts on its allow-list, and the Durable Object checks owner and epoch again.
 
-This depends on trustworthy headers supplied by the Sites outer boundary; it is not standalone public-site authentication. Local portable sign-in is simulated, not production login. The lower-level legacy `profile()` helper retains a `private-owner` fallback; exposing old routes directly on an unprotected host would not preserve the intended boundary. Active migrated session paths deliberately validate owner before that helper.
+Local portable sign-in is simulated, not production login.
 
 Native mutations require exact same-origin requests and reject cross-site/same-site fetch metadata. The older generic `sameOrigin()` only rejects a present mismatched Origin. Do not claim all legacy routes have identical protections.
 
 ### Account scope
 
-An authenticated different Sites identity without a runner fence receives its own D1 paper account and browser runtime, starting with the new-account defaults. It does not gain the native owner's balance or journal. Each identity's session controls, archived runs, and history export are scoped separately. Access to the private site still requires the hosting invitation/authentication flow; possessing source files grants none.
-
-The included account-access patch uses server-only `DUGOUT_OWNER_ID` to restrict background setup and paid adviser access to the pinned owner. It must exactly match native `RUNNER_OWNER_ID`. For another identity, migration status is ineligible and prepare/advance/activate return 403 **before any pause, account freeze, migration write, or native request**. The guest retains browser paper mode with the page open and visible. No separate native object/account is automatically provisioned for that customer.
-
-Guest adviser GET returns only disabled/unconfigured status, without reading private chat or allowance. Guest Send and Save notes return 403 before reading/reserving allowance, changing notes, or making provider requests. The UI hides Ask Claude and background setup for ineligible accounts. A missing/invalid owner pin disables new background setup and adviser access for everyone without destroying sessions or migration fences; it does not disable management of an already-migrated runner account through its existing signed owner/session path.
-
-Synthetic actual-route/SQLite tests verify isolation and denied side effects. A real invited customer's login and complete paper run remain **unverified** until performed through the deployed private site. The documented native background validation applies only to the pinned owner's migrated account. This is not a shared-bankroll multiuser trading service.
+Every invited identity gets its own D1 paper account. Background runners are separate Durable Object instances keyed by account (`idFromName(owner)`), so no account can see or change another's.
+- **Who may set one up:** accounts on the site's `DUGOUT_RUNNER_USERS` list, and the runner's `RUNNER_OWNERS` list, may set up a runner. `*` means every invited account.
+- **Owner-only extras:** the owner (`DUGOUT_OWNER_ID` = `RUNNER_OWNER_ID`) additionally gets the Claude adviser, the owner's Polymarket stream keys, and the all-games research sweep.
+- **Personal key:** anyone may add their own read-only Polymarket key ("Live prices"). It is checked with a balance read, sent once to their own runner, stored encrypted (AES-GCM), and never returned.
 
 ### Configuration names
 
 | Name | Location / purpose |
 | --- | --- |
-| `DB` | Sites D1 binding. |
-| `DUGOUT_RUNNER_URL` | Sites server: HTTPS runner origin. |
-| `DUGOUT_RUNNER_SECRET` | Sites secret: signs requests; matches native HMAC secret. |
-| `DUGOUT_OWNER_ID` | Sites server: identity permitted background setup and paid adviser access; must match `RUNNER_OWNER_ID`. Missing/invalid pin disables extras. |
-| `RUNNER_HMAC_SECRET` | Native Worker secret: signature verification and credential-key derivation. |
-| `RUNNER_OWNER_ID` | Native Worker: exact existing Sites owner identity. |
-| `RUNNER_ENGINE_VERSION` | Native Worker: exact shared engine commit/build identity for replay. |
-| `POLYMARKET_KEY_ID`, `POLYMARKET_SECRET_KEY` | Server-only feed/credential verification. Strict REST paper fallback can operate without stream credentials. |
-| `POLYNARKET_KEY_ID` | Retained misspelled compatibility alias; prefer correct spelling. |
-| `ANTHROPIC_API_KEY` | Optional Sites server secret for adviser Send only. |
-| `TRADING_SERVICE_URL`, `TRADING_SERVICE_TOKEN` | Optional older stream service, not DO authority. |
+| `DB` | Site D1 binding (`dugout` database; id via `DUGOUT_D1_DATABASE_ID` at build time). |
+| `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Build variables: the Cloudflare Access team domain and application audience. Without them the site refuses everyone. |
+| `DUGOUT_RUNNER_URL` | Site secret: HTTPS runner origin. |
+| `DUGOUT_RUNNER_SECRET` | Site secret: signs runner requests; equals the runner's `RUNNER_HMAC_SECRET`. |
+| `DUGOUT_OWNER_ID` | Site secret: the owner's account id (`u_` + hash of the sign-in email); owner extras. |
+| `DUGOUT_RUNNER_USERS` | Site secret: `*` or a comma list of account ids allowed a background runner. |
+| `RUNNER_HMAC_SECRET` | Runner secret: signature verification and credential-key derivation. |
+| `RUNNER_OWNER_ID`, `RUNNER_OWNERS` | Runner variables: the owner, and `*` or a comma list of other allowed accounts. |
+| `RUNNER_ENGINE_VERSION` | Runner variable: the build's commit, for replay provenance. |
+| `LAKE`, `LAKE_PREFIX` | Optional runner R2 binding for research recording and Chaos logs. |
+| `POLYMARKET_KEY_ID`, `POLYMARKET_SECRET_KEY` | Owner's server-only feed credentials. |
+| `ANTHROPIC_API_KEY` | Optional site secret for the owner's adviser. |
 
 Never put signing/provider secrets in browser/public environment variables. The native runner has no real-order route or model client. Feed credential verification is a read-only account call; `liveEnabled` remains false.
 
@@ -376,7 +387,7 @@ Activation leaves idle/paused sources paused and stopped sources stopped. It sch
 
 ### Runtime
 
-Alarms target 2.5 seconds after a completed check. A recovery alarm is persisted before external I/O. Network/platform latency can extend actual cadence. Revision/session/epoch comparison prevents stale asynchronous work overwriting a control or reset.
+Alarms target 10 seconds before kickoff with nothing held or pending, and 2.5 seconds once a watched game is live or anything is held or pending. A recovery alarm is persisted before external I/O. Network/platform latency can extend actual cadence. Revision/session/epoch comparison prevents stale asynchronous work overwriting a control or reset.
 
 Held markets and pending intents have input priority. Football reports run alongside books; ordinary held-position exits do not wait for a slow report. New/pending buys await a bounded context check. Detached reports/socket setup use `waitUntil`. Verified focused metadata survives object reconstruction. Tennis context has a separate 15-second cache; fee/tick/size metadata has a 60-second refresh clock.
 
@@ -386,11 +397,19 @@ The API supports optional observation durations from one minute to six hours. Ex
 
 ### Cost/source controls
 
-The native service estimates its own UTC-day SQL row writes and alarm writes. At **75,000 estimated writes**, entries pause while held exits continue. Start/Resume cannot bypass it; a paper reset does not reset the daily counter. Approximately 71,721 writes immediately after migration was a dated reading, not a current value.
+**Runner write budget:** the runner counts the rows its SQLite storage reports as written, per UTC day. At **90,000** rows (the Free plan allows 100,000 a day) new entries pause; held positions are still managed.
+- **Normal use:** about 6 rows per check.
+- **Saved only on change, or once a minute:** health status, saved game copies, and the counter itself.
+- **Pregame cadence:** the 10-second pregame cadence also halves usage before kickoff.
 
-This estimate is not an exact Cloudflare bill, free-tier calculator, or guarantee against account-wide limits. State reads, nonces, exports, journals, and migrations also consume resources. Other Workers, reads, duration, and platform limits are outside this guard. No automatic billing upgrade exists. Current external prices and remaining quota are not established by this manual.
+**Site budget:**
+- **Writes:** D1 allows 100,000 rows written a day on the Free plan. A game's cached row is rewritten only when the game changes, or once per 10 minutes.
+- **CPU:** each site request has 10 ms of CPU on the Free plan. The site passes runner state through as text rather than re-parsing it. The page shows a connection banner only after two failed checks in a row.
 
-429 backoff persists. Concurrent failures keep the **maximum** deadline so a shorter Retry-After cannot erase a longer pause. Source responses are bounded: normally 1 MB for books/metadata/compact football, 4 MB for event detail, and 16 MB for a discovery page capped at 20 events. Oversized responses fail rather than allowing unbounded allocation.
+**Provider pauses (429):**
+- **Two lanes:** game reports have their own lane and pause, separate from prices and the game list. A rate limit on one never silences the other.
+- **Pause lengths:** a report 429 pauses reports for 15 s by default; other requests honour Retry-After (at least 60 s on the site).
+- **Report checks:** may take 3 s. A check counts as fresh only if Cloudflare says it was fetched or revalidated from the origin on that request.
 
 ## Journal exports and replay
 
@@ -444,7 +463,7 @@ pnpm start
 
 Build produces `dist/server/wrangler.json`. Start launches local Wrangler on loopback with `.wrangler/state` persistence; it does not publish. That local production preview does not supply the portable-dev auth mock. Use the printed address rather than assuming a port from an old browser tab.
 
-[.openai/hosting.json](../.openai/hosting.json) declares Sites D1 binding `DB` and no R2 binding. Generated Sites configuration is separate from [services/runner/wrangler.jsonc](../services/runner/wrangler.jsonc). Do not overwrite the Sites setup with a new root Wrangler configuration when editing the runner.
+[.openai/hosting.json](../.openai/hosting.json) is the older Sites build's binding file; the Cloudflare build uses `vite.config.ts` (self-hosted config, `DUGOUT_D1_DATABASE_ID`). Generated Sites configuration is separate from [services/runner/wrangler.jsonc](../services/runner/wrangler.jsonc). Do not overwrite the Sites setup with a new root Wrangler configuration when editing the runner.
 
 Schema is in [db/schema.ts](../db/schema.ts), with six numbered SQL migrations under [drizzle](../drizzle) at the audited revision. Apply only pending migrations in order to the intended database. Example for a known pending **local** migration after build:
 
@@ -525,7 +544,7 @@ The rollout noted two pre-existing explicit-`any` lint findings in `lib/server/p
 
 1. Preserve a source checkpoint and authenticated history export before stateful migration. Keep private exports/secrets outside Git.
 2. Run relevant tests, both TypeScript checks when shared code changes, and required builds.
-3. Publish native code with existing namespace/owner/secret and correct `RUNNER_ENGINE_VERSION`; publish the Sites application privately from matching source where needed.
+3. Push to `main`. Cloudflare Workers Builds redeploys both the site and the runner ([CLOUDFLARE-HOSTING.md](CLOUDFLARE-HOSTING.md)), keeping the Durable Object namespace, owner and secrets, and setting `RUNNER_ENGINE_VERSION` to the commit.
 4. Verify actual success and source identity. A build, dry run, pushed commit, or queued request is not deployment success.
 5. Reload the authenticated site and verify unchanged account/ledger/positions, runtime, controls, book/context refresh, and relevant errors.
 6. Starting paper trading is a separate operational action. Do not force a fill or weaken a gate to make a deployment look successful.
@@ -538,40 +557,26 @@ For a maintainer-oriented handoff, see [MAINTAINER-HANDOFF.md](MAINTAINER-HANDOF
 
 | Symptom | Meaning / check |
 | --- | --- |
-| Never buys | Read the recorded reason. Check running state, focus/leagues, fresh live status/context, spread/depth/cost, history, confirmations, cash, rest, and daily budget. No qualifying candidate is a valid result. |
-| Fresh chart, old bot quote | Chart game may differ or account may be paused/flat. Display refresh is not an engine tick. |
-| Old report, recent Last checked | A successful response contained unchanged old provider facts. Do not replace report time with check time. |
-| Book stale | Check actual receipt/provenance and errors, not listing price. Regressive/cached/unverified responses are correctly rejected. |
-| Warm-up does not finish | Check independent receipts and elapsed baseline time. Failures, edits, focus changes, or context resets can interrupt progress. |
-| Pending entry disappeared | Later book failed delay/signal/context/cost/depth/limit checks. Pending is not a fill. |
-| Rest after trade | Inspect saved per-game cooldown; factory defaults may not match. |
-| Stop remains stopping | Quantity remains and needs a later executable book or settlement; Stop creates no buyers. |
-| Wider spread/age rejected | Native hard limits remain 2¢/5 seconds despite broader legacy dialog ranges. |
-| Rule update lost revision race | Reload/reopen; expected session/revision protects newer changes. |
-| Provider asks to slow down | Honor 429 backoff. Refreshing cannot erase a longer persisted deadline. |
-| Missing game/partial list | Read discovery error/completion state. Saved ages remain old. Held exits have separate priority. |
-| Sign-in / failed-to-fetch banner | Check authenticated session and actual request response. Bootstrap may transiently fail; persistent failures need logs, not owner changes or auth bypasses. |
-| Background setup stalled | Resume saved migration; frozen state remains paused instead of browser fallback. |
-| Daily write guard reached | Entries wait until next UTC day; held exits continue. Paper reset does not reset usage. |
-| Claude unavailable | Missing key makes no call; present key does not verify model availability. Check access, allowance, timeout, and provider error before another deliberate Send. |
-| Missing chart middle | No observations may have been captured. Dashed bridges are not reconstructed prices/trades. |
+| Not trading | Read the status box. Normal reasons: paused/idle, the 30-second pull after a play, an old game report, a book wider than 5¢, or no qualifying evidence. Offers only fill when someone sells at that price. |
+| "Bot is behind" | No bot check for 45 s (background) or 30 s (browser). Reload if it lasts more than a minute. |
+| Game report stale | The tracker shows why the last check failed (timeout, provider pause, cached reply). Offers stay down until a fresh report arrives. |
+| "Server returned an unreadable response (503)" | Usually the Free plan's 10 ms CPU limit on a request; it passes. Persistent 503s: consider the Workers Paid plan. |
+| Shares held on one team only | Steady pairs or sells within 10 minutes. Bold pairs, may buy once on a dip, and has a loss limit after that. Open orders & shares shows the plan. |
+| Writes counter high | See Cost/source controls. Entries pause at 90,000 rows a day; held positions continue. |
+| Can't set up background bot | Finish or end open trades first; the account must be on the runner allow-lists. |
+| Switching games | Allowed any time; holdings stay managed on their own game. |
+| Provider asks to slow down | Honour the pause; refreshing cannot shorten it. |
+| Claude unavailable | Owner-only; needs `ANTHROPIC_API_KEY`. |
 
-A useful report includes time/timezone, game, state, focus versus chart, reason, book/report/check ages, and redacted error. Share a private export only through an appropriate private channel. Exclude keys, signing secrets, cookies, and credential-bearing request headers.
+A useful report includes the time, game, status-box text, the ages in its chips, and any error text.
 
 ## Limitations and outstanding validation
 
-- Strategies are unproven. The local model uses observed price movement, depth and explicit noise/cost assumptions; its scenario headroom is not a win probability or validated expected profit. It does not hear broadcasts or guarantee fills.
-- The local policy and adaptive exits need their own genuine live validation. Dated feed smoke checks and older fills do not establish a live round trip under this version.
-- Football currently screens entry quality and produces isolated shadow experiments. Fourth down/possession loss does not independently authorize a real paper early exit.
-- The 45-second gate can correctly prevent entry during provider pauses, kickoff, breaks, or incomplete reports. Fresh quotes cannot cure missing game context.
-- Native scheduling/data integration are implemented with synthetic tests and a read-only live input smoke check. The recorded 60-minute browser-closed experiment and genuine native automatic round trip remain unverified.
-- Paper depth/fees do not establish real exchange execution, queue position, order acceptance, or guaranteed stop losses.
-- Chart history is bounded. Legacy exact replay is limited by evidence actually saved.
-- Provider outages/payload changes and Cloudflare account-wide quotas are external facts. Guards do not promise zero cost or uninterrupted uptime.
-- Claude model availability/pricing, a successful paid response, and user balance were not verified in the rollout. It is optional advice, not the decision engine.
-- Legacy modules/routes remain. Removing controls is not deleting types, historical records, or all old code.
-- Sites authentication is an architectural dependency. Copying the app to another host does not implement Google login.
-- A different identity's browser paper account must not be confused with the pinned native owner's account. Verify deployed sharing/access configuration before inviting another person.
+- **Unproven strategies:** no strategy is proven profitable. Resting-order evidence is still being collected; paper fills are conservative and do not model queue position.
+- **Bold's extra rules:** the dip buy and loss limit were chosen by the owner on October 3, 2026 for bigger swings, not derived from evidence. Their ledger rows ("Bold dip buy", "Bold loss limit") exist so their results can be measured.
+- **Game reports:** reports come from Polymarket and can lag or pause. The 45-second gate correctly keeps live offers down when context is old.
+- **Provider and quotas:** provider outages, payload changes and Cloudflare quotas are external; the guards above reduce but do not remove them.
+- **Real money:** not connected (`lib/live/README.md`).
 
 For the next live validation, retain paper-only operation and current spread/freshness limits, choose a verified current focus, explicitly start when the daily budget permits, record browser-closed time, export afterward, and reconcile every fill/cash delta. If no qualifying automatic round trip occurs, report the actual reasons and retain the unverified milestone. Do not change rules merely because time passed or a trade would make the test appear successful.
 

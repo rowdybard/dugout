@@ -7,12 +7,12 @@ This describes the current source. Historical release and QA notes describe earl
 | Component | Source | Responsibility |
 | --- | --- | --- |
 | Current dashboard | `app/page.tsx`, `components/tennis`, `components/tennis/use-tennis.ts` | Bot controls, focused game, both outcomes, charts, reasons, history and optional adviser |
-| Sites API | `app/api/tennis`, `lib/tennis/server.ts` | Authenticated UI requests, bounded data reads, session routing, history and migration |
+| Site API (Cloudflare Worker) | `worker/cloudflare-entry.ts`, `app/api/tennis`, `lib/tennis/server.ts` | Access sign-in check, UI requests, bounded data reads, session routing, history and migration |
 | Shared paper engine | `lib/tennis` | ATP/WTA/NFL/CFB normalization, price policy, football context gate, simulated execution, risk snapshots and shadow exits |
 | Execution primitives | `lib/trading` | Decimal money, validated books, depth/fee simulation, source receipts and read-only market transport |
-| Background service | `services/runner` | One owner's authoritative session in a SQLite Durable Object, alarms, native feeds, commands and transactional journal |
-| Sites/runner boundary | `lib/runner` | Signed requests, authority fence, migration, replay contracts and deterministic reducer |
-| Sites storage | `lib/server/storage.ts`, `db/schema.ts`, `drizzle` | D1 cache, existing paper archives, observations, migration staging/fence and adviser history |
+| Background service | `services/runner` | One SQLite Durable Object per allowed account: authoritative session, alarms, feeds, commands and transactional journal |
+| Site/runner boundary | `lib/runner` | Signed requests, allow-lists, authority fence, migration, personal feed key, replay contracts and deterministic reducer |
+| Site storage (D1) | `lib/server/storage.ts`, `db/schema.ts`, `drizzle` | D1 cache, existing paper archives, observations, migration staging/fence and adviser history |
 | Optional Node bridge | `services/trading` | Read-only account/market stream proxy; not required by the Cloudflare runner |
 | Retained research | `lib/bot`, `lib/market`, `services/paper-bot`, `research/mlb-elo`, `data` | Older MLB/NFL workflows, research and compatibility paths; not the current dashboard's strategy engine |
 
@@ -20,15 +20,19 @@ The naming `tennis` remains for the live-game engine after NFL/CFB support was a
 
 ## Identity and authority
 
-The UI is hosted behind Sites' owner-private authentication. The runner boundary requires the trusted `oai-authenticated-user-id` header and does not invent an owner. Other legacy helpers retain a `private-owner` fallback, so exposing the web app directly without the trusted outer authentication boundary is unsupported. This release does not add Google OAuth or Cloudflare Access to the frontend.
+**Sign-in:** the site is a Cloudflare Worker behind Cloudflare Access with Google sign-in.
+- **Token check:** `worker/cloudflare-entry.ts` verifies the Access JWT on every request (signature, audience, issuer, expiry).
+- **Identity:** the account id is `u_` + a hash of the verified email. The Worker sets the internal identity header itself and refuses any copy a client sends.
+- **Fails closed:** without valid Access settings everyone is refused, and Workers Builds will not build an unprotected site.
 
-Sites signs server-to-server requests using `DUGOUT_RUNNER_SECRET`; the Worker verifies the same value as `RUNNER_HMAC_SECRET`, plus owner, epoch, timestamp, nonce, method, URL and body hash. Redirects are rejected without forwarding signed credentials. The browser receives neither signing secrets nor provider keys. See [the runner README](../services/runner/README.md) for the exact protocol and configuration.
+**Runner requests:** the site signs every request with `DUGOUT_RUNNER_SECRET`. The runner verifies it as `RUNNER_HMAC_SECRET`, together with owner, epoch, timestamp, nonce, method, URL and body hash. Redirects are rejected without forwarding signed credentials. The browser receives neither signing secrets nor provider keys. See [the runner README](../services/runner/README.md).
 
-An owner without a runner fence uses the retained browser-driven session path. Migration first freezes that owner's Sites session while flat and inactive, then transfers the full active journal and referenced observations through resumable hashed chunks. Activation reconciles cash and execution records, stores a replay checkpoint, and leaves the session paused or stopped. An explicit user command starts it. Sites keeps the source archive read-only. An unavailable runner or failed migration never falls back to browser trading after a fence exists.
-
-The native runner currently permits exactly one configured `RUNNER_OWNER_ID`. Inviting another authenticated Sites identity creates that identity's separate D1 paper account; it does not grant access to the first owner's account or automatically provision a background runner. Until a supported per-customer runner arrangement exists, the invited account uses browser-owned checks and requires the page to remain active. This is not yet multi-customer background hosting.
-
-Sites uses a matching server-only `DUGOUT_OWNER_ID` pin to gate background setup/migration and paid adviser access. Unauthorized migration commands fail before any pause, fence or history transfer. Guest UI hides those unavailable controls; adviser reads reveal only disabled capability flags. A missing pin disables new setup and adviser access, while existing runner fences and normal session/exit management remain intact.
+**Accounts and runners:**
+- **Separate accounts:** every invited identity has its own D1 paper account.
+- **Who gets a runner:** accounts allowed by `DUGOUT_RUNNER_USERS` (site) and `RUNNER_OWNERS` (runner) can move to their own runner instance (`idFromName(owner)`). `*` allows every invited account.
+- **Migration:** freezes the account while flat, transfers the journal in hashed chunks, reconciles, and leaves it paused. After that, a runner outage never falls back to browser trading.
+- **Owner extras:** the owner (`DUGOUT_OWNER_ID` = `RUNNER_OWNER_ID`) also gets the Claude adviser, the owner's stream keys and the all-games research sweep.
+- **Personal key:** any account may store its own read-only Polymarket key, encrypted in its runner.
 
 ## Decision and execution path
 
@@ -36,9 +40,9 @@ The engine acts on validated inputs, not chart pixels. Entry and delayed fill ch
 
 The `football-context-v1` policy adds a report quality gate, not a football win-probability model. Provider game identity, score, period, down/distance, possession and timestamps are validated. Old, incomplete, conflicting or mismatched reports block context-dependent entries. Adverse-context early exits are recorded as shadow comparisons; configured exits remain governed by the paper engine. Held positions retain their risk snapshot instead of silently widening their loss allowance when settings change.
 
-Books and game reports have separate clocks. The compact football event request uses a verified event ID and full-game-winner filter, a bounded fresh-source request and three-second helper cache. The provider's event-state timestamp remains the report time; fetching again does not rejuvenate a stale play. A slow report does not hold up an existing position's book-based exit check. Metadata has a separate refresh clock. REST and WebSocket sources retain provenance; recorded development data cannot masquerade as current input.
+Books and game reports have separate clocks. The compact football event request uses a verified event ID and full-game-winner filter and a bounded fresh-source request (3 s) in its own rate-limit lane, so a 429 on prices or the game list never silences reports. It has a three-second helper cache. The provider's event-state timestamp remains the report time; fetching again does not rejuvenate a stale play. A slow report does not hold up an existing position's book-based exit check. Metadata has a separate refresh clock. REST and WebSocket sources retain provenance; recorded development data cannot masquerade as current input.
 
-The adapter starts a recovery alarm before external I/O and schedules the next check about 2.5 seconds after work finishes. It can continue with the page closed when deployed, activated, running and healthy. This is not a scheduling or provider-latency guarantee. Confirmed game completion pauses entries while exits continue. A persisted estimate at 75,000 daily row/alarm writes also pauses entries, reserving management of existing positions; it is not an account-wide platform quota guarantee.
+The adapter starts a recovery alarm before external I/O. It schedules the next check 10 seconds later before kickoff with nothing held or pending, and 2.5 seconds later once a watched game is live or anything is held or pending. It can continue with the page closed when deployed, activated, running and healthy. This is not a scheduling or provider-latency guarantee. Confirmed game completion pauses entries while exits continue. Counted SQLite row writes reaching 90,000 in a UTC day also pause entries, while existing positions stay managed. It is a per-runner guard, not an account-wide platform quota.
 
 ## Persistence, evidence and optional AI
 
@@ -54,4 +58,4 @@ Use the pinned pnpm version, `pnpm install --frozen-lockfile`, then `pnpm test`,
 
 Distribute the complete source tree with the lockfile/workspace policy, shared libraries, both services, tests and fixtures, all Drizzle migrations and metadata, vendored plugin/styles and licenses, model/research artifacts, scripts, public assets and example configuration. `development-fixtures/us-api.json` is required by the development-only replay import and is historical data, not a live feed.
 
-A source ZIP does not contain remote Sites D1 or runner Durable Object account state. Account backup requires a separate saved-history export. Exclude dependency/build folders, local runtime databases, `.wrangler`, `.sites-runtime`, `.git`, credentials and secret environment files. The checked-in hosting project ID associates a Sites project; it is not portable authentication. A new deployment needs its own approved hosting configuration and server-side secrets. Never infer deployment success, live fills or profitability from a build or synthetic test pass.
+A source ZIP does not contain the remote D1 database or runner Durable Object account state. Account backup requires a separate saved-history export. Exclude dependency/build folders, local runtime databases, `.wrangler`, `.sites-runtime`, `.git`, credentials and secret environment files. The checked-in hosting project ID associates a Sites project; it is not portable authentication. A new deployment needs its own approved hosting configuration and server-side secrets. Never infer deployment success, live fills or profitability from a build or synthetic test pass.

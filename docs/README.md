@@ -5,14 +5,16 @@
 - **[Strategy lab handoff](STRATEGY-LAB-HANDOFF.md): read this first.** It covers the real-money goal, audit findings, decisions, verified data sources and the live checklist.
 - **[Decision engine](DECISION-ENGINE.md):** the research turned into GO / PAPER ONLY / NO verdicts and plans, with plugs for new research, plus the CFB favourite forward test.
 - **[Data platform](DATA-PLATFORM.md):** storing the research lake on Cloudflare R2, searching it with DuckDB, and streaming evidence packs into the engine.
+- **[Strategy architecture](STRATEGY-ARCHITECTURE.md):** strategy specs, the rule miner, the all-games sweep, and the PC study scripts.
+- **[Cloudflare hosting](CLOUDFLARE-HOSTING.md):** deploying the site and runner from GitHub, Google sign-in through Cloudflare Access, and secrets.
 - [Project README](../README.md)
 - [Bot and developer manual](BOT-MANUAL.md)
 - [Architecture](ARCHITECTURE.md)
 - [Release evidence and known gaps](RELEASE-STATUS.md)
 - [ZIP scope and restore notes](DISTRIBUTION.md)
-- [Chad's getting-started guide](../chad.md)
+- [Chad's getting-started guide](../chad.md): plain-English guide for invited users
 - [Maintainer handoff](MAINTAINER-HANDOFF.md)
-- [Cloudflare runner](../services/runner/README.md)
+- [Cloudflare runner](../services/runner/README.md): background runner setup, storage writes, GitHub deploy
 - [Optional read-only stream service](../services/trading/README.md)
 - [Retained MLB research](../research/mlb-elo/README.md)
 

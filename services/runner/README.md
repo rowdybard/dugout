@@ -14,12 +14,14 @@ The runner authorizes `RUNNER_OWNER_ID` plus the optional allow-list `RUNNER_OWN
 
 | Location | Setting | Required value |
 | --- | --- | --- |
-| Worker variable | `RUNNER_OWNER_ID` | Unchanged, trusted Sites owner ID; not an email address |
-| Worker variable | `RUNNER_ENGINE_VERSION` | Exact shared-engine commit/build identifier for replay provenance |
-| Worker secret | `RUNNER_HMAC_SECRET` | Random signing secret; generate at least 32 random bytes |
-| Sites server secret | `DUGOUT_RUNNER_SECRET` | Same value as the Worker's `RUNNER_HMAC_SECRET` |
-| Sites server setting | `DUGOUT_RUNNER_URL` | HTTPS runner origin, without a path or query |
-| Sites server setting | `DUGOUT_OWNER_ID` | Same trusted ID as `RUNNER_OWNER_ID`; gates migration/setup and paid adviser access |
+| Runner variable | `RUNNER_OWNER_ID` | The owner's account id: `u_` + a hash of the sign-in email (`node scripts/cloudflare-hosting.mjs owner-id you@gmail.com`); not an email address |
+| Runner variable | `RUNNER_OWNERS` | `*` or a comma list of other account ids allowed a runner |
+| Runner variable | `RUNNER_ENGINE_VERSION` | Exact shared-engine commit/build identifier for replay provenance (`$WORKERS_CI_COMMIT_SHA` on Workers Builds) |
+| Runner secret | `RUNNER_HMAC_SECRET` | Random signing secret; at least 32 random characters |
+| Site secret | `DUGOUT_RUNNER_SECRET` | Same value as the runner's `RUNNER_HMAC_SECRET` |
+| Site secret | `DUGOUT_RUNNER_URL` | HTTPS runner origin, without a path or query |
+| Site secret | `DUGOUT_OWNER_ID` | Same id as `RUNNER_OWNER_ID`; owner extras (adviser, stream keys, research sweep) |
+| Site secret | `DUGOUT_RUNNER_USERS` | `*` or a comma list of account ids offered background setup |
 
 **Storage writes.** Each check writes:
 - an audit record (about 3 rows with its indexes) and the bot's state (1 row);
@@ -103,7 +105,7 @@ Reports and connection setup run alongside books using platform `waitUntil`. Hel
 
 Confirmed final context is returned separately when a final book is unavailable, so a completed game still records an automatic pause. That lifecycle cause and verified context are preserved in the control/replay journal. Existing exits continue. Starting/resuming without an explicit duration clears the old browser observation window, with that transition recorded in the replay frame; the service then runs until the focused game ends, a user pauses/stops it, or a safety limit pauses entries.
 
-SQL cursor row-write counts and alarm writes feed a persisted UTC-day estimate. At 75,000 estimated writes, new entries pause while existing exits remain managed. Start/resume cannot bypass that pause. This is an account-local estimate, not a hard guarantee against Cloudflare account-wide limits; other Workers, reads, duration and other quotas still apply. No billing plan upgrade occurs automatically.
+SQL cursor row-write counts and alarm writes feed a persisted UTC-day count (saved at most once a minute). At 90,000 rows, new entries pause while existing exits remain managed. Start/resume cannot bypass that pause. This is an account-local estimate, not a hard guarantee against Cloudflare account-wide limits; other Workers, reads, duration and other quotas still apply. No billing plan upgrade occurs automatically.
 
 Every committed action and tick—including no-input ticks—records exact inputs by content hash, engine/build identity, timestamp, source failures and before/after state hashes in the same transaction as session and journal changes. Reset IDs are captured as replay entropy. `lib/runner/replay.ts` reproduces frames from the initial migration checkpoint. Older imported histories retain their original evidence limitations and are not presented as exact whole-strategy replay.
 

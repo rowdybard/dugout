@@ -1,80 +1,69 @@
 # Dugout project handoff
 
-Updated September 26, 2026. Read [the manual](BOT-MANUAL.md) and [release evidence](RELEASE-STATUS.md). Possessing this file or source ZIP does not grant hosted account access.
+Updated October 3, 2026. Read [the manual](BOT-MANUAL.md), [the decision engine](DECISION-ENGINE.md) and [release evidence](RELEASE-STATUS.md). Having this file or the source does not grant access to anyone's hosted account.
 
-September 27 UTC follow-up: `2f02e87` passed 573 tests and both builds and was deployed to the dashboard and native Worker. A workerd reproduction confirmed the old upgrade timeout closed an open WebSocket; the handshake timer now clears after upgrade. Production subsequently retained a streaming connection and collected 64 observations per side. At 02:04:44 UTC the account was running, flat, with unchanged cash; stale football context blocked entry. Earlier paused-account statements below describe the dated cutover. This short observation does not complete live acceptance.
-
-GitHub is public at https://github.com/rowdybard/dugout. `main` contains the full project. Original GitHub history was preserved as a merge parent without changing the tested source tree or force-pushing. Sites publication and GitHub pushes are separate: publishing to one does not update the other. Use `git status -sb` for local changes and tracking, and `git log origin/main..HEAD` for unpushed commits after fetching.
+GitHub: https://github.com/rowdybard/dugout. `main` is the deployed branch. Cloudflare Workers Builds redeploys the site (`dugout`) and the runner (`dugout-paper-runner`) on every push to `main`.
 
 ## Current product
 
-- Active UI: `app/page.tsx` and `app/tennis/page.tsx` render `components/tennis/tennis-dashboard.tsx`; `/sports` redirects to `/`.
-- Sports: ATP/WTA tennis and NFL/CFB football, limited to verified available Polymarket US winner markets. Do not promise every real-world game has a market or complete report.
-- Bot-only paper UI. Beginner mode is disabled; technical details/history expand on demand. The old browser beginner preference must not change this.
-- Game selection controls the chart. Explicit focus controls future entries. Both outcomes are evaluated, with one open position across the account.
-- Dashboard remains on its existing owner-private Sites host. Cloudflare hosts the background paper runner, not a new public dashboard or Google login flow.
-- Customer access uses a private hosting invitation and the visitor's own identity. Accounts have separate D1 balances/history. The server-only `DUGOUT_OWNER_ID` restricts background setup and paid adviser access to the existing owner; it must match native `RUNNER_OWNER_ID`. Guests use browser-mode paper checks with the tab open and visible. Chad's invitation and complete customer run remain unverified.
+- **UI:** `app/page.tsx` renders `components/tennis/tennis-dashboard.tsx`. The view shows college football only (`lib/tennis/leagues.ts`, `VISIBLE_LEAGUES`). The engine and data paths still support ATP/WTA, NFL and MLB.
+- **Layout:** game search, the bot card, game tracker, Trades & balance, and a closed Settings & history section.
+  - **Bot card:** Steady/Bold, Chaos, balance and reset, Pause/Resume/End run/New run, the status box, Both sides, and Open orders & shares.
+- **Hosting:** the site is a Cloudflare Worker behind Cloudflare Access with Google sign-in; [CLOUDFLARE-HOSTING.md](CLOUDFLARE-HOSTING.md) has setup.
+  - Each invited email gets its own D1 paper account.
+  - Background runners are one SQLite Durable Object per account, allowed by `DUGOUT_RUNNER_USERS` / `RUNNER_OWNERS`.
+- **Strategy:** the evidence-gated decision engine, mainly paper market making ([DECISION-ENGINE.md](DECISION-ENGINE.md)).
+  - **Steady:** resting offers only. After a one-sided fill it pairs or exits within 10 minutes.
+  - **Bold:** bigger offers plus hold-to-final bets the evidence allows; after a one-sided fill it pairs, buys once on a 5¢ dip, and has a 10¢ loss limit after that.
+  - **Chaos:** Steady on up to 6 extra games, logged as tiny JSONL files.
+- **Paper only:** real money is not connected (`lib/live/README.md`). Connecting it is the owner's decision.
 
 ## Components and authority
 
 | Component | Source |
 | --- | --- |
-| Dashboard/charts | `components/tennis/` |
-| Strategy, rules, football assessment | `lib/tennis/` |
-| Pure local entry analysis / adaptive exit measurements | `lib/tennis/opportunity.ts`, `lib/tennis/exit-analysis.ts` |
-| Recorded UI policy upgrade / optional decision measurements | `lib/tennis/start-control.ts`, `components/tennis/decision-metrics.tsx` |
-| Simulated depth/fee execution and source validation | `lib/trading/` |
-| Sites HTTP routes | `app/api/tennis/` |
-| Signed runner proxy/migration contracts | `lib/runner/` |
-| Native Worker and SQLite Durable Object | `services/runner/` |
-| Sites D1 schema/migrations | `db/`, `drizzle/` |
-| Optional standalone read-only stream service | `services/trading/` |
-
-Legacy manual/research modules remain in source for historical compatibility. Do not describe them as current homepage controls or remove historical journal rows to make the interface look bot-only.
-
-## Versioned decision policy
-
-`config.decisionEngine: 'local-move-v1'` selects the new deterministic local entry analysis. An absent field preserves the old strategy path. `defaultTennisConfig()` remains the legacy factory for compatibility; `defaultLiveTennisConfig()` selects local analysis for fresh server accounts. Reset retains the previous local/legacy policy family. Dashboard Start/Resume records an explicit `update-rules` before starting older accounts, preserving money/risk/rest settings and tightening history/spread/freshness only to the required floors/limits.
-
-The new entry module measures causal pre-drop noise, buyer recovery, depth pressure, executable fees and delay friction. Its return scenario is not a calibrated win probability or expected profit. The exit module uses executable net marks, an upward-only profit floor, structural invalidation and remaining scenario headroom versus measured waiting risk. A fixed `targetReturn` is retained in the snapshot for compatibility but is not a local profit trigger. Original stop and maximum hold remain absolute bounds on the policy; delayed fills can still lose more than a trigger value.
-
-`TennisDecision.analysis` and `exitAnalysis` store serializable measurements. Pending intents carry entry analysis; actual buys save `position.entryAnalysis` and an immutable `exitPlan`, while `exitState` evolves with distinct executable books. Existing legacy positions do not acquire adaptive plans by an incidental settings edit. Optional details select evidence for the displayed game/outcome rather than borrowing a newer result from another game. No model calls are added.
-
-These source changes require their own test/deployment and live validation record. The dated 503-test interface release and earlier runner feed smoke do not validate the new strategy's live behavior or profitability. See release evidence for results actually completed.
+| Dashboard and panels | `components/tennis/` (dashboard, `open-book.tsx`, `chaos-panel.tsx`, `decision-card.tsx`, `use-tennis.ts`) |
+| Session engine, resting orders, pairing/exit, Bold rules | `lib/tennis/engine.ts`, `lib/tennis/maker.ts`, `lib/tennis/modes.ts` |
+| Decision engine, strategies, evidence | `lib/decision/` |
+| Status text, open orders view | `lib/tennis/decision-view.ts`, `lib/tennis/open-book.ts` |
+| Game reports | `lib/tennis/priority-context.ts`, `lib/trading/fresh-event.ts` |
+| Simulated depth/fee execution | `lib/trading/` |
+| Site routes | `app/api/tennis/` |
+| Sign-in | `worker/cloudflare-entry.ts`, `lib/server/cloudflare-access.ts` |
+| Signed runner proxy, allow-lists, personal key | `lib/runner/` |
+| Runner Worker and Durable Object | `services/runner/` |
+| D1 schema/migrations | `db/`, `drizzle/` |
+| Research (PC) | `research/` (studies, rule miner, Lab GUI) |
 
 ## Dated state, not live state
 
-The September 26 cutover transferred 285 resumable chunks. Reconciliation found cash 93.93805, 19 historical fills, 4.11 execution fees, 13,130 journal records and 4,373 observations, with zero missing references in that export. Local dated exports and the reconciliation script remain under ignored `outputs/`; see release evidence. Reread a fresh export before making new state claims.
-
-The account was left paused, flat, with no pending order. No Start was issued during the runner/report-refresh deployment. The old Clemson automation remains paused. Do not restart either automatically.
-
-Report-refresh source `5ac6e98f89755381d9164980ab8556b18efd7ede` was deployed to Sites and the native runner. It uses compact identity-checked football reads with uncached-response evidence, separate report/check timestamps, bounded response sizes, and backoff that cannot be shortened by concurrent 429 responses. Current source also includes the clean-interface/documentation changes in the release record.
+On October 2–3, 2026 the owner's account and invited accounts ran on Cloudflare during live college games.
+- **Owner account:** a background runner. The site's D1 holds only its pre-migration snapshot; the runner is authoritative.
+- **Observed:** resting offers, a one-sided fill, and the issues fixed that day ([RELEASE-STATUS.md](RELEASE-STATUS.md)).
+- **Read live state yourself:** use a fresh export or the dashboard.
 
 ## Preserve these constraints
 
-1. Paper only: no real orders, automatic AI calls, forced fills or profit promises.
-2. Do not relax the runner's 2-cent spread/5-second book limits or required 45-second football entry context.
-3. Preserve tennis, balances, journals, provider ordering, delayed fills, depth and fees. Held positions keep their entry-time exit limits.
-4. Missing/stale game reports block relevant entries, not ordinary risk exits. Shadow context exits do not change cash.
-5. Preserve the old-writer fence and native namespace. Do not restore stale balances, reset quota counters or enable a paid plan as a repair.
-6. Runner Start is an explicit dashboard action. Pause keeps managing held exits; Stop is not guaranteed immediate liquidation.
-7. Never include actual API keys, signing secrets, credentials, `.wrangler` state or `.env` files in a source export/commit.
+1. **Paper only:** no real orders, automatic AI calls, forced fills or profit promises.
+2. **Gates stay:** live resting orders require a game report under 45 s, and are pulled for 30 s after each play. The engine's evidence verdicts decide what is allowed.
+3. **Fail closed:** missing or stale reports block entries, never risk exits. The site refuses everyone without valid Access settings.
+4. **Runner identity:** keep the Durable Object namespace, the runner fences and each account's epoch. Don't reset write counters or restore browser writes for a migrated account.
+5. **No secrets in the repo:** never commit API keys, signing secrets, `.wrangler` state or `.env` files. Secrets go in Cloudflare (type Secret).
+6. **Free-plan limits are real:** 10 ms CPU per site request, 100,000 D1 rows written a day, and the runner's own 90,000-row entry pause. Keep per-poll work small.
 
 ## Evidence still needed
 
-- 60 minutes of genuine new-runner background operation, including closed dashboards, then full journal/cash/fee reconciliation.
-- A genuine bot-initiated live entry and exit on that runner; read-only checks are not fills.
-- A genuine live entry/exit using `local-move-v1`, with recorded analysis and fee/cash reconciliation; synthetic scenario tests alone are insufficient.
-- Later-game comparison of fixed versioned policies against an unchanged baseline; no automatic rule tuning.
-- Fresh-install verification on a new machine.
-- Current provider model availability/pricing and paid Claude integration; no paid verification call was made.
+- A weekend of resting-order results per mode (Steady, Bold, Chaos), reconciled from exports, before any claim about returns.
+- Whether Bold's dip buys and loss-limit exits help or hurt: compare the "Bold dip buy" and "Bold loss limit" ledger rows.
+- Behaviour on the Workers Paid plan, if adopted (CPU, writes).
+- The PC research items in [STRATEGY-LAB-HANDOFF.md](STRATEGY-LAB-HANDOFF.md) and [STRATEGY-ARCHITECTURE.md](STRATEGY-ARCHITECTURE.md).
 
-Repository-wide lint has pre-existing failures. Report actual results rather than claiming that everything is verified.
+Repository-wide lint has pre-existing failures in older files. Changed files are kept lint-clean.
 
 ## Editing and publishing
 
-Change the pure engine/rules with focused regression tests. Test both teams, held-position behavior and unchanged tennis paths. Label synthetic data/results as synthetic. For presentation-only changes, inspect the actual layout and controls.
-
-Run the root README commands. Publish exact tested source to the configured Sites repository and preserve private access. Build/deploy the separate Worker when runner/shared-runtime code changes, preserving bindings and secrets. UI/docs changes alone do not require migration or account restart.
-
-The source archive is not a full backup of live databases. See [distribution notes](DISTRIBUTION.md). Update this file and the manual when behavior changes; retain dates on historical evidence.
+- **Engine changes:** pure engine and rule changes come with focused tests (`tests/maker-bot.test.ts`, `tests/steady.test.ts`, `tests/modes.test.ts` and so on).
+- **Before pushing:** run `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm runner:check` and `pnpm build`.
+- **Pushing:** a push to `main` deploys both Workers. Check Cloudflare → Workers → Deployments for success.
+- **UI changes:** check the page at phone width.
+- **Keep docs current:** update this file, the manual and `chad.md` when behaviour changes, and keep dates on historical evidence.
