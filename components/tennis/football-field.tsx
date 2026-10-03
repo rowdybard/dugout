@@ -17,18 +17,14 @@ export function FootballField({market,now,assessment,contextCheck,showFreshnessN
   const fresh=field.freshness==='fresh'&&!reportNotice;
   const reportLabel=fresh?'Fresh report':field.lineOfScrimmage!==null?'Last reported field position':'Field position pending';
   const notice=showFreshnessNotice?reportNotice:null;
-  const summary=`Reported football field. ${market.yesName} goal on the left; ${market.noName} goal on the right. ${field.positionLabel}. ${field.possessionLabel}. ${field.distanceLabel}. ${field.sources.label}. ${field.sources.clock.label}. ${field.sources.drive.label}. ${reportLabel}.${field.lastScore?` Last score: ${field.lastScore.label}, ${field.lastScore.ageLabel}.${field.lastScore.waitingForDrive?' Waiting for the next drive.':''}`:''}`;
+  const summary=`Reported football field. ${market.yesName} goal on the left; ${market.noName} goal on the right. ${field.positionLabel}. ${field.possessionLabel}. ${field.distanceLabel}. ${reportLabel}.${field.lastScore?` Last score: ${field.lastScore.label}, ${field.lastScore.ageLabel}.${field.lastScore.waitingForDrive?' Waiting for the next drive.':''}`:''}`;
   const markerOpacity=fresh?1:.55;
   return <section aria-label="Reported football field" style={{margin:'14px 0',padding:'16px',border:'1px solid var(--dg-line,#28323e)',borderRadius:12,background:'var(--dg-surface-2,#1a212b)',color:'var(--dg-text,#eef2f6)'}}>
     <div style={{display:'flex',flexWrap:'wrap',alignItems:'baseline',justifyContent:'space-between',gap:'6px 16px',marginBottom:6}}>
       <strong style={{fontSize:'var(--fs-md,16px)'}}>{field.direction===-1?'← ':''}{field.possessionLabel}{field.direction===1?' →':''}<span style={{fontWeight:400,color:muted}}> · {field.distanceLabel}</span></strong>
-      <span style={{fontSize:small,fontWeight:600,color:fresh?'var(--dg-accent,#c2f477)':'var(--dg-warn,#f2c46d)'}} title={`Last checked ${check.checkedLabel}`}>{market.ended?'Game ended · ':!market.live?'Not in play · ':''}{reportLabel}{field.reportAgeMs!==null?` · ${field.ageLabel.replace(/^Reported /,'')}`:''}</span>
+      <span style={{fontSize:small,fontWeight:600,color:fresh?'var(--dg-accent,#c2f477)':'var(--dg-warn,#f2c46d)'}}>{market.ended?'Game ended · ':!market.live?'Not in play · ':''}{reportLabel}{field.reportAgeMs!==null?` · ${field.ageLabel.replace(/^Reported /,'')}`:''}</span>
     </div>
     {field.lastScore&&<p role="status" style={{fontSize:small,lineHeight:1.5,margin:'8px 0',padding:'9px 12px',borderRadius:7,background:'var(--dg-surface-3,#2a2f37)'}}><strong>{field.lastScore.label}</strong><span style={{color:muted}}> · {field.lastScore.ageLabel}{field.lastScore.waitingForDrive?' · Waiting for the next drive.':''}</span></p>}
-    <p style={{fontSize:small,color:muted,lineHeight:1.5,margin:'0 0 4px'}}>{field.sources.label}</p>
-    <div style={{display:'flex',flexWrap:'wrap',gap:'2px 16px',fontSize:small,color:muted,lineHeight:1.5,marginBottom:8}}>
-      <span>{field.sources.clock.label}</span><span>{field.sources.drive.label}</span>{check.ageMs!==null&&<span>Last successful feed check {check.checkedLabel}</span>}
-    </div>
     {notice&&<p role="status" data-football-feed-status style={{fontSize:small,color:'var(--dg-warn,#f2c46d)',lineHeight:1.5,margin:'0 0 8px'}}>{notice}</p>}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,fontSize:small,color:muted}}>
       <span style={{overflowWrap:'anywhere'}}>{market.yesName}</span>
@@ -62,5 +58,14 @@ export function FootballField({market,now,assessment,contextCheck,showFreshnessN
       <span><span aria-hidden="true" style={{color:'#ffdf57'}}>━━ </span>{field.goalToGo?'Goal':'First down'}{field.firstDownLine===null?' · unknown':''}</span>
       {!fresh&&field.lineOfScrimmage!==null&&<span>Faded markers show the last reported spot.</span>}
     </div>
+    <details style={{fontSize:small,color:muted,lineHeight:1.5,marginTop:8}}>
+      <summary style={{cursor:'pointer'}}>Feed details</summary>
+      <div style={{display:'grid',gap:4,marginTop:6}}>
+        <span>{field.sources.label}</span>
+        <span>{field.sources.clock.label}</span>
+        <span>{field.sources.drive.label}</span>
+        <span>Last successful check: {check.checkedLabel}</span>
+      </div>
+    </details>
   </section>;
 }
