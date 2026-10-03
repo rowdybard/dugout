@@ -49,7 +49,7 @@ We measured roughly 2,800 games of Polymarket US prices. Most simple ways of bet
 | `spec.ts`, `catalog.ts`, `prereg.lock.json` | Every strategy version's spec (hypothesis, mechanism, evidence for and against, rules, exits, kill conditions, minimum sample) and the SHA-256 lock on its rules |
 | `edge.ts` | Edge after costs: the calibrated lower bound minus the book-walked fill, fee and latency allowance |
 | `events.ts` | Score, possession, period and dead-ball events with pre-event prices |
-| `shadow.ts`, `scorecard.ts`, `why.ts` | Counterfactual legs and exits, the per-version scorecard, and the "why no trade" vocabulary |
+| `shadow.ts`, `scorecard.ts`, `why.ts` | Counterfactual legs and exits, the per-version scorecard (a verdict needs both `minSample.trades` and `minSample.games` distinct games; records may carry a `variant`, scored separately), and the "why no trade" vocabulary |
 | `evidence.ts` | The compiled-in evidence rows and the condition language |
 | `pack.ts` | Evidence-pack schema and validation, the bundled pack, and the untrusted-pack restriction |
 | `models.ts` | Win-probability models as JSON (`logistic-v1`, `table-v1`, `calibration-v1` with intervals) and the market-implied baseline |
@@ -122,6 +122,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
   - **Comeback test:** Bold and Auto set `explore: ['comeback-drive']`, so `comeback-drive@1` is paper-traded (EXPLORE_PAPER) to measure it; Steady clears it.
   - **Auto** (`autoMode: true`, with Bold's rules in the config): `decideAuto` picks the mode on each check and keeps it in `session.autoMode`. Steady while the run is down 10% (`AUTO_DRAWDOWN`); Bold when the main game's plan has a permitted hold-to-final or drive action; back to Steady after 5 minutes without one (`AUTO_HOLD_MS`) once nothing is held. `tradeMode(session)` and `tradeBudget(session)` give the mode and order size in force; the engine, open-orders view and Octopus use them.
   - **Reset** keeps the mode and resizes the orders to the new balance.
+  - **Results by variant:** closed resting-order holdings are scored as `forward-paper` records of the selected maker strategy (`sessionTradeRecords`), one per holding. They're grouped by mode, main game or Octopus, and rules revision (from `PurchaseTerms`); holdings from before tracking are grouped as "before tracking". A pair shows as one win and one loss, so read total P&L, not win rate.
 - **The Octopus** (experimental; "Chaos mode" in code, `lib/tennis/octopus.ts`). The bot also rests offers on up to 6 extra games, its arms, in either mode, at that mode's size and with its one-sided rules.
   - **Arm state:** each arm has its own quote state (`session.chaos[slug]`), fills and holdings; the main game keeps `session.maker`.
   - **Pinned and auto arms:** pinned arms are `config.chaosSlugs`. With `config.octopusAuto`, free arms are filled by `pickOctopusGames`:

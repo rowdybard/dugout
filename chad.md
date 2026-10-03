@@ -28,7 +28,7 @@ You can scroll through **Trades & balance** and **Bot activity** without the row
    - your **balance**, and **Reset balance**;
    - the selected bot's main button: **Start bot**, **Pause**, **Resume** or **Acknowledge loss and resume**, and **End run** next to it while a run is going;
    - **status box:** what the bot is doing right now, in one or two sentences. Tap **Both sides** under it for a line about each team.
-   - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now.
+   - **Open orders & shares:** every offer the bot has waiting and every share it holds, with prices, cost and what it would get if it sold now. If a price isn't fresh it says so ("price 40 s old", "only 6 of 10 shares priced", "no price yet"); the balance at the top counts holdings the same way. After you change the rules or the mode, a line here says whether it changes anything for shares already held.
 3. **Game tracker:** Football's score and clock come from Polymarket. For a verified game, ESPN can fill in missing drive details. During a gap after scoring, the last known scorer and play stay visible; if only the score changed, it shows the points without guessing what happened. Feed timing is tucked into **Feed details**. Tennis shows a scoreboard above its prices and chart: sets, games, points and who's serving when supplied. It checks every five seconds even while the Tennis bot is idle. A small update age shows how recent the reported score is.
 4. **Trades & balance:** every fill, with price, fees and result, plus a balance chart.
 5. **Settings & history** (closed by default): rules, background running, your own price key, diagnostics and downloads. You don't need any of it to get started.
@@ -62,7 +62,8 @@ The line under the buttons says which one it's in and why. Switching never chang
 - **Acknowledge loss and resume:** appears after the bot hits its loss limit and finishes selling. Keeps the same run, balance and history. Each acknowledgement allows the original dollar amount again: with a $100 start and a 20% limit, a stop at $79.94 can resume with another $20 allowance, reaching the next limit at $59.94. It never resumes a loss stop automatically.
 - **Sell everything now:** the big button that appears while the bot holds shares. It's green when they're up and red when down, and shows the amount. It sells everything at the best price on the next price check (a few seconds) and pauses the bot. Press Resume to carry on.
 - **Reset balance:** explicitly starts the whole shared wallet over at any amount from $5 to $10,000. It resets both bots and drops open paper trades.
-- **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game.
+- **Switching games:** search and pick another game any time. Shares held on the old game are still managed there, and new offers go to the new game. The Engine line under Settings & history waits for the new game's first check instead of showing the old game's plan.
+- **Changing rules or mode mid-game is fine.** Every change is saved with the time and what it was before and after, and every purchase records the mode and rules it was made under, so results can be compared later.
 
 ## Leaving it running
 
@@ -87,6 +88,9 @@ These are all normal. It's the bot being careful, not broken:
 - **Old game report:** prices can keep moving while a drive report is delayed. Polymarket's report must stay within 45 seconds, and an ESPN drive report within 90 seconds, with matching score and quarter. A newer clock does not freshen an older drive. During gaps the tracker keeps the last known details and explains what is missing. Existing exits continue.
 - **Thin or wide market:** if there are too few buyers and sellers, or the gap between buy and sell prices is wider than 5¢, it doesn't post offers.
 - **Nobody selling:** offers only fill when someone sells at that price. Quiet games mean few fills.
+- **Market closed or its status is out of date:** offers and Bold's extra dip buy don't fill on a market that's closed or suspended, or whose status is over 45 seconds old. Selling still works.
+- **Spending limit:** shares held, a queued purchase and every waiting offer (main game and Octopus) together stay within half the balance, so offers shrink or stop as the bot holds more.
+- **Loss limit:** Bold's dip buy is limited to what's left of the run's loss allowance, and skipped when none is left.
 
 Don't reset or change rules just to make it trade. If something looks wrong, note the game, the time and what the status box says, and tell the owner.
 
@@ -102,7 +106,8 @@ Don't reset or change rules just to make it trade. If something looks wrong, not
 ## Limits worth knowing
 
 - Everything is simulated: the fills, the fees, the $1 payouts.
-- Real fills on Polymarket can be worse, for example waiting in line behind other offers.
+- **How fills are simulated:** an offer fills in full as soon as the best sell price reaches it. Real fills would be fewer, because other buyers at the same price are ahead in line. Downloads and the scorecard state this.
+- **Scorecard:** a strategy is only called proven with enough trades **and** enough different games. Resting-offer results are listed by mode (Steady, Bold, Auto), main game or Octopus, and rules version.
 - No strategy here is proven yet; the bot is collecting the evidence. Expect quiet stretches and small results.
 - Ask Claude, if you see it, is an optional chat for the owner. It can't place trades or change rules.
 

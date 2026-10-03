@@ -94,7 +94,7 @@ Together the bots reserve at most half the lower of your starting balance and cu
 
 ### Trading modes
 
-The bot mostly makes markets: it rests a buy offer at each team's best bid. Both filling is a **pair**, which pays exactly $1 at settlement whoever wins; the pair cost less than $1. Fills are conservative: an offer fills only when the price trades through it.
+The bot mostly makes markets: it rests a buy offer at each team's best bid. Both filling is a **pair**, which pays exactly $1 at settlement whoever wins; the pair cost less than $1. Paper fills: an offer fills in full once the best ask reaches its price, after a short placement delay. Queue position and other buyers at that price aren't modelled, so real fills would be fewer (`PAPER_FILLS` in `lib/tennis/maker.ts`, also written into every history download).
 
 | | Steady | Bold |
 | --- | --- | --- |
@@ -117,6 +117,21 @@ The bot mostly makes markets: it rests a buy offer at each team's best bid. Both
 - on stale data, pause, End run, or a rule change.
 
 The engine only posts where the evidence permits resting orders ([DECISION-ENGINE.md](DECISION-ENGINE.md)).
+
+**Safeguards (October 3, 2026 review):**
+- **Spending limit:** held shares at cost, a queued purchase and every resting offer (main game and Octopus arms) together stay within 50% of the balance. With both bots on the shared wallet, `walletCommitments` (`lib/tennis/wallet-risk.ts`) applies across both; a single bot uses `committed()` (`lib/tennis/engine-plan.ts`). Each bet keeps its own 25%/$100 cap. An offer that completes a pair only needs the cash.
+- **No fills on closed or stale markets:** resting offers and Bold dip buys fill only when the market is open, active, not ended, and its status is under 45 s old (`unfillable` in `engine.ts`). Exits and settlement don't use this check.
+- **Bold dip buy:** limited to what's left of the run's loss allowance (`remainingLossAllowance`). The run's loss limit refuses it once ("DIP_BUY_LOSS_LIMIT") and it retries after a minute. Only a filled dip buy counts, and only that arms the 10¢ loss limit. A failed one retries on the next fresh book. The holding is re-valued right after the buy.
+
+**Traceable changes:**
+- **Rule changes:** every rule change on an evidence-engine account is a `RULES_UPDATED` decision with each changed setting `[before, after]`, the mode before and after, and a note on held shares. The last 50 changes are in `session.ruleChanges`. A mode change also changes the one-sided rules for shares already held; sizes, the Octopus and the focus only change new offers.
+- **Purchase terms:** every purchase (resting fill, dip buy, planned bet) carries `terms` on its ledger row (rules revision, mode, Auto, order size, main or Octopus). A position keeps the terms of its first fill as `openedUnder`.
+
+**Valuation:** the balance, Open orders & shares and Sell everything use one valuation (`accountValue`/`priceOf` in `lib/tennis/open-book.ts`):
+- **Price states:** current (≤ 15 s), old, partial (the book takes only some shares) or missing. Old and partial values still count, and are labelled.
+- **Partly priced holdings:** compared with the cost of the priced shares only.
+
+**Engine card:** shows only the focused game's plan, offers and reason (`focusedEngine`).
 
 ### Session states and runtimes
 
@@ -455,6 +470,9 @@ Inspect separately:
 - `observations`: referenced source inputs.
 - `recordCount`, `observationCount`: totals included.
 - `truncated`: do not call a truncated audit complete.
+- `paperFills`: how paper fills were simulated.
+
+Runner export pages stop at about 4 MB of journal rows (`EXPORT_PAGE_BYTES`, always at least one row), and only the first page carries the session snapshot; the site's downloader joins them into one file.
 - `missingObservationIds`, `pageEvidenceComplete`: supporting evidence completeness.
 - `exactReplayStartsAt`: migration checkpoint for native exact replay.
 
