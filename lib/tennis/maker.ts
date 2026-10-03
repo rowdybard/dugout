@@ -22,6 +22,10 @@ export const INVENTORY_MULTIPLE=2;
 export const PAIR_WINDOW_MS=10*60_000;
 /** A completing offer keeps the pair's total cost at most 1 − this (a pair pays $1 at the end). */
 export const PAIR_MIN_EDGE=0.005;
+/** Bold, one-sided: buy more once when the price is at least this far below what was paid. */
+export const DIP_STEP=0.05;
+/** Bold, one-sided: total cost in one game's unpaired side is capped at this multiple of the order size. */
+export const DIP_CAP_MULTIPLE=2;
 
 export type RestingQuote={price:number;quantity:number;placedAt:number;placedBookTime:number;activeAfter:number};
 export type MakerState={

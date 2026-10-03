@@ -20,8 +20,8 @@ function input(time:number,book:Book,over:{live?:boolean;league?:TennisLeague;se
       execution:{slug:SLUG,league,active:!over.ended,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.005,feeCoefficient:.0695}},
     ...(over.settlement!==undefined?{settlement:over.settlement,settlementReceivedAt:time}:{})};
 }
-function started(league:TennisLeague='CFB'):TennisSession{
-  let session=createTennisSession({...defaultLiveTennisConfig(100),leagues:[league],focusSlug:SLUG},START-7_200_000);
+function started(league:TennisLeague='CFB',entries?:'steady'|'all'):TennisSession{
+  let session=createTennisSession({...defaultLiveTennisConfig(100),leagues:[league],focusSlug:SLUG,...(entries?{entries}:{})},START-7_200_000);
   session.id='synthetic-maker';
   session=applyTennisAction(session,{action:'start',commandId:'maker-start'},[],START-7_200_000);
   return session;
@@ -160,8 +160,8 @@ test('one-sided fill: the pair completes when the other side fills, and both are
   assertReconciles(session);
 });
 
-test('one-sided fill: with no pair within 10 minutes the unpaired shares are sold at the best bid',()=>{
-  let session=step(started(),T0,{bid:.60,ask:.61});
+test('Steady, one-sided fill: with no pair within 10 minutes the unpaired shares are sold at the best bid',()=>{
+  let session=step(started('CFB','steady'),T0,{bid:.60,ask:.61});
   session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
   session=step(session,T0+5000+9*60_000,{bid:.59,ask:.60});   // 9 minutes: still held
   assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);
@@ -170,5 +170,23 @@ test('one-sided fill: with no pair within 10 minutes the unpaired shares are sol
   assert.ok(sale,'sold after 10 minutes');assert.equal(sale.side,'YES');assert.equal(sale.execution!.filledQty,8);
   assert.match(sale.reason,/unpaired/);
   assert.equal(session.positions.filter(p=>p.status==='open').length,0);
+  assertReconciles(session);
+});
+
+test('Bold, one-sided fill: keeps the shares, buys once more on a 5-cent dip (capped), never sells at 10 minutes',()=>{
+  let session=step(started('CFB','all'),T0,{bid:.60,ask:.61});
+  session=step(session,T0+5000,{bid:.59,ask:.60});            // YES fills 8 at 60¢
+  const yes=()=>session.positions.find(p=>p.exitPolicy==='maker'&&p.side==='YES')!;
+  session=step(session,T0+60_000,{bid:.56,ask:.57});          // 3¢ lower: not a dip yet
+  assert.equal(yes().dipBuys??0,0);
+  session=step(session,T0+120_000,{bid:.54,ask:.55});         // 5¢ lower: buy once more
+  const dip=session.ledger.find(e=>e.id.includes(':dip:'))!;
+  assert.ok(dip,'dip buy recorded');assert.equal(dip.action,'BUY');assert.match(dip.reason,/Bold dip buy/);
+  assert.ok(yes().quantity>8&&yes().entryPrice<.6,'more shares at a lower average');
+  assert.ok(yes().costBasis<=2*session.config.entryBudget+1e-6,'capped at twice the order size');
+  session=step(session,T0+180_000,{bid:.44,ask:.45});         // another dip: no second buy
+  assert.equal(session.ledger.filter(e=>e.id.includes(':dip:')).length,1);
+  session=step(session,T0+5000+15*60_000,{bid:.44,ask:.45});  // past 10 minutes: still held
+  assert.equal(session.ledger.filter(e=>e.action==='SELL').length,0);assert.equal(yes().status,'open');
   assertReconciles(session);
 });

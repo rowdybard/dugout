@@ -25,7 +25,7 @@ export function OpenBook({session,markets,now}:{session:TennisSession;markets:Te
     {holdings.length>0&&<table><caption>Shares held</caption>
       <thead><tr><th>Team</th><th>Shares</th><th>Avg price</th><th>Cost</th><th>If sold now</th></tr></thead>
       <tbody>{holdings.map(holding=><tr key={holding.key}>
-        <td><strong>{holding.team}</strong><small>{games>1?`${holding.game} · `:''}{holding.policy==='offer fill'?(holding.paired?'paired: pays $1 per pair at the end':holding.sellBy?`waiting for a pair · sells ${holding.sellBy<=now?'now':`at ${new Date(holding.sellBy).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`} if none`:'from a filled offer'):holding.policy==='hold to final'?'holding to final':holding.policy==='drive'?'riding the drive':'managed'}</small></td>
+        <td><strong>{holding.team}</strong><small>{games>1?`${holding.game} · `:''}{holding.policy==='offer fill'?(holding.paired?'paired: pays $1 per pair at the end':holding.boldHold?'Bold: pairing, may buy once more on a dip, else holds to final':holding.sellBy?`waiting for a pair · sells ${holding.sellBy<=now?'now':`at ${new Date(holding.sellBy).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`} if none`:'from a filled offer'):holding.policy==='hold to final'?'holding to final':holding.policy==='drive'?'riding the drive':'managed'}</small></td>
         <td>{qty(holding.quantity)}</td><td>{cents(holding.averagePrice)}</td><td>{money(holding.cost)}</td>
         <td className={holding.result===null?'':holding.result<0?'tennis-negative':'tennis-positive'}>{holding.result===null?'Waiting for a price':`${signed(holding.result)}${holding.partial?' (part)':''}`}</td>
       </tr>)}</tbody></table>}

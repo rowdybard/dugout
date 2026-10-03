@@ -111,6 +111,8 @@ export type TennisPosition={
   netLiquidationValue:number|null;liquidationQuantity:number;markedAt:number|null;
   market:TennisMarket;
   lastContext?:TennisMarket;
+  /** Bold: extra buys made on a dip while one-sided (at most one). */
+  dipBuys?:number;
   exitRules?:PositionExitRules;entryContext?:FootballReport;
   entryAnalysis?:OpportunityAnalysis;exitPlan?:AdaptiveExitPlan;exitState?:AdaptiveExitState;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];

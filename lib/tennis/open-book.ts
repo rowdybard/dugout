@@ -1,5 +1,6 @@
 import type {TennisMarket,TennisSession} from './types';
 import {PAIR_WINDOW_MS} from './maker.ts';
+import {modeOf} from './modes.ts';
 
 /**
  * Everything the bot has working right now, in one list: resting buy offers (main game and Chaos games), a queued
@@ -9,7 +10,9 @@ export type OpenOrder={key:string;slug:string;game:string;team:string;side:'YES'
 export type Holding={key:string;slug:string;game:string;team:string;side:'YES'|'NO';quantity:number;averagePrice:number;cost:number;value:number|null;result:number|null;
   policy:'offer fill'|'hold to final'|'drive'|'managed';partial:boolean;
   /** Offer-fill shares with no matching fill on the other team: sold at the best bid at this time if still unpaired. */
-  sellBy:number|null;paired:boolean};
+  sellBy:number|null;paired:boolean;
+  /** Bold keeps unpaired shares: it still tries to pair, may buy once more on a dip, else holds to the final. */
+  boldHold:boolean};
 
 const exact=(x:number)=>Math.round(x*1e6)/1e6;
 
@@ -34,7 +37,7 @@ export function openBook(session:TennisSession,markets:TennisMarket[],now:number
     return {key:p.id,slug:p.slug,game:game(p.slug),team:team(p.slug,p.side)||p.name,side:p.side,quantity:p.quantity,averagePrice:p.entryPrice,cost:p.costBasis,
       value:marked?p.netLiquidationValue:null,result:marked?exact(p.netLiquidationValue!-p.costBasis):null,
       policy:p.exitPolicy==='maker'?'offer fill':p.exitPolicy==='hold-to-settlement'?'hold to final':p.exitPolicy==='drive'?'drive':'managed',
-      partial:marked&&p.liquidationQuantity+1e-7<p.quantity,sellBy:unpairedSide?p.openedAt+PAIR_WINDOW_MS:null,paired};
+      partial:marked&&p.liquidationQuantity+1e-7<p.quantity,sellBy:unpairedSide&&modeOf(session.config)==='steady'?p.openedAt+PAIR_WINDOW_MS:null,paired,boldHold:unpairedSide&&modeOf(session.config)==='bold'};
   });
   return {orders,holdings,reserved:exact(orders.reduce((sum,o)=>sum+(o.reserved??0),0)),held:exact(holdings.reduce((sum,h)=>sum+h.cost,0))};
 }

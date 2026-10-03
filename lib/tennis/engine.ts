@@ -24,7 +24,7 @@ import {advanceShadows,openCandidateShadows,openExecutedShadow,recordGameEvents,
 import {specOf} from '../decision/catalog.ts';
 import {SHADOW_STATUS} from '../decision/spec.ts';
 import {noTradeCode} from '../decision/why.ts';
-import {eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
+import {DIP_CAP_MULTIPLE,DIP_STEP,eventKey,INVENTORY_MULTIPLE,makerRebate,MAX_QUOTE_SPREAD,PAIR_MIN_EDGE,PAIR_WINDOW_MS,quoteQuantity,restingFilled,sameQuote,type RestingQuote} from './maker.ts';
 import type {Plan,PlannedTrade} from '../decision/engine.ts';
 import type {Proposal} from '../decision/strategies.ts';
 import type {Phase} from '../decision/evidence.ts';
@@ -395,7 +395,6 @@ function applyMakerFill(session: TennisSession, input: TennisInput, side: TradeS
   record(session, now, input.market.slug, side, 'BUY', 'MAKER_FILLED', reason, input);
 }
 
-/** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
 /**
  * One-sided fills (lib/tennis/maker.ts strategy, chosen 2026-10-03): when only one team's offer fills, the bot stops
  * buying that team, raises its offer on the other team (the pair pays $1 at the end, so the pair may cost at most
@@ -437,6 +436,39 @@ function sellMakerShares(session: TennisSession, input: TennisInput, now: number
   record(session, now, position.slug, position.side, 'SELL', result.status.toUpperCase(), `${why} ${result.reason}`, input);
 }
 
+/**
+ * Bold, one side filled alone: buy more once if the price falls DIP_STEP below what was paid, matching the shares
+ * already held, with the side's total cost capped at DIP_CAP_MULTIPLE × the order size. Bought at the ask on a fresh
+ * book (taker fee applies), never inside the post-play pull window. Each dip buy is its own ledger row ("Bold dip buy").
+ */
+function dipBuy(session: TennisSession, input: TennisInput, now: number) {
+  const slug = input.market.slug, open = unpaired(session, slug);
+  if (!open || modeOf(session.config) !== 'bold' || session.status !== 'running' || (open.position.dipBuys ?? 0) >= 1) return;
+  if (session.maker?.slug === slug && now < session.maker.pulledUntil) return;
+  if (dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[slug] ?? -1) || !input.market.execution) return;
+  const position = open.position, ask = quotes(input, position.side).ask;
+  if (ask === undefined || ask > position.entryPrice - DIP_STEP + EPSILON) return;
+  const budget = exact(Math.min(position.costBasis, DIP_CAP_MULTIPLE * session.config.entryBudget - position.costBasis, session.cash));
+  if (budget < ask * input.market.execution.minimumTradeQty) return;
+  session.consumedBooks[slug] = input.receivedAt;
+  const command = { ...freshCommand(session, input, position.side, 'BUY', now, ask), commandId: `${position.id}:dip:${now}`, budget };
+  const result = simulate(session, input, command, now, undefined);
+  position.dipBuys = (position.dipBuys ?? 0) + 1;
+  if (!result.apply || result.filledQty <= 0) { record(session, now, slug, position.side, 'SKIP', 'DIP_BUY_UNFILLED', `Bold dip buy did not fill. ${result.reason}`, input); return; }
+  session.cash = exact(session.cash + result.cashDelta);
+  position.quantity = exact(position.quantity + result.filledQty);
+  position.initialQuantity = exact(position.initialQuantity + result.filledQty);
+  position.costBasis = exact(position.costBasis - result.cashDelta);
+  position.entryCost = exact(position.entryCost - result.cashDelta);
+  position.entryFees = exact(position.entryFees + result.fees);
+  position.entryPrice = exact((position.entryCost - position.entryFees) / position.initialQuantity);
+  const reason = `Bold dip buy: ${position.side} fell to ${(ask * 100).toFixed(1)}¢, at least ${DIP_STEP * 100}¢ below what was paid; bought ${result.filledQty} more (once per game).`;
+  session.ledger.push({ id: command.commandId, time: now, slug, side: position.side, action: 'BUY', source: 'AUTOMATIC', positionId: position.id, reason, execution: result,
+    cashDelta: result.cashDelta, realizedPnl: 0, quotedPrice: ask, actualPrice: result.averagePrice || undefined, executionDelayMs: 0, signalBookTime: input.receivedAt,
+    executionBookTime: input.receivedAt, rulesRevision: session.rulesRevision ?? 0 });
+  record(session, now, slug, position.side, 'BUY', 'DIP_BUY', reason, input);
+}
+
 /** Stop or the loss limit: sell maker inventory at the bid (IOC) on a fresh book. */
 function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
   const held = makerPositions(session).filter(p => p.slug === input.market.slug);
@@ -445,10 +477,13 @@ function flattenMaker(session: TennisSession, input: TennisInput, now: number) {
   for (const position of held) sellMakerShares(session, input, now, position, position.quantity, 'Closing market-making inventory because the bot is stopping.');
 }
 
-/** No pair within the window: sell only the unpaired shares (a completed pair is kept; it pays $1 at the end). */
+/**
+ * No pair within the window: sell only the unpaired shares (a completed pair is kept; it pays $1 at the end).
+ * Bold keeps them instead (see dipBuy): it still tries to pair, may buy more once on a dip, and otherwise holds to the final.
+ */
 function exitUnpaired(session: TennisSession, input: TennisInput, now: number) {
   const open = unpaired(session, input.market.slug);
-  if (!open || now - open.position.openedAt < PAIR_WINDOW_MS || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
+  if (!open || modeOf(session.config) === 'bold' || now - open.position.openedAt < PAIR_WINDOW_MS || dataIssue(session, input, now) || input.receivedAt <= (session.consumedBooks[input.market.slug] ?? -1)) return;
   const minimum = input.market.execution?.minimumTradeQty ?? 0;
   if (open.quantity + EPSILON < minimum) return;
   session.consumedBooks[input.market.slug] = input.receivedAt;
@@ -481,7 +516,7 @@ function advanceMaker(session: TennisSession, current: TennisInput[], now: numbe
     for (const input of current) flattenMaker(session, input, now);
     return;
   }
-  for (const input of current) exitUnpaired(session, input, now);
+  for (const input of current) { exitUnpaired(session, input, now); dipBuy(session, input, now); }
   if (!state) return;
   if (session.status !== 'running') cancelMakerQuotes(session, 'Entries are paused; existing inventory is held to settlement.', now);
   else if (holding(session) || session.pending) cancelMakerQuotes(session, 'A planned position or order has the account slot.', now);

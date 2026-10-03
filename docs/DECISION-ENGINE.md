@@ -109,6 +109,7 @@ A pack marked `proven` enables real money only when its SHA-256 is pinned by the
     - **Rebates:** the rebate is credited on every fill, rounded to the cent like the exchange's.
     - **Limits:** inventory is capped at twice the stake per side, and both quotes' cash is reserved.
     - **One-sided fills (pair or exit):** if only one team's offer fills, the bot stops buying that team and raises its offer on the other team to complete the pair. A pair pays $1 at the end, so the completing price keeps the pair's cost at most 99.5¢. If no pair forms within 10 minutes of the first fill, it sells the unpaired shares at the best bid. A completed pair is kept to the final.
+      - **Bold keeps the unpaired shares instead of selling them at 10 minutes.** It still tries to pair. If the price falls at least 5¢ below what it paid, it buys more once, at the ask, matching what it holds, and only after the post-play pull. That side's total cost is capped at 2× the order size, and otherwise it holds to the final. Each dip buy is its own ledger row ("Bold dip buy"), so its results can be measured separately.
     - **When quotes come down:** they're pulled for 30 s after each live play, and cancelled on stale data, pause or a rule change. Inventory settles, or is sold on Stop.
   - **Legacy scalps** still pass through the gate and are refused, as the evidence says.
   - **Pinned evidence:** a session can pin an evidence-pack version (`config.evidencePack`). A version this host hasn't loaded blocks entries, so replays stay exact.
