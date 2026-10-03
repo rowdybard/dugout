@@ -2,6 +2,13 @@
 
 This records dated observations and test results; it is not a live account-status feed. Newest first.
 
+## October 3, 2026: adaptive Tennis Auto and readable history
+
+- New Auto uses separately registered Recovery/Momentum version 2 experiments: smaller independently confirmed moves, a fixed original dollar loss allowance and exits based on fully executable gains after fees. It has no fixed price target or two-minute holding timer. A confirmed lower-price rebound can permit one additional purchase, with weighted actual purchase costs and the original loss allowance retained. Legacy strategy hashes and saved exit policies remain unchanged.
+- Both initial purchases and additions check the shared commitment limit against the resulting balance after fees. Independent review reproduced and corrected an old-quote addition and a case where fees pushed commitments above the resulting 50% cap. Regressions cover pending cancellations, repeated books, JSON persistence, partial exits, settlement and exact purchase/fee accounting.
+- Trade and decision history scroll independently. Reading freezes the displayed rows; Show newest resumes updates without changing bot controls. Fill prices, fees, net results and original execution reasons appear separately. Holdings and chart labels update their weighted buy averages after actual fills.
+- Verification: **934/934 tests passed**, main and runner TypeScript passed, changed-file ESLint passed, site production build and runner dry-run build passed, and static React rendering checked the history, fee/result labels, average costs and queued additions. Browser and phone-width visual checks were not performed at the owner's request. Hosted account settings were not changed; selecting Auto explicitly upgrades future entries in a saved original run.
+
 ## October 3, 2026: game-report audit during Montana State–Idaho
 
 - At 03:52:21 UTC, Polymarket's scoreboard was about 2 seconds old with no drive details. ESPN supplied a correctly parsed Idaho first-and-10 at Montana State's 35, but its play was 48 seconds old. The original 45-second rule and 15-second source-gap rule both rejected it. This was not an absent ESPN feed or a field-direction parsing failure.

@@ -31,13 +31,13 @@ import {RunnerSetup} from './runner-setup';
 import {FeedKey} from './feed-key';
 
 import {supportsBot,tennisBetOptions,tennisStrategyRules,walletHasOrders} from './bot-controls';
-import {isFootballFreshnessReason} from './football-notice';
 
 import {DecisionCard} from './decision-card';
 
 import {EngineCard} from './engine-card';
 
 import {OpenBook,SellEverything} from './open-book';
+import {ActivityList} from './activity-list';
 
 import {OctopusPanel,downloadOctopusLog,type OctopusRules} from './octopus-panel';
 
@@ -94,6 +94,7 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
   const [resetOpen,setResetOpen]=useState(false),[resetText,setResetText]=useState('100');
 
   const [showAll,setShowAll]=useState(false);
+  const [showAllActivity,setShowAllActivity]=useState(false);
 
   const [advisorOpen,setAdvisorOpen]=useState(false);
 
@@ -197,11 +198,11 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
   const reason=!session?'Loading your saved paper session…':!bot.visible&&!background?'Page is hidden. Live checks resume when you return.':tickStale?'The bot has not reported a check in a while. It normally checks every few seconds; if this lasts more than a minute, reload the page.':restSeconds!==null?`${focusedMarket?`${focusedMarket.yesName} vs. ${focusedMarket.noName}: `:''}Next entry check in ${restSeconds}s. The bot resumes automatically and still needs a qualifying setup.`:namedReason;
 
-  const decisions=[...(session?.decisions??[])].reverse().filter(d=>showAll||!['WARMUP','CONFIRMATION','NO_DIP','NO_MOMENTUM'].includes(d.code));
+  const decisions=[...(session?.decisions??[])].reverse().filter(d=>showAllActivity||!['WARMUP','CONFIRMATION','NO_DIP','NO_MOMENTUM'].includes(d.code));
 
   const seen=new Set<string>();
 
-  const unique=decisions.filter(decision=>{const key=`${decision.slug}:${decision.side}:${decision.code}`;if(seen.has(key)&&['WAIT','SKIP'].includes(decision.action))return false;seen.add(key);return true;}).slice(0,showAll?60:6);
+  const unique=decisions.filter(decision=>{const key=`${decision.slug}:${decision.side}:${decision.code}`;if(seen.has(key)&&['WAIT','SKIP'].includes(decision.action))return false;seen.add(key);return true;}).slice(0,showAllActivity?60:6);
 
   const ledger=[...(account?.ledger??[])].reverse().slice(0,showAll?60:6);
 
@@ -271,7 +272,12 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
     setStrategyTap(strategy);
 
-    try{await bot.perform(latest=>!latest?null:{action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules:tennisStrategyRules(strategy)});}finally{setStrategyTap(null);}
+    try{await bot.perform(latest=>{
+      if(!latest)return null;
+      const rules=tennisStrategyRules(strategy);
+      if(latest.config.tennisStrategy===strategy&&latest.config.tennisTradeStyle===rules.tennisTradeStyle)return null;
+      return {action:'update-rules',sessionId:latest.id,expectedRulesRevision:latest.rulesRevision??0,commandId:tennisCommandId(),rules};
+    });}finally{setStrategyTap(null);}
 
   };
 
@@ -332,7 +338,7 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
               {(['auto','recovery','momentum'] as const).map(strategy=><button key={strategy} aria-pressed={shownStrategy===strategy} disabled={!session||!!strategyTap||controlsBusy} onClick={()=>void setStrategy(strategy)}>{strategy==='auto'?'Auto':strategy==='recovery'?'Recovery':'Momentum'}</button>)}
 
-              <span>{strategyTap?'Saving…':shownStrategy==='auto'?'Auto compares recovery and momentum on each fresh check.':shownStrategy==='recovery'?'Recovery waits for a drop and a confirmed rebound.':'Momentum waits for a confirmed rise.'} Paper experiments; no measured tennis edge yet.</span>
+              <span>{strategyTap?'Saving…':shownStrategy==='auto'?(session?.config.tennisTradeStyle==='adaptive-v2'?'Auto follows confirmed moves, protects gains on a reversal, and can add once at a lower price.': 'This run uses the original quick-trade Auto. Tap Auto to use adaptive entries and exits.') :shownStrategy==='recovery'?'Recovery waits for a drop and a confirmed rebound.':'Momentum waits for a confirmed rise.'} Paper experiments; no measured tennis edge yet.</span>
 
             </div>:<div className="tennis-mode-choice" role="group" aria-label="How the bot trades">
 
@@ -353,6 +359,7 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
             {tennis&&<div className="tennis-mode-choice" role="group" aria-label="Tennis bet size">
               {betOptions.map(option=><button key={option.label} aria-pressed={entryBudget===option.budget} disabled={!session||controlsBusy||migrating} onClick={()=>setTennisBet(option.budget)}>{option.label} {money(option.budget)}</button>)}
               <span>Up to {money(entryBudget)} per new bet, including fees. Default targets 10% of the starting balance, within the per-bet limits.</span>
+              {session?.config.tennisTradeStyle==='adaptive-v2'&&<span>Auto tries to exit near {money(entryBudget*session.config.stopReturn)} loss on the initial bet. An extra buy does not move that stop.</span>}
             </div>}
 
           </div>
@@ -428,13 +435,23 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
 
         <TennisPriceChart points={account?.equity??[]} currency/>
 
-        {ledger.length?<div className="tennis-activity-list">{ledger.map(entry=><div className="tennis-activity-row" key={entry.id}><span className={`tennis-action-badge ${entry.action==='BUY'?'is-buy':'is-sell'}`}>{entry.action}</span><div><strong>{account?.bots?.tennis?`${entry.botId==='tennis'?'Tennis':'Football'} · `:''}{labelFor(entry.slug,entry.side)} · {signed(entry.cashDelta)}</strong><p>{entry.execution?`${entry.execution.filledQty.toFixed(2)} at ${cents(entry.execution.averagePrice)} · ${money(entry.execution.fees)} fees`:'Settled'}{entry.action!=='BUY'?` · result ${signed(entry.realizedPnl)}`:''}</p></div><time>{time(entry.time)}</time></div>)}</div>
+        {ledger.length?<ActivityList key={`trades:${account?.id}:${showAll}`} label="Trade history" rows={ledger.map(entry=>({id:entry.id,action:entry.action,time:entry.time,
+          title:`${account?.bots?.tennis?`${entry.botId==='tennis'?'Tennis':'Football'} · `:''}${labelFor(entry.slug,entry.side)}`,
+          detail:entry.execution?entry.execution.filledQty>0?`${entry.execution.filledQty.toFixed(2)} shares filled at ${cents(entry.execution.averagePrice)} · ${money(entry.execution.fees)} fees${entry.execution.remainingQty>0?` · ${entry.execution.remainingQty.toFixed(2)} unfilled`:''}`:`No shares filled · ${money(entry.execution.fees)} fees`:'Settled',
+          summary:`Cash change ${signed(entry.cashDelta)}${entry.action!=='BUY'&&(!entry.execution||entry.execution.filledQty>0)?` · Net result ${signed(entry.realizedPnl)} after fees`:''}`,reason:entry.reason}))}/>
 
           :<div className="tennis-empty-activity">{isRunning?tennis?'No fills yet. The bot is waiting for a qualifying tennis setup.':'No fills yet. Resting orders fill when someone trades into them.':'No trades yet. Pick a game and press Start bot.'}</div>}
 
-        {(account?.ledger.length??0)>6&&<button className="tennis-link" onClick={()=>setShowAll(!showAll)}>{showAll?'Show fewer':`Show all ${account?.ledger.length}`}</button>}
+        {(account?.ledger.length??0)>6&&<button className="tennis-link" onClick={()=>setShowAll(!showAll)}>{showAll?'Show recent trades':`Show latest ${Math.min(60,account?.ledger.length??0)} trades`}</button>}
 
       </section>
+
+      <details className="tennis-details tennis-main-details"><summary><strong>Bot activity</strong><span>Decisions and execution reasons</span></summary><div className="tennis-details-content">
+        <section aria-label="Bot activity history"><div className="tennis-activity-head"><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a>{session&&!tennis&&<button className="tennis-link" onClick={()=>downloadOctopusLog(session)}>Download Octopus log</button>}</div>
+          {unique.length?<ActivityList key={`activity:${account?.id}:${showAllActivity}`} label="Bot decision history" rows={unique.map(decision=>({id:decision.id,action:decision.action,time:decision.time,title:labelFor(decision.slug,decision.side),detail:decision.reason}))}/>:<div className="tennis-empty-activity">Nothing yet.</div>}
+          {(session?.decisions.length??0)>6&&<button className="tennis-link" type="button" onClick={()=>setShowAllActivity(!showAllActivity)}>{showAllActivity?'Show fewer checks':'More activity'}</button>}
+        </section>
+      </div></details>
 
       <details className="tennis-details tennis-main-details"><summary><strong>Settings &amp; history</strong><span>Rules, reset, engine, diagnostics</span></summary><div className="tennis-details-content">
 
@@ -459,12 +476,6 @@ export function TennisDashboard({botId='football',onBotChange}:{botId?:BotId;onB
         <section className="tennis-rule-summary" aria-label="Connection diagnostics"><b>Connection &amp; checks</b><p>{bot.runtime?.description||'Connecting to the saved paper account.'}</p>{background&&<p className="tennis-order-help">Last successful check: {bot.runtime?.lastSuccessfulCheck?age(bot.runtime.lastSuccessfulCheck,now):'waiting'}. {bot.runtime?.usage&&`${bot.runtime.usage.estimatedRowsWritten.toLocaleString()} estimated storage writes today.`}</p>}<small>{session?.evaluated??0} price checks · Rules revision {session?.rulesRevision??0} · Entry {session?money(isIdle?entryBudget:session.config.entryBudget):'—'} · Shared cash {account?money(account.cash):'—'}</small></section>
 
         {session?.testRun&&<section className="tennis-run-progress" aria-label="Observation progress"><div><b>{session.testRun.complete?'Observation finished':`${Math.round((session.testRun.endsAt-session.testRun.startedAt)/60000)}-minute paper watch`}</b><span>{Math.floor(session.testRun.watchedMs/60000)}m {Math.floor(session.testRun.watchedMs/1000)%60}s checked</span></div><progress max={session.testRun.endsAt-session.testRun.startedAt} value={Math.min(session.testRun.endsAt-session.testRun.startedAt,Math.max(0,now-session.testRun.startedAt))}/></section>}
-
-        <section className="tennis-activity" aria-label="Bot activity"><div className="tennis-activity-head"><h2>Bot activity</h2><a className="tennis-link tennis-history-export" href="/api/tennis/session?export=1" download>Download complete saved history</a>{session&&!tennis&&<button className="tennis-link" onClick={()=>downloadOctopusLog(session)}>Download Octopus log</button>}</div>
-
-          {!isFootballFreshnessReason(reason)&&<div className="tennis-rule-summary"><b>What is happening now</b><p>{reason}</p></div>}
-
-          {unique.length?<div className="tennis-activity-list">{unique.map(decision=><div className="tennis-activity-row" key={decision.id}><span className={`tennis-action-badge ${decision.action==='BUY'?'is-buy':decision.action==='SELL'?'is-sell':''}`}>{decision.action}</span><div><strong>{labelFor(decision.slug,decision.side)}</strong><p>{decision.reason}</p></div><time>{time(decision.time)}</time></div>)}</div>:<div className="tennis-empty-activity">Nothing yet.</div>}</section>
 
         <div className="tennis-rule-summary"><b>Your current rules</b><p>{session?describeTennisRules(session.config):'Loading saved rules…'}</p></div>
 

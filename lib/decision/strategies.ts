@@ -14,6 +14,7 @@ import {holdEdge} from './edge.ts';
 export type ExitPolicy=
   |{kind:'hold-to-settlement'}
   |{kind:'scalp';targetReturn:number;stopReturn:number;maxHoldMs:number}
+  |{kind:'tennis-trend';rules:import('../tennis/trend-exit.ts').TennisTrendRules}
   /**
    * Resting order: cancel for `pullAfterEventMs` after each play/pitch event. `windowOnly`: the strategy proposes
    * only inside its quiet windows, so quotes are cancelled as soon as it stops proposing.

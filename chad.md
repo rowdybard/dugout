@@ -15,6 +15,12 @@ Choose **Football** or **Tennis** at the top. Tennis starts idle, and opening it
 
 Tennis's new default bet is **$10 on a $100 starting balance**. Use the Small / Default / Large buttons on the bot card to change your saved bet size. An existing run keeps its saved size until you choose one; your balance and history stay intact.
 
+New **Tennis Auto** can follow smaller confirmed moves and let gains continue. It looks at the result after fees and can sell when buyers confirm a reversal. It has no fixed 65¢ target or two-minute sell timer. The first purchase fixes its loss allowance: about $2.50 on a $10 purchase by default. One extra buy after a confirmed lower-price rebound can reduce average cost, but cannot increase that original dollar allowance. It can still sell the combined holding early. Average purchase price updates using the actual shares and prices of both buys; purchase fees are shown separately.
+
+If your saved run says it uses the original quick-trade Auto, tap **Auto** to apply the new rules to future trades. Shares already bought keep their original exit rules.
+
+You can scroll through **Trades & balance** and **Bot activity** without the rows moving underneath you. The list pauses when you start reading; the bot keeps running. **Show newest** catches up. Open **Why** on a trade to see what triggered it, and check its after-fee result rather than just the change in price.
+
 1. **Search box.** Type a team and pick a live or upcoming college game. That's the game the bot trades.
    - If it says the account is set to other sports, tap **Show college football games** once.
 2. **Bot card:**

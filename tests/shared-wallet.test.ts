@@ -39,7 +39,7 @@ function openPosition(botId:BotId,costBasis:number,time=NOW-1000):TennisPosition
 function queued():TennisSession {
   let account=both();
   for(let i=0;i<12;i++){const t=NOW-60000+i*4000;account=stepAccountSession(account,[input(t,.59,.60)],t);}
-  for(const [i,[bid,ask]] of [[.61,.62],[.64,.65],[.64,.65]].entries()){const t=NOW-12000+i*5000;account=stepAccountSession(account,[input(t,bid,ask)],t);}
+  for(const [i,[bid,ask]] of [[.60,.61],[.64,.65],[.64,.65]].entries()){const t=NOW-12000+i*5000;account=stepAccountSession(account,[input(t,bid,ask)],t);}
   assert.equal(account.bots?.tennis?.pending?.action,'BUY',accountBotView(account,'tennis').lastReason);return account;
 }
 function reconciles(account:TennisSession){assert.equal(exact(account.config.startingCash+account.ledger.reduce((sum,row)=>sum+row.cashDelta,0)),account.cash);assert.equal(new Set(account.ledger.map(row=>row.id)).size,account.ledger.length);}

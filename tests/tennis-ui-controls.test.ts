@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {botAction,botQuery,supportsBot,tennisStrategyRules,walletHasOrders,walletNeedsCheck} from '../components/tennis/bot-controls.ts';
 import {createTennisSession} from '../lib/tennis/engine.ts';
-import {defaultLiveTennisConfig,defaultTennisBotConfig} from '../lib/tennis/rules.ts';
+import {defaultLiveTennisConfig,defaultTennisBotConfig,normalizeTennisConfig,validateTennisConfig} from '../lib/tennis/rules.ts';
 import type {TennisRuntime,TennisSession} from '../lib/tennis/types';
 
 const runtime=(patch:Partial<TennisRuntime>={}):TennisRuntime=>({mode:'service',intervalMs:2500,backgroundConnected:true,streamConfigured:true,description:'Runner',...patch});
@@ -24,8 +24,27 @@ test('switching fixed Tennis strategies to Auto authorizes both signal experimen
   assert.deepEqual(fixed.explore,['tennis-recovery']);
   const automatic={...fixed,...tennisStrategyRules('auto')};
   assert.equal(automatic.tennisStrategy,'auto');assert.equal(automatic.strategy,'auto');
+  assert.equal(automatic.tennisTradeStyle,'adaptive-v2');assert.equal(automatic.stopReturn,.25);
+  assert.equal(validateTennisConfig(automatic),null);
   assert.deepEqual(automatic.explore,['tennis-recovery','tennis-momentum']);
   assert.deepEqual(tennisStrategyRules('momentum').explore,['tennis-momentum']);
+  const manual={...automatic,...tennisStrategyRules('momentum')};
+  assert.equal(manual.tennisTradeStyle,'classic-v1');assert.equal(manual.stopReturn,.08);
+  assert.equal(validateTennisConfig(manual),null);
+  assert.match(validateTennisConfig({...manual,tennisTradeStyle:'adaptive-v2'})!,/Auto/);
+});
+
+test('normalizing a saved Tennis run does not silently replace its original trade style or loss limit',()=>{
+  const saved=defaultTennisBotConfig(100);delete saved.tennisTradeStyle;saved.stopReturn=.08;
+  const normalized=normalizeTennisConfig(saved);
+  assert.equal(normalized.tennisTradeStyle,undefined);assert.equal(normalized.stopReturn,.08);
+  assert.equal(validateTennisConfig(normalized),null);
+});
+
+test('adaptive Tennis keeps fresh quotes, a narrow spread and enough independent history',()=>{
+  const config=defaultTennisBotConfig(100);
+  for(const patch of [{maxBookAgeMs:6000},{maxSpreadPoints:3},{minimumHistoryMs:1000},{minSamples:3},{baselineWindowMs:10000}])assert.notEqual(validateTennisConfig({...config,...patch}),null);
+  assert.equal(validateTennisConfig({...config,...tennisStrategyRules('momentum'),maxBookAgeMs:6000,maxSpreadPoints:3,minimumHistoryMs:1000,minSamples:3}),null);
 });
 
 test('independent commands target their bot, but reset/liquidation/checks address the shared wallet',()=>{

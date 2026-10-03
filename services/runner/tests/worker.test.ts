@@ -131,7 +131,7 @@ test('background checks trade Tennis through the shared ledger while Football re
   assert.equal((await request(f.instance,'/v1/command',{command:{action:'start',botId:'tennis',commandId:'tennis-background-start',config:{focusSlug:TENNIS}}})).status,200);
   let bid=.59,ask=.60;f.instance.adapter={close(){},health:()=>({updatedAt:now,state:'rest',message:'Synthetic Tennis book'}),async gather(){return {inputs:[input(now,bid,ask)],failures:[]};}};
   for(let i=0;i<12;i++){now+=4000;await f.instance.alarm();}
-  for(const prices of [[.61,.62],[.64,.65],[.64,.65]]){[bid,ask]=prices;now+=5000;await f.instance.alarm();}
+  for(const prices of [[.60,.61],[.64,.65],[.64,.65]]){[bid,ask]=prices;now+=5000;await f.instance.alarm();}
   const queued=f.instance.store.session()!;assert.equal(queued.status,'paused');assert.equal(queued.cash,92);assert.equal(queued.bots?.tennis?.pending?.plan?.strategy,'tennis-momentum');
   now+=2000;await f.instance.alarm();const filled=f.instance.store.session()!;
   assert.equal(filled.status,'paused');assert.equal(filled.bots?.tennis?.status,'running');assert.ok(filled.cash<92);assert.equal(filled.ledger.length,3);

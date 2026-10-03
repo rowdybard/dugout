@@ -11,5 +11,7 @@
  "random-side-control@1": "68e4449b8fc4f4cc249740edcf21894bb5e0f7c2b221e44cb2d07ee777a9a4d4",
  "surprise-fade@1": "39a44bc0c8c82d92ebfdb3349e2c8716d1f10057a766148e96a8d406f7319aa3",
  "tennis-momentum@1": "3dab2cbf92916f39bf9238ab2e6d6ba3ea2194a872a7bbe025c1fc28f6dd9b31",
- "tennis-recovery@1": "8cd11964fd85818fd3892066a69cabd3e6a57ae3d49b2c67e60bf22913dd1b92"
+ "tennis-momentum@2": "f64e138a683f914cf87b257bc83c6a7bd2bb7836a79f3893ab33f2deb028e6c6",
+ "tennis-recovery@1": "8cd11964fd85818fd3892066a69cabd3e6a57ae3d49b2c67e60bf22913dd1b92",
+ "tennis-recovery@2": "1dcb2efb655ddb6d626fdc1af0d9812bfc9ba898155ffde0971a03423b79d5cd"
 }

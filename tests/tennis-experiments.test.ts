@@ -16,7 +16,7 @@ function input(time:number,bid:number,ask:number,league:'ATP'|'WTA'='ATP'):Tenni
     execution:{slug:SLUG,league,active:true,minimumTradeQty:1,quantityIncrement:1,priceIncrement:.01,feeCoefficient:.0695}}};
 }
 function queued(pattern:'recovery'|'momentum',selection:'auto'|'recovery'|'momentum'='auto',league:'ATP'|'WTA'='ATP',patch:Partial<TennisConfig>={}):TennisSession {
-  const config={...defaultTennisBotConfig(100,selection),focusSlug:SLUG,...patch};
+  const config={...defaultTennisBotConfig(100,selection),tennisTradeStyle:'classic-v1' as const,stopReturn:.08,focusSlug:SLUG,...patch};
   let session=applyTennisAction(createTennisSession(config,NOW-60000),{action:'start',commandId:'start'},[],NOW-60000);
   for(let i=0;i<12;i++){const t=NOW-60000+i*4000;session=stepTennisSession(session,[input(t,pattern==='recovery'?.71:.59,pattern==='recovery'?.72:.60,league)],t);}
   const path=pattern==='recovery'?[[.61,.62],[.63,.64],[.64,.65]]:[[.61,.62],[.64,.65],[.64,.65]];

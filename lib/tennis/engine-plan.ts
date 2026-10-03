@@ -19,9 +19,10 @@ import {walletCommitments,walletProjection} from './wallet-risk.ts';
 export type PlanEntry={
   strategy:string;strategyVersion:string;style:Style;phase:Phase;
   /** hold-to-settlement: held to the final. drive: sold when the football drive ends, at the stop, or at the time limit. */
-  exit:'hold-to-settlement'|'drive'|'scalp';
+  exit:'hold-to-settlement'|'drive'|'scalp'|'tennis-trend';
   drive?:{stopReturn:number;maxHoldMs:number};
   scalp?:{targetReturn:number;stopReturn:number;maxHoldMs:number};
+  trend?:import('./trend-exit.ts').TennisTrendRules;
   /** The setup this entry traded (one entry per setup, lib/decision/strategies.ts Proposal.setupKey). */
   setupKey?:string;
   code:string;evidence:string|null;pack:string;stake:number;reason:string;
@@ -166,7 +167,9 @@ export function tennisSignalContext(session:TennisSession,input:TennisInput,now:
     observedAt:signal.lastObservedAt??null,setupAt:signal.dipAt??null,windowMs:config.baselineWindowMs,baseline:signal.baseline??null,baselineBid:signal.baselineBid??null,
     lastBid:signal.lastBid??null,lastPrice:signal.lastPrice??null,trough:signal.trough??null,troughBid:signal.troughBid??null,confirmations:signal.confirmations,requiredConfirmations:required,
     declinePoints:config.declinePoints,recoveryPoints:config.recoveryPoints,momentumPoints:config.momentumPoints,
-    targetReturn:config.targetReturn,stopReturn:config.stopReturn,maxHoldMs:config.maxHoldMs};
+    targetReturn:config.targetReturn,stopReturn:config.stopReturn,maxHoldMs:config.maxHoldMs,
+    strategyVersion:config.tennisTradeStyle==='adaptive-v2'&&config.tennisStrategy==='auto'?'2':'1',
+    executionDelayMs:config.executionDelayMs,tickSize:input.market.execution?.priceIncrement??null};
   return {...decisionContext(session,input,now,marketPhase(input,now)),signals:Object.fromEntries(Object.entries(values).map(([field,value])=>[tennisSignalKey(key,pattern,field),value]))};
 }
 

@@ -9,6 +9,8 @@ import type {MakerState} from './maker';
 import type {GameEvent} from '../decision/events';
 import type {ShadowResult,ShadowTrade} from '../decision/shadow';
 import type {NoTradeCode} from '../decision/why';
+import type {TennisTrendState} from './trend-exit';
+import type {TennisAddState} from './position-averaging';
 
 /** App-owned tennis contracts. Provider fields are validated in normalize.ts. */
 export type TennisLeague='ATP'|'WTA'|'NFL'|'CFB'|'MLB';
@@ -97,6 +99,8 @@ export type TennisConfig={
   version:'tennis-recovery-v1';startingCash:number;entryBudget:number;leagues:TennisLeague[];
   /** Registered tennis experiments; absent keeps the historical reducer path. */
   tennisStrategy?:'auto'|'recovery'|'momentum';
+  /** Absent retains the original Tennis experiments and saved exit semantics. */
+  tennisTradeStyle?:'classic-v1'|'adaptive-v2';
   decisionPolicy?:'price-v1'|'football-context-v1';
   /** Absent retains historical strategy/replay semantics. New live accounts use local-move-v1. */
   decisionEngine?:'local-move-v1';
@@ -153,6 +157,8 @@ export type TennisPosition={
   lastContext?:TennisMarket;
   /** Bold: extra buys made on a dip while one-sided (at most one). */
   dipBuys?:number;
+  tennisTrend?:TennisTrendState;
+  tennisAdd?:TennisAddState;
   exitRules?:PositionExitRules;entryContext?:FootballReport;
   entryAnalysis?:OpportunityAnalysis;exitPlan?:AdaptiveExitPlan;exitState?:AdaptiveExitState;
   strategy?:'recovery'|'momentum';decisionMode?:TennisConfig['strategy'];
@@ -161,11 +167,11 @@ export type TennisPosition={
    * maker: inventory from resting-quote fills; settles, or is sold on Stop or the loss limit.
    * drive: engine-planned football trade; sold when the drive ends, at its stop or time limit (plan.drive).
    */
-  exitPolicy?:'hold-to-settlement'|'maker'|'drive'|'scalp';plan?:PlanEntry;
+  exitPolicy?:'hold-to-settlement'|'maker'|'drive'|'scalp'|'tennis-trend';plan?:PlanEntry;
   /** Worst and best net return seen while open (for the scorecard), and the spread paid at entry. */
   mae?:number;mfe?:number;entrySpread?:number;
 };
-export type TennisIntent={botId?:BotId;id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
+export type TennisIntent={botId?:BotId;id:string;market:TennisMarket;slug:string;side:TradeSide;action:'BUY'|'SELL';positionId?:string;tennisAdd?:boolean;budget?:number;limitPrice:number;createdAt:number;executeAfter:number;observedAt:number;source:'MANUAL'|'AUTOMATIC';reason:string;signalConfig?:TennisConfig;signalSnapshot?:TennisSignal;decisionMode?:TennisConfig['strategy'];contextSnapshot?:FootballReport;analysis?:OpportunityAnalysis;plan?:PlanEntry};
 export type TennisDecision={botId?:BotId;id:string;time:number;slug:string;side:TradeSide;action:'WAIT'|'SKIP'|'SIGNAL'|'BUY'|'SELL'|'SETTLE';code:string;reason:string;bookTime?:number;baseline?:number;price?:number;netReturn?:number;rulesRevision?:number;strategy?:'recovery'|'momentum';autoRules?:TennisAutoRules;context?:FootballAssessment;analysis?:OpportunityAnalysis;exitAnalysis?:AdaptiveExitAssessment};
 export type TennisLedgerEntry={botId?:BotId;id:string;time:number;slug:string;side:TradeSide;action:'BUY'|'SELL'|'SETTLE';source:'MANUAL'|'AUTOMATIC';positionId:string;reason:string;execution?:PaperExecution;cashDelta:number;realizedPnl:number;quotedPrice?:number;actualPrice?:number;executionDelayMs?:number;signalBookTime?:number;executionBookTime?:number;rulesRevision?:number;strategy?:TennisConfig['strategy']};
 export type TennisSession={

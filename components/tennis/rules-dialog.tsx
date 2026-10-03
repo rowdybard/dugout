@@ -12,6 +12,7 @@ export function TennisRulesDialog({botId='football',session,busy,error,onClose,o
   const [draft,setDraft]=useState(()=>normalizeTennisConfig(session.config));
   const [revision]=useState(session.rulesRevision??0),[more,setMore]=useState(false);
   const tennis=botId==='tennis';
+  const adaptive=tennis&&draft.tennisTradeStyle==='adaptive-v2';
   const local=!tennis&&draft.decisionEngine==='local-move-v1';
   const visibleLeagues=tennis?(['ATP','WTA'] as const):VISIBLE_LEAGUES;
   const field=(key:NumberKey,label:string,unit:string,min:number,max:number,scale=1,step=1)=>
@@ -26,17 +27,17 @@ export function TennisRulesDialog({botId='football',session,busy,error,onClose,o
     <div className="tennis-tour-choice" role="group" aria-label="Leagues the bot can watch">{visibleLeagues.map(league=><button key={league} aria-pressed={draft.leagues.includes(league)} onClick={()=>setDraft({...draft,focusSlug:null,leagues:draft.leagues.includes(league)?draft.leagues.filter(l=>l!==league):[...draft.leagues,league]})}>{league==='ATP'?'Men · ATP':league==='WTA'?'Women · WTA':league==='CFB'?'College football':league==='MLB'?'MLB':'NFL'}</button>)}</div>
     <div className="tennis-rules-grid">
       {field('entryBudget','Dollars per trade','Maximum spend, including fees',.01,Math.min(100,draft.startingCash*.2),1,.01)}
-      {!local&&field('targetReturn','Take profit at','Percent after fees',.01,100,.01,.1)}
-      {field('stopReturn','Try to exit a loss at','Percent after fees; exit needs buyers',.01,50,.01,.1)}
-      {field('maxHoldMs','Hold for at most','Minutes before trying to exit',.1,60,60000,.1)}
-      {field('maxSpreadPoints','Largest price gap','Cents between buying and selling',.1,local?2:10,1,.1)}
+      {!local&&!adaptive&&field('targetReturn','Take profit at','Percent after fees',.01,100,.01,.1)}
+      {field('stopReturn','Try to exit a loss at',adaptive?'Percent of the first purchase, after fees; extra buys do not raise it':'Percent after fees; exit needs buyers',.01,50,.01,.1)}
+      {!adaptive&&field('maxHoldMs','Hold for at most','Minutes before trying to exit',.1,60,60000,.1)}
+      {field('maxSpreadPoints','Largest price gap','Cents between buying and selling',.1,local||adaptive?2:10,1,.1)}
       {!local&&draft.strategy!=='auto'&&<>{draft.strategy==='recovery'?<>{field('declinePoints','Wait for a drop of','Cents below the recent baseline',.1,40,1,.1)}{field('recoveryPoints','Then a recovery of','Cents above the low',.1,40,1,.1)}</>:field('momentumPoints','Wait for a rise of','Cents above the recent baseline',.1,40,1,.1)}{field(draft.strategy==='recovery'?'recoveryConfirmations':'momentumConfirmations','Confirm the move','Independent fresh quotes',2,20)}</>}
     </div>
     <button className="tennis-link" aria-expanded={more} onClick={()=>setMore(!more)}>{more?'Hide timing controls':'More controls'}</button>
     {more&&<div className="tennis-rules-grid">
-      {field('baselineWindowMs','History window','Seconds used to measure price movement',local?30:1,3600,1000)}
-      {field('minimumHistoryMs','Warm-up time','Seconds of history before any entry',local?30:1,3600,1000)}
-      {field('minSamples','Minimum quotes','Fresh observations needed',local?10:3,200)}
+      {field('baselineWindowMs','History window','Seconds used to measure price movement',local||adaptive?30:1,3600,1000)}
+      {field('minimumHistoryMs','Warm-up time','Seconds of history before any entry',local||adaptive?30:1,3600,1000)}
+      {field('minSamples','Minimum quotes','Fresh observations needed',local||adaptive?10:3,200)}
       {field('cooldownMs','Rest between trades','Seconds for this match',0,3600,1000)}
       {field('executionDelayMs','Simulated delay','Seconds plus a later fresh quote',1,30,1000)}
       {field('maxBookAgeMs','Oldest allowed quote','Seconds',.1,local||tennis?5:30,1000,.1)}
@@ -44,7 +45,8 @@ export function TennisRulesDialog({botId='football',session,busy,error,onClose,o
     </div>}
     <p className="tennis-rule-summary">{issue||describeTennisRules(draft)}</p>
     {local&&<p className="tennis-order-help">Profit exits follow executable gains, measured price noise and the remaining recovery scenario. There is no fixed profit-percentage trigger. Local calculations make no AI calls and do not predict the winner.</p>}
-    <p className="tennis-order-help">Paper money, live games, one position per bot at a time. Both bots share one wallet and its loss allowance. Entries are capped at 20% of the starting balance. The entry plan and original loss/time limits stay with each position; edits apply to future positions. Exits need fresh buyers and can fill beyond a loss threshold. This strategy is unproven.</p>
+    {adaptive&&<p className="tennis-order-help">Auto adapts to each match. It protects gains after a confirmed reversal, or can keep holding to the result. One additional buy can lower the average cost after a confirmed rebound; it must fit the original loss allowance. Extra buys can still be sold early.</p>}
+    <p className="tennis-order-help">Paper money, live games, one position per bot at a time. Both bots share one wallet and its loss allowance. Entries are capped at 20% of the starting balance. The original exit plan stays with each position; edits apply to future positions. Exits need fresh buyers and can fill beyond a loss threshold. This strategy is unproven.</p>
     {error&&<p className="tennis-dialog-error" role="alert">{error}</p>}
     <div className="tennis-reset-actions"><button className="tennis-link" onClick={()=>setDraft({...(tennis?defaultTennisBotConfig(session.config.startingCash):defaultLiveTennisConfig(session.config.startingCash)),leagues:draft.leagues,focusSlug:draft.focusSlug})}>Restore defaults</button><button className="tennis-primary" disabled={busy||!!issue} onClick={()=>void apply()}>{busy?'Saving…':'Apply rules'}</button></div>
   </DialogContent></Dialog>;

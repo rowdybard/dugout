@@ -4,7 +4,9 @@ import {tennisBetSize} from '../../lib/tennis/rules.ts';
 /** Read requests select a view without initializing or resetting a bot. */
 export const botQuery=(url:string,botId:BotId)=>`${url}${url.includes('?')?'&':'?'}botId=${botId}`;
 
-export const tennisStrategyRules=(strategy:'auto'|'recovery'|'momentum'):Partial<TennisConfig>=>({tennisStrategy:strategy,strategy,explore:strategy==='auto'?['tennis-recovery','tennis-momentum']:[`tennis-${strategy}`]});
+export const tennisStrategyRules=(strategy:'auto'|'recovery'|'momentum'):Partial<TennisConfig>=>({tennisStrategy:strategy,strategy,
+  tennisTradeStyle:strategy==='auto'?'adaptive-v2':'classic-v1',stopReturn:strategy==='auto'?.25:.08,
+  explore:strategy==='auto'?['tennis-recovery','tennis-momentum']:[`tennis-${strategy}`]});
 
 export function tennisBetOptions(startingCash:number){
   const options=[{label:'Small',budget:tennisBetSize(startingCash,.05)},{label:'Default',budget:tennisBetSize(startingCash)},{label:'Large',budget:tennisBetSize(startingCash,.2)}];

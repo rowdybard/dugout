@@ -15,6 +15,7 @@ export const tennisRulesSchema=z.object({
   octopusSkip:z.array(z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/)).max(30).optional(),
   explore:z.array(z.enum(['comeback-drive','tennis-recovery','tennis-momentum'])).max(5).optional(),
   tennisStrategy:z.enum(['auto','recovery','momentum']).optional(),
+  tennisTradeStyle:z.enum(['classic-v1','adaptive-v2']).optional(),
   strategy:z.enum(['auto','recovery','momentum']),
   focusSlug:z.string().min(1).max(250).regex(/^[a-zA-Z0-9:_.-]+$/).nullable(),
   entryBudget:positive.max(100),leagues:z.array(z.enum(['ATP','WTA','NFL','CFB','MLB'])).min(1).max(5),
@@ -56,6 +57,7 @@ export function tennisBetSize(startingCash:number,fraction=.1):number {
 
 export function defaultTennisBotConfig(startingCash=100,tennisStrategy:'auto'|'recovery'|'momentum'='auto'):TennisConfig {
   return {...defaultTennisConfig(startingCash),entryBudget:tennisBetSize(startingCash),decisionPolicy:'price-v1',tennisStrategy,strategy:tennisStrategy,evidenceGate:'evidence-v1',
+    tennisTradeStyle:tennisStrategy==='auto'?'adaptive-v2':'classic-v1',stopReturn:tennisStrategy==='auto'?.25:.08,
     explore:tennisStrategy==='auto'?['tennis-recovery','tennis-momentum']:[tennisStrategy==='recovery'?'tennis-recovery':'tennis-momentum']};
 }
 
@@ -78,6 +80,10 @@ export function validateTennisConfig(config:TennisConfig):string|null {
     if(config.decisionEngine||config.maker||config.autoMode||config.chaosSlugs?.length||config.octopusAuto)return 'Tennis uses Recovery and Momentum experiments with one position at a time.';
     if(config.explore?.includes('comeback-drive'))return 'Comeback drives belong to the football bot.';
   }
+  if(config.tennisTradeStyle&&!config.tennisStrategy)return 'Choose a Tennis strategy before its trade style.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&config.tennisStrategy!=='auto')return 'Adaptive trade management belongs to Tennis Auto.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&(config.minimumHistoryMs<30000||config.minSamples<10||config.baselineWindowMs<30000))return 'Adaptive Tennis Auto requires at least 30 seconds and 10 quotes of history.';
+  if(config.tennisTradeStyle==='adaptive-v2'&&(config.maxSpreadPoints>2||config.maxBookAgeMs>5000))return 'Adaptive Tennis Auto requires a spread of at most two cents and quotes at most five seconds old.';
   if(config.maker&&config.evidenceGate!=='evidence-v1')return 'Market making needs the evidence gate: it only quotes where the research permits.';
   if((config.chaosSlugs?.length||config.octopusAuto)&&(!config.maker||config.evidenceGate!=='evidence-v1'))return 'The Octopus needs resting orders and the evidence gate: press Use decision engine first.';
   if(config.chaosSlugs&&new Set(config.chaosSlugs).size!==config.chaosSlugs.length)return 'Each Octopus game can be added once.';
@@ -95,6 +101,7 @@ export function validateTennisConfig(config:TennisConfig):string|null {
 }
 
 export function describeTennisRules(config:TennisConfig):string {
+  if(config.tennisStrategy==='auto'&&config.tennisTradeStyle==='adaptive-v2')return `Auto checks confirmed recoveries and rises, adjusting to recent quote noise. Spend up to $${config.entryBudget.toFixed(2)} including fees. Let gains continue, then protect them when fresh buyer prices reverse. The original entry fixes a ${+(config.stopReturn*100).toFixed(2)}% dollar loss allowance; one confirmed lower-price addition may reduce average cost within that same allowance and the shared spending limit. There is no fixed sell price or two-minute exit. Entries and exits need fresh executable books. Paper experiment; no measured profit result yet.`;
   if(config.decisionEngine==='local-move-v1')return `Local volatility-adjusted move analysis checks drop speed, buyer recovery, order-book pressure and executable costs. Spend up to $${config.entryBudget.toFixed(2)} in your focused live game. Entry plans freeze risk limits; volatility trailing and setup invalidation can exit before the −${+(config.stopReturn*100).toFixed(2)}% loss threshold or ${+(config.maxHoldMs/60000).toFixed(2)}-minute deadline. Entry books must pass the 2¢ spread and five-second freshness limits. No model or cloud inference calls.`;
   const entry=config.strategy==='auto'?'Automatically compare a recovery and a sustained rise on each live match, adjusting the move size to recent quote noise'
     :config.strategy==='momentum'

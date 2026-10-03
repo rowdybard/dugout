@@ -148,6 +148,8 @@ test('side summaries describe an actual pending buy as a ceiling and hide old bu
   value.enginePlan={time:now-5000,slug:'focus',phase:'live',pack:'p',trust:'paper',summary:'',considered:[{strategy:'tennis-momentum',side:'YES',style:'taker-scalp',price:.74,stake:10,result:'ACTION',reason:'Confirmed rise.'}]};
   value.pending={id:'queued',slug:'focus',market:m,side:'YES',action:'BUY',limitPrice:.74,budget:10,createdAt:now-1000,executeAfter:now,observedAt:now-1000,source:'AUTOMATIC',reason:'Confirmed rise.'};
   assert.match(sideLines(value,'focus',undefined)[0].text,/Buy queued, up to 74¢.*Rechecking/);
-  value.pending=null;value.positions=[{...position('focus'),side:'YES',entryPrice:.73}];
-  assert.equal(sideLines(value,'focus',undefined)[0].text,'Holding 5 at 73¢ average.');
+  value.pending=null;value.positions=[{...position('focus'),side:'YES',entryPrice:.73,costBasis:3.75,entryCost:3.75,entryFees:.1}];
+  assert.equal(sideLines(value,'focus',undefined)[0].text,'Holding 5 at 73¢ average before buy fees (75¢ incl. buy fees).');
+  value.pending={id:'add',slug:'focus',side:'YES',action:'BUY',tennisAdd:true,positionId:value.positions[0].id,limitPrice:.65} as NonNullable<typeof value.pending>;
+  assert.match(sideLines(value,'focus',undefined)[0].text,/Holding 5 at 73¢ average before buy fees \(75¢ incl. buy fees\)\. Add buy queued, up to 65¢/);
 });

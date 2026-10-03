@@ -13,7 +13,7 @@ function input(time:number,bid:number,ask:number):TennisInput {
 }
 
 for(const selection of ['auto','momentum'] as const)test(`${selection} cancels a planned 74c buy when a later fresh quote falls to 63c`,()=>{
-  let session=applyTennisAction(createTennisSession({...defaultTennisBotConfig(100,selection),entryBudget:5,focusSlug:SLUG},NOW-60000),{action:'start',commandId:'start'},[],NOW-60000);
+  let session=applyTennisAction(createTennisSession({...defaultTennisBotConfig(100,selection),tennisTradeStyle:'classic-v1',stopReturn:.08,entryBudget:5,focusSlug:SLUG},NOW-60000),{action:'start',commandId:'start'},[],NOW-60000);
   for(let i=0;i<12;i++){const time=NOW-60000+i*4000;session=stepTennisSession(session,[input(time,.70,.71)],time);}
   for(const time of [NOW-12000,NOW-7000])session=stepTennisSession(session,[input(time,.73,.74)],time);
   assert.equal(session.pending?.limitPrice,.74,session.lastReason);assert.equal(session.pending?.plan?.strategy,'tennis-momentum');

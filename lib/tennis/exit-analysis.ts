@@ -55,12 +55,12 @@ export type ExitMarketMeasurement={
  * risk. A two-standard-error drift envelope is a policy assumption, not a fitted
  * confidence probability. No imputation, future samples or duplicate weighting.
  */
-export function measureExitMarket(history:readonly ExitMarketPoint[],now:number,windowMs:number):ExitMarketMeasurement{
+export function measureExitMarket(history:readonly ExitMarketPoint[],now:number,windowMs:number,maxGapMs=15_000):ExitMarketMeasurement{
   const result:ExitMarketMeasurement={available:false,code:'EXIT_HISTORY_INPUT',reason:'Recent executable history is unavailable.',
     samples:0,historyMs:0,lastBookTime:null,volatilityPerSqrtSecond:null,recoveryDriftLowerPerSecond:null,
     driftPerSecond:null,driftStandardErrorPerSecond:null};
   const unavailable=(code:string,reason:string)=>({...result,code,reason});
-  if(!finite(now)||now<0||!finite(windowMs)||windowMs<=0)
+  if(!finite(now)||now<0||!finite(windowMs)||windowMs<=0||!finite(maxGapMs)||maxGapMs<=0)
     return unavailable('EXIT_HISTORY_INPUT','Recent exit analysis needs a finite clock and history window.');
   const window=bounded(windowMs,30_000,300_000);
   const points:{time:number;bid:number;mid:number;ask:number}[]=[];
@@ -79,8 +79,8 @@ export function measureExitMarket(history:readonly ExitMarketPoint[],now:number,
   result.historyMs=points.length?points.at(-1)!.time-points[0].time:0;
   if(points.length<4)return unavailable('EXIT_HISTORY_WARMUP','At least three distinct recent quote intervals are needed to measure held-position noise.');
   if(now-points.at(-1)!.time>5_000)return unavailable('EXIT_HISTORY_STALE','Recent exit measurements end more than five seconds ago.');
-  if(points.slice(1).some((p,i)=>p.time-points[i].time>15_000))
-    return unavailable('EXIT_HISTORY_GAP','Recent exit measurements have a quote gap over fifteen seconds.');
+  if(points.slice(1).some((p,i)=>p.time-points[i].time>maxGapMs))
+    return unavailable('EXIT_HISTORY_GAP',maxGapMs===15000?'Recent exit measurements have a quote gap over fifteen seconds.':`Recent exit measurements have a quote gap over ${Math.round(maxGapMs/1000)} seconds.`);
   const seconds=result.historyMs/1000;
   const bidDrift=(points.at(-1)!.bid-points[0].bid)/seconds;
   const diffusion=(field:'bid'|'mid')=>{

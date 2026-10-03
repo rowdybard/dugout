@@ -1,5 +1,6 @@
 import type {TennisMarket,TennisRuntime,TennisSession} from './types';
 import {canAcknowledgeLoss,lossAllowance,lossLimitReached} from './loss-limit.ts';
+import {purchaseAverageWithFees} from './position-average.ts';
 
 /**
  * How old the bot's last check may be before the card says it is behind. A normal background-runner cycle can take
@@ -84,9 +85,9 @@ export function sideLines(session:TennisSession,focus:string|null|undefined,name
     const considered=plan?.considered.find(trade=>trade.side===side);
     const pending=session.pending?.slug===focus&&session.pending.side===side?session.pending:undefined;
     const parts:string[]=[];
-    if(held)parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average.`);
+    if(held){const withFees=purchaseAverageWithFees(held);parts.push(`Holding ${+held.quantity.toFixed(2)} at ${cents(held.entryPrice)} average before buy fees${withFees===null?'':` (${cents(withFees)} incl. buy fees)`}.`);}
     if(offer)parts.push(`Offer to buy ${+offer.quantity.toFixed(2)} at ${cents(offer.price)} is posted.`);
-    else if(pending)parts.push(pending.action==='BUY'?`Buy queued, up to ${cents(pending.limitPrice)}. Rechecking the price and entry conditions before buying.`:'Sale queued. Waiting for a fresh executable price.');
+    else if(pending)parts.push(pending.action==='BUY'?`${pending.tennisAdd&&held?.id===pending.positionId?'Add buy':'Buy'} queued, up to ${cents(pending.limitPrice)}. Rechecking the price and entry conditions before buying.`:'Sale queued. Waiting for a fresh executable price.');
     if(!parts.length){
       const latest=session.decisions.findLast(row=>row.slug===focus&&row.side===side);
       const signal=session.signals[`${focus}:${side}`];

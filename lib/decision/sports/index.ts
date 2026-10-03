@@ -10,7 +10,7 @@ import {tennisRecovery,tennisMomentum} from './tennis.ts';
  * and its strategy specs to lib/decision/catalog.ts.
  */
 export const SPORT_FEATURES:Record<string,Feature>=Object.freeze({...FOOTBALL_FEATURES,...BASEBALL_FEATURES});
-export const SPORT_STRATEGIES:readonly Strategy[]=Object.freeze([comebackDrive(),driveFade(),surpriseFade(),quietWindowMaker(),tennisRecovery(),tennisMomentum()]);
+export const SPORT_STRATEGIES:readonly Strategy[]=Object.freeze([comebackDrive(),driveFade(),surpriseFade(),quietWindowMaker(),tennisRecovery(),tennisMomentum(),tennisRecovery('2'),tennisMomentum('2')]);
 
 export {BASEBALL_FEATURES} from './baseball.ts';
 export {tennisRecovery,tennisMomentum,tennisSignalKey} from './tennis.ts';

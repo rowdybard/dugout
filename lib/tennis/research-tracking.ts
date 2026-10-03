@@ -157,6 +157,9 @@ export function openCandidateShadows(session:TennisSession,input:TennisInput,tra
 /** Counterfactuals for a real paper trade: what other entries and exits would have returned. */
 export function openExecutedShadow(session:TennisSession,position:TennisPosition,input:TennisInput,fill:{price:number;feePerContract:number},now:number){
   const plan=position.plan,spec=plan?specOf(plan.strategy,plan.strategyVersion):undefined,{bid,ask}=best(input);
+  // Dynamic v2 dollar stops and noise trails require full executable position data.
+  // Closed real paper positions still feed the scorecard; do not invent shadow exits.
+  if(plan?.exit==='tennis-trend')return;
   if(!plan||!spec||bid===null||ask===null)return;
   const side=position.side==='YES'?'yes':'no';
   (session.shadows??=[]).push(openShadow({id:`exec|${position.id}`,kind:'executed',strategy:plan.strategy,version:plan.strategyVersion,slug:position.slug,sport:position.league,
